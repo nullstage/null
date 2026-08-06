@@ -1,0 +1,235 @@
+/**
+ * 일반 전투방 1~3을 담당한다. (MVP_PLAN §9)
+ *
+ * 이 씬은 흐름만 관리한다. 전투 자체는 Player와 적 클래스가 담당한다.
+ *
+ *   방 시작 → 전투 → 클리어 → 분석 → (강화) → 다음 방
+ *   방 3 클리어 후에는 역기만 판정을 거쳐 보스로 넘어간다.
+ *
+ * 분석 팝업과 강화 선택 UI는 React에 있다. (DEC-006)
+ * 이 씬은 이벤트를 쏘고 `ui:continue` / `upgrade:select` 응답을 기다린다.
+ * UI 응답 대기는 여기 두 지점뿐이며, 그 외에는 UI가 없어도 런이 성립한다.
+ */
+
+import Phaser from "phaser";
+
+import { eventBus, type GameEventMap } from "../EventBus";
+import { VIEWPORT } from "../config/gameConfig";
+import { KEY_BINDINGS } from "../config/inputConfig";
+import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
+import { Player } from "../entities/Player";
+import { BaseEnemy } from "../entities/enemies/BaseEnemy";
+import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
+import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
+import { RangedEnemy } from "../entities/enemies/RangedEnemy";
+import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
+import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems/DirectorPolicy";
+import { RoomController } from "../systems/RoomController";
+import { rollUpgradeChoices } from "../systems/UpgradeSystem";
+import { runState } from "../systems/RunState";
+import type { CombatTelemetry, EnemySpawn, EnemyType, RoomId, RoomPreset } from "../types/game";
+
+export interface CombatSceneData {
+  roomId?: RoomId;
+}
+
+/** 방 3이 마지막 일반 방이다. 이후는 보스전이다. */
+const LAST_COMBAT_ROOM_INDEX = 3;
+
+export class CombatScene extends Phaser.Scene {
+  private roomId: RoomId = FIXED_ROOM_SEQUENCE[0];
+  private telemetry = new CombatTelemetryRecorder();
+  private player!: Player;
+  private room!: RoomController;
+  private enemies: BaseEnemy[] = [];
+  private subscriptions: (() => void)[] = [];
+
+  constructor() {
+    super("Combat");
+  }
+
+  init(data: CombatSceneData): void {
+    this.roomId = data.roomId ?? FIXED_ROOM_SEQUENCE[0];
+    this.enemies = [];
+    this.subscriptions = [];
+  }
+
+  create(): void {
+    runState.setPhase("COMBAT");
+
+    this.buildStage();
+
+    this.player = new Player({
+      scene: this,
+      telemetry: this.telemetry,
+      upgrades: runState.selectedUpgrades,
+      onDamaged: (amount) => runState.damage(amount),
+      onDeath: () => this.handlePlayerDeath(),
+    });
+
+    // 런 전체에서 체력이 이어지도록 이전 방에서 남은 값을 넘긴다. (OQ-008 미결정)
+    this.player.hp = runState.hp;
+
+    this.room = new RoomController({
+      scene: this,
+      telemetry: this.telemetry,
+      spawnEnemy: (spawn, preset) => this.spawnEnemy(spawn, preset),
+      enableHazards: (preset) => this.enableHazards(preset),
+      getRemainingHp: () => this.player.hp,
+      onRoomClear: (telemetry) => this.handleRoomClear(telemetry),
+    });
+
+    this.player.spawn(VIEWPORT.width * 0.15, VIEWPORT.height * 0.6);
+
+    runState.beginRoom(this.roomId);
+    this.room.start(this.roomId);
+    this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+
+    // 개발·시연 전용 방 스킵. 전투가 완성되기 전에도 전체 흐름을 확인하기 위한 것이다.
+    this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () =>
+      this.room.forceClear(),
+    );
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
+  }
+
+  update(time: number, deltaMs: number): void {
+    this.player.update(time, deltaMs);
+    for (const enemy of this.enemies) {
+      if (!enemy.isDefeated) enemy.update(time, deltaMs);
+    }
+  }
+
+  // ────────────────────────────── 방 구성 ──────────────────────────────
+
+  /** 팀원 담당: 방 템플릿(가로형/발판형)에 맞는 지형을 만든다. */
+  private buildStage(): void {
+    this.cameras.main.setBackgroundColor("#12151c");
+  }
+
+  private spawnEnemy(spawn: EnemySpawn, _preset: RoomPreset): void {
+    const enemy = this.createEnemy(spawn.type);
+    enemy.spawn(VIEWPORT.width * spawn.xRatio, VIEWPORT.height * 0.6);
+    this.enemies.push(enemy);
+    this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+  }
+
+  private createEnemy(type: EnemyType): BaseEnemy {
+    const deps = {
+      scene: this,
+      onDefeated: () => {
+        this.room.onEnemyDefeated();
+        this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+      },
+    };
+
+    switch (type) {
+      case "CHASER":
+        return new ChaserEnemy(deps);
+      case "RANGED":
+        return new RangedEnemy(deps);
+      case "MOBILITY_COUNTER":
+        return new MobilityCounterEnemy(deps);
+    }
+  }
+
+  /** 팀원 담당: 지연 폭발 장판 배치. 예고 없이 즉시 폭발시키지 않는다. (DEC-004) */
+  private enableHazards(_preset: RoomPreset): void {
+    // 팀원 담당
+  }
+
+  // ────────────────────────────── 흐름 제어 ──────────────────────────────
+
+  private handleRoomClear(telemetry: CombatTelemetry): void {
+    // completeRoom은 같은 방에 두 번 호출되면 false를 돌려준다.
+    if (!runState.completeRoom(telemetry)) return;
+
+    runState.hp = this.player.hp;
+
+    if (runState.roomIndex >= LAST_COMBAT_ROOM_INDEX) {
+      this.resolveDeception(telemetry);
+      return;
+    }
+
+    runState.setPhase("ANALYSIS");
+    runState.attachAnalysis(analyze(telemetry, runState.previousTelemetry));
+
+    // 분석 팝업을 닫으면 강화 선택으로 넘어간다.
+    this.once("ui:continue", () => this.offerUpgrade());
+  }
+
+  /** OQ-016 미결정 — 지금은 방 1·방 2 클리어 후 두 번만 지급한다. */
+  private offerUpgrade(): void {
+    runState.setPhase("UPGRADE");
+    eventBus.emit("upgrade:offer", { choices: rollUpgradeChoices(runState.selectedUpgrades) });
+
+    this.once("upgrade:select", ({ upgradeId }) => {
+      runState.addUpgrade(upgradeId);
+      this.goToNextRoom();
+    });
+  }
+
+  private goToNextRoom(): void {
+    const nextIndex = runState.roomIndex + 1;
+
+    // 방 3은 Director가 고른 카운터 방이다. 그 외에는 고정 순서를 쓴다.
+    const nextRoomId =
+      nextIndex >= LAST_COMBAT_ROOM_INDEX
+        ? (runState.counterRoomId ?? "counter_mixed")
+        : FIXED_ROOM_SEQUENCE[nextIndex - 1];
+
+    this.scene.restart({ roomId: nextRoomId });
+  }
+
+  /**
+   * MVP_PLAN §6 역기만 판정.
+   *
+   * 예측은 방 3 입장 전 값이고, 실제 스타일은 방 3 텔레메트리만으로 다시 계산한다.
+   * OQ-014 미결정 — 보스 성향도 지금은 방 3만 사용한다.
+   */
+  private resolveDeception(roomThreeTelemetry: CombatTelemetry): void {
+    const predictedStyle = runState.predictedStyle ?? "MIXED";
+    const actualStyle = classify(roomThreeTelemetry).style;
+
+    runState.setDeception(
+      evaluateDeception(predictedStyle, actualStyle, true, runState.maxHp),
+    );
+    runState.setBossWeights(bossWeightsFor(actualStyle));
+
+    this.once("ui:continue", () => this.scene.start("Boss"));
+  }
+
+  private handlePlayerDeath(): void {
+    runState.hp = 0;
+    runState.setPhase("GAME_OVER");
+    eventBus.emit("run:result", { result: runState.buildResult(this.time.now, false) });
+
+    this.once("run:restart", () => {
+      runState.reset(this.time.now);
+      this.scene.start("Ready");
+    });
+  }
+
+  // ────────────────────────────── 유틸 ──────────────────────────────
+
+  /** 한 번만 반응하는 구독. 씬이 내려가면 자동으로 해제된다. */
+  private once<K extends keyof GameEventMap>(
+    event: K,
+    handler: (payload: GameEventMap[K]) => void,
+  ): void {
+    const unsubscribe = eventBus.on(event, (payload) => {
+      unsubscribe();
+      handler(payload);
+    });
+    this.subscriptions.push(unsubscribe);
+  }
+
+  private cleanup(): void {
+    for (const unsubscribe of this.subscriptions) unsubscribe();
+    this.subscriptions = [];
+    this.room?.dispose();
+    for (const enemy of this.enemies) enemy.destroy();
+    this.enemies = [];
+    this.player?.destroy();
+  }
+}
