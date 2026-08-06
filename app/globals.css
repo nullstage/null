@@ -1,0 +1,22 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #12151c;
+  color: #e9edf5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* 게임 조작 중 스페이스·방향키로 화면이 스크롤되지 않게 한다. */
+body {
+  touch-action: none;
+}
