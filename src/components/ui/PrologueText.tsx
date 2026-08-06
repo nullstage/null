@@ -107,7 +107,6 @@ const Caret = styled.span`
 
 export default function PrologueText({ onDone }: { onDone: () => void }) {
   const screenRef = useRef<HTMLDivElement>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
   const noiseRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<HTMLParagraphElement>(null);
   const caretRef = useRef<HTMLSpanElement>(null);
@@ -157,51 +156,42 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
           else setIndex((current) => current + 1);
         },
       })
-      .to(caretRef.current, { autoAlpha: 0, duration: out * 0.4 }, 0)
-      // 제자리에서 그대로 꺼진다. 밀어내거나 벌리면 문장이 가벼워진다.
-      .to(lineRef.current, { autoAlpha: 0, duration: out, ease: "power2.in" }, 0);
+      .to(caretRef.current, { autoAlpha: 0, duration: out * 0.35 }, 0)
+      // 새겨진 방향 그대로 지워진다. 들어온 길로 나가야 한 동작으로 읽힌다.
+      .to(
+        lineRef.current,
+        { clipPath: "inset(0% 0% 0% 100%)", duration: out, ease: "power2.inOut" },
+        0,
+      );
   }, [finish, index]);
 
   // 배경을 먼저 세우고 첫 줄로 넘어간다.
   useLayoutEffect(() => {
     const reduced = prefersReducedMotion();
 
+    // 배경은 한 번 밝아지고 그대로 있는다. 계속 움직이면 글자와 시선을 다툰다.
     const intro = gsap.timeline({ onComplete: () => setIndex(0) });
     intro.fromTo(
       screenRef.current,
       { autoAlpha: 0 },
       { autoAlpha: 1, duration: reduced ? 0 : 0.6, ease: "power2.out" },
     );
-    if (!reduced) {
-      intro.fromTo(glowRef.current, { scale: 1.25, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 1.6 }, 0);
-    }
 
     if (reduced) return () => intro.kill();
 
-    // 아주 느린 확대·수축. 정지 화면처럼 보이지 않을 정도로만 움직인다.
-    const breath = gsap.to(glowRef.current, {
-      scale: 1.08,
-      duration: 6,
-      ease: "sine.inOut",
-      repeat: -1,
-      yoyo: true,
-      delay: 1.6,
-    });
-
-    // 그레인은 매 반복마다 자리를 새로 뽑는다. 같은 무늬가 반복되면 정지 화면으로 보인다.
+    // 그레인만 계속 돈다. 매 반복마다 자리를 새로 뽑아야 정지 화면으로 보이지 않는다.
     const grain = gsap.to(noiseRef.current, {
-      duration: 0.09,
+      duration: 0.12,
       repeat: -1,
       repeatRefresh: true,
       ease: "none",
-      x: () => gsap.utils.random(-14, 14),
-      y: () => gsap.utils.random(-14, 14),
-      opacity: () => gsap.utils.random(0.035, 0.075),
+      x: () => gsap.utils.random(-10, 10),
+      y: () => gsap.utils.random(-10, 10),
+      opacity: () => gsap.utils.random(0.04, 0.06),
     });
 
     return () => {
       intro.kill();
-      breath.kill();
       grain.kill();
     };
   }, []);
@@ -212,7 +202,7 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
 
     readyRef.current = false;
     gsap.killTweensOf(caretRef.current);
-    gsap.set(caretRef.current, { autoAlpha: 0, y: 0 });
+    gsap.set(caretRef.current, { autoAlpha: 0 });
 
     const reduced = prefersReducedMotion();
 
@@ -222,20 +212,23 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
         gsap.set(caretRef.current, { autoAlpha: 1 });
         return;
       }
-      gsap.to(caretRef.current, { autoAlpha: 1, duration: 0.25 });
-      gsap.to(caretRef.current, { y: 4, duration: 0.55, ease: "sine.inOut", repeat: -1, yoyo: true });
+      // 깜빡이기만 한다. 위아래로 움직이면 와이프와 겹쳐 산만해진다.
+      gsap.fromTo(
+        caretRef.current,
+        { autoAlpha: 0 },
+        { autoAlpha: 1, duration: 0.7, ease: "sine.inOut", repeat: -1, yoyo: true },
+      );
     };
 
-    // 자간이 좁아지며 맺힌다. 글자가 모여 문장이 되는 느낌을 준다.
+    // 왼쪽에서 오른쪽으로 새겨진다. 기록이 적히는 것처럼 보여야 한다.
+    // 페이드나 이동을 겹치지 않는다. 움직이는 것이 둘 이상이면 문장이 눈에 안 들어온다.
     lineTweenRef.current = gsap.fromTo(
       lineRef.current,
-      { autoAlpha: 0, y: 12, letterSpacing: "0.22em" },
+      { clipPath: "inset(0% 100% 0% 0%)" },
       {
-        autoAlpha: 1,
-        y: 0,
-        letterSpacing: "0.04em",
+        clipPath: "inset(0% 0% 0% 0%)",
         duration: reduced ? 0 : LINE_IN_SEC,
-        ease: "power2.out",
+        ease: "power2.inOut",
         onComplete: markReady,
       },
     );
@@ -257,7 +250,7 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
 
   return (
     <Screen ref={screenRef} onPointerDown={advance}>
-      <Glow ref={glowRef} />
+      <Glow />
       <Noise ref={noiseRef} />
       <Vignette />
 
