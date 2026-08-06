@@ -241,9 +241,14 @@ export default function HUDOverlay() {
 
       {transition !== "none" && <ScreenFade onCovered={enterRun} onDone={noop} />}
 
-      {/* 전환용 로딩. 커버 위에 뜨므로 검정에서 흰 로딩으로 바로 넘어간다. */}
-      {transition === "load" && (
-        <LoadingScreen key="transition" ready onReveal={noop} onDone={startPrologue} />
+      {/*
+        전환용 로딩. 커버 위에 뜨므로 검정에서 흰 로딩으로 바로 넘어간다.
+        걷히기 시작할 때(onReveal) 프롤로그를 붙인다. 다 걷힌 뒤에 붙이면
+        걷히는 0.6초 동안 아래의 전투 씬이 그대로 드러난다.
+        로딩은 프롤로그 아래에서 페이드아웃을 마치고 함께 내려간다.
+      */}
+      {(transition === "load" || transition === "prologue") && (
+        <LoadingScreen key="transition" ready onReveal={startPrologue} onDone={noop} />
       )}
 
       {transition === "prologue" && <PrologueText onDone={endTransition} />}
