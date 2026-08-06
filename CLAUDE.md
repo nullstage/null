@@ -648,3 +648,13 @@ npm run test
 - [ ] 확정된 주요 결정이 `docs/DecisionLog.md`에 기록되어 있다.
 - [ ] 작업·오류·검증 결과가 `docs/WorkLog.md`에 기록되어 있다.
 - [ ] 주요 AI 사용 내역이 `docs/ai-log/`에 기록되어 있다.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
