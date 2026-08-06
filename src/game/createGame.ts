@@ -15,6 +15,7 @@ import { BootScene } from "./scenes/BootScene";
 import { BossScene } from "./scenes/BossScene";
 import { CombatScene } from "./scenes/CombatScene";
 import { ReadyScene } from "./scenes/ReadyScene";
+import { HitFxPipeline } from "./systems/CombatVfx";
 import { runState } from "./systems/RunState";
 
 /** 일시정지가 의미 있는 씬. 시작 화면은 멈출 것이 없다. */
@@ -71,6 +72,8 @@ export const createGame = (parent: HTMLElement): Phaser.Game => {
         debug: false,
       },
     },
+    // 포스트 파이프라인은 게임 생성 시점에만 등록할 수 있다. 씬에서 나중에 붙이지 못한다.
+    pipeline: { HitFx: HitFxPipeline } as unknown as Phaser.Types.Core.PipelineConfig,
     scene: [BootScene, ReadyScene, CombatScene, BossScene],
   });
 

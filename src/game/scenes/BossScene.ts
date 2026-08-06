@@ -15,6 +15,7 @@ import { VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { Boss } from "../entities/Boss";
 import { Player } from "../entities/Player";
+import { attachHitFx } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { createArena, type CombatArena } from "../types/combat";
@@ -38,6 +39,8 @@ export class BossScene extends Phaser.Scene {
     runState.setPhase("BOSS");
 
     this.cameras.main.setBackgroundColor("#140b10");
+    // 전투방과 같은 피격 셰이더. 보스전만 연출이 빠지면 격이 낮아 보인다.
+    attachHitFx(this);
     this.telemetry.begin(this.time.now);
 
     this.arena = createArena(this, VIEWPORT);
@@ -106,7 +109,8 @@ export class BossScene extends Phaser.Scene {
 
       // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
       const mode = attack.getData("mode") as AttackMode | undefined;
-      if (mode) this.player.notifyHit(mode);
+      const point = bodyObj as Phaser.GameObjects.Sprite;
+      if (mode) this.player.notifyHit(mode, { x: point.x, y: point.y });
 
       if (attack.getData("consumeOnHit")) attack.destroy();
     });

@@ -22,6 +22,7 @@ import { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
 import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
 import { RangedEnemy } from "../entities/enemies/RangedEnemy";
+import { attachHitFx } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems/DirectorPolicy";
 import { RoomController } from "../systems/RoomController";
@@ -123,6 +124,8 @@ export class CombatScene extends Phaser.Scene {
    */
   private buildStage(): void {
     this.cameras.main.setBackgroundColor("#0a0709");
+    // 피격 셰이더는 카메라에 한 번 붙여두고, 세기만 0에서 올렸다 내린다.
+    attachHitFx(this);
     this.arena = createArena(this, VIEWPORT);
   }
 
@@ -149,7 +152,9 @@ export class CombatScene extends Phaser.Scene {
       enemy.takeDamage((attack.getData("damage") as number) ?? 0);
 
       const mode = attack.getData("mode") as AttackMode | undefined;
-      if (mode) this.player.notifyHit(mode);
+      // 파편은 맞은 적 위에서 터져야 한다. 플레이어 위치에서 터지면 누굴 쳤는지 모른다.
+      const target = bodyObj as Phaser.GameObjects.Sprite;
+      if (mode) this.player.notifyHit(mode, { x: target.x, y: target.y });
 
       if (attack.getData("consumeOnHit")) attack.destroy();
     });

@@ -21,6 +21,14 @@ import Phaser from "phaser";
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
+import {
+  beamLine,
+  createBulletTrail,
+  hitBurst,
+  hitStop,
+  pulseHitFx,
+  slashArc,
+} from "../systems/CombatVfx";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import {
   PLAYER_SPRITE,
@@ -60,13 +68,22 @@ const TUNING = {
 
   ranged: {
     damage: 8,
-    speed: 620,
-    width: 18,
-    height: 8,
-    lifeMs: 1600,
+    /**
+     * 총알은 눈으로 좇는 것이 아니라 지나간 자국으로 읽는다.
+     * 느리면 피할 수 있는 투사체처럼 보여서, 쏜 순간 도달한 것처럼 빠르게 보낸다.
+     */
+    speed: 1500,
+    width: 10,
+    height: 6,
+    /** 빨라진 만큼 화면을 금방 벗어난다. 수명은 화면 밖 정리로 충분하다. */
+    lifeMs: 1200,
     /** RANGED_PIERCE가 없을 때 관통 0명 = 최대 1명 적중 */
     baseMaxHits: 1,
     pierceBonusHits: 1,
+    /** 쏜 순간 총구에서 뻗는 직선의 길이. 조준선 역할만 하므로 실제 사거리와 무관하다. */
+    trailLength: 200,
+    /** 반동으로 뒤로 밀리는 속도 */
+    recoil: 70,
   },
 
   dash: {
@@ -274,7 +291,10 @@ export class Player {
   destroy(): void {
     this.blinkTween?.remove();
     this.blinkTween = null;
-    for (const projectile of this.projectiles) projectile.destroy();
+    for (const projectile of this.projectiles) {
+      (projectile.getData("trail") as Phaser.GameObjects.Graphics | undefined)?.destroy();
+      projectile.destroy();
+    }
     this.projectiles = [];
     this.sprite?.destroy();
     this.sprite = null;
@@ -379,7 +399,8 @@ export class Player {
     );
     hitbox.setDisplaySize(reach, melee.hitboxHeight);
     hitbox.setDepth(TUNING.depth.attack);
-    hitbox.setAlpha(isFinisher ? 0.9 : 0.6);
+    // 판정 범위는 눈에 보일 필요가 없다. 궤적은 아래 slashArc가 그린다.
+    hitbox.setAlpha(0);
     this.deps.arena.playerAttacks.add(hitbox);
     (hitbox.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
 
@@ -387,14 +408,17 @@ export class Player {
     hitbox.setData("mode", "MELEE" satisfies AttackMode);
     // consumeOnHit을 걸지 않는다. 한 번 휘두르면 범위 안의 적을 모두 벤다.
 
-    // 베는 궤적처럼 보이도록 짧게 늘어나며 사라진다.
-    this.scene.tweens.add({
-      targets: hitbox,
-      scaleX: hitbox.scaleX * 1.25,
-      alpha: 0,
-      duration: melee.hitboxLifeMs,
-      onComplete: () => hitbox.destroy(),
-    });
+    this.scene.time.delayedCall(melee.hitboxLifeMs, () => hitbox.destroy());
+
+    // 몸 앞쪽을 중심으로 호를 그린다. 발밑에서 그리면 베는 방향이 안 읽힌다.
+    slashArc(
+      this.scene,
+      sprite.x + this.facing * TUNING.body.width * 0.4,
+      sprite.y - 6,
+      this.facing,
+      reach + TUNING.body.width * 0.5,
+      this.comboStep,
+    );
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
   }
@@ -425,7 +449,14 @@ export class Player {
     );
     projectile.setDisplaySize(ranged.width, ranged.height);
     projectile.setDepth(TUNING.depth.attack);
+    // 탄 자체는 안 보이게 두고 꼬리로만 보여준다. 사각형 두 개가 겹치면 지저분하다.
+    projectile.setAlpha(0);
     this.deps.arena.playerAttacks.add(projectile);
+
+    // 꼬리는 총알에 자식으로 붙이지 않는다. 붙이면 물리 바디까지 함께 커진다.
+    const trail = createBulletTrail(this.scene, this.facing);
+    trail.setPosition(projectile.x, projectile.y);
+    projectile.setData("trail", trail);
 
     const body = projectile.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
@@ -439,6 +470,13 @@ export class Player {
     projectile.setData("expiresAtMs", now + ranged.lifeMs);
     this.projectiles.push(projectile);
 
+    // 총구에서 뻗는 얇은 직선. 투사체보다 먼저 눈에 들어와 조준선 역할을 한다.
+    beamLine(this.scene, projectile.x, projectile.y, this.facing, ranged.trailLength);
+
+    // 반동으로 뒤로 조금 밀린다. 검과 총의 감각이 갈리는 지점이다.
+    const playerBody = sprite.body as Phaser.Physics.Arcade.Body;
+    playerBody.setVelocityX(playerBody.velocity.x - this.facing * ranged.recoil);
+
     this.punch(1 / TUNING.feedback.punchScale, TUNING.feedback.punchScale);
   }
 
@@ -446,15 +484,26 @@ export class Player {
    * 공격이 적에게 실제로 맞았을 때 호출한다.
    * 분류는 시도가 아니라 적중 기준이므로(MVP_PLAN §4) 이 호출을 빠뜨리면 분석이 무너진다.
    */
-  notifyHit(mode: AttackMode): void {
+  notifyHit(mode: AttackMode, at?: { x: number; y: number }): void {
     if (mode === "MELEE") this.telemetry.recordMeleeHit();
     else this.telemetry.recordRangedHit();
 
-    // 도형만으로는 맞았는지 알기 어렵다. 아주 짧은 흔들림으로 타격을 알린다.
     this.scene.cameras.main.shake(
       TUNING.feedback.hitShakeMs,
       TUNING.feedback.hitShakeIntensity,
     );
+
+    // 맞은 자리를 모르면 플레이어 위치에라도 터뜨린다. 아무것도 안 나오는 것보다 낫다.
+    const point = at ?? { x: this.sprite?.x ?? 0, y: this.sprite?.y ?? 0 };
+    hitBurst(this.scene, point.x, point.y);
+
+    // 검은 무겁고 총은 가볍다. 같은 연출을 쓰면 두 방식이 구분되지 않는다.
+    if (mode === "MELEE") {
+      hitStop(this.scene);
+      pulseHitFx(this.scene, 0.6);
+    } else {
+      pulseHitFx(this.scene, 0.3);
+    }
   }
 
   /** 근거리 ↔ 원거리 모드 전환. 즉시 전환한다. (PLAYER.modeSwitchMs) */
@@ -486,6 +535,9 @@ export class Player {
       TUNING.feedback.damageShakeMs,
       TUNING.feedback.damageShakeIntensity,
     );
+    // 내가 맞은 것은 가장 세게 알려야 한다. 적을 때린 것보다 강도가 높다.
+    pulseHitFx(this.scene, 0.85);
+    hitBurst(this.scene, this.sprite?.x ?? 0, this.sprite?.y ?? 0);
 
     const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     // 넉백 방향은 바라보는 쪽의 반대다. 피해원 좌표는 여기까지 오지 않는다.
@@ -683,7 +735,13 @@ export class Player {
     const { width } = this.deps.arena.bounds;
 
     this.projectiles = this.projectiles.filter((projectile) => {
-      if (!projectile.active) return false;
+      const trail = projectile.getData("trail") as Phaser.GameObjects.Graphics | undefined;
+
+      if (!projectile.active) {
+        // 씬이 관통 없는 탄을 적중 즉시 없앤다. 꼬리만 남으면 허공에 선이 떠 있게 된다.
+        trail?.destroy();
+        return false;
+      }
 
       // 씬이 적중한 적을 이 Set에 모아둔다. 관통 수를 세는 유일한 근거다.
       const hitCount = (projectile.getData("hitEnemies") as Set<unknown> | undefined)?.size ?? 0;
@@ -694,9 +752,12 @@ export class Player {
         projectile.x > width;
 
       if (expired) {
+        trail?.destroy();
         projectile.destroy();
         return false;
       }
+
+      trail?.setPosition(projectile.x, projectile.y);
       return true;
     });
   }
