@@ -158,12 +158,8 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
         },
       })
       .to(caretRef.current, { autoAlpha: 0, duration: out * 0.4 }, 0)
-      // 위로 빠지며 글자가 벌어진다. 사라지는 방향을 눈이 따라가게 된다.
-      .to(
-        lineRef.current,
-        { autoAlpha: 0, y: -14, letterSpacing: "0.16em", duration: out, ease: "power2.in" },
-        0,
-      );
+      // 제자리에서 그대로 꺼진다. 밀어내거나 벌리면 문장이 가벼워진다.
+      .to(lineRef.current, { autoAlpha: 0, duration: out, ease: "power2.in" }, 0);
   }, [finish, index]);
 
   // 배경을 먼저 세우고 첫 줄로 넘어간다.
