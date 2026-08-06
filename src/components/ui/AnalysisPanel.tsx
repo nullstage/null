@@ -13,11 +13,13 @@ import Panel, { PanelActions, PanelButton, PanelRow } from "./Panel";
  * 방 클리어 후 분석 팝업. (MVP_PLAN §7)
  *
  * 필수 표시: 감지된 스타일 / 근거리·원거리 비율 / 대시 의존도 / 신뢰도 / Director 대사
+ * 표기는 기록자의 장부라는 설정을 따른다. 영문 헤더 대신 「기록」 계열 한국어를 쓴다.
  *
  * OQ-012 미결정 — 카운터 예고 공개 범위. 지금은 대응 방향 문장까지만 보여준다.
  */
 
-const STYLE_LABEL: Record<PlayStyle, string> = {
+/** 기만·결과 패널도 같은 말로 불러야 해서 여기서 한 번만 정의한다. */
+export const STYLE_LABEL: Record<PlayStyle, string> = {
   MELEE: "근거리",
   RANGED: "원거리",
   MOBILE: "기동",
@@ -43,25 +45,25 @@ export default function AnalysisPanel({ analysis, dashCount, onContinue }: Analy
   const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
 
   return (
-    <Panel title="DIRECTOR ANALYSIS">
+    <Panel title="「기록」">
       <PanelRow>
-        <span>주 전투 방식</span>
+        <span>택한 방식</span>
         <span>{STYLE_LABEL[analysis.style]}</span>
       </PanelRow>
       <PanelRow>
-        <span>근거리 적중 비율</span>
+        <span>가까이서 맞힌 비율</span>
         <span>{percent(analysis.meleeRatio)}</span>
       </PanelRow>
       <PanelRow>
-        <span>원거리 적중 비율</span>
+        <span>멀리서 맞힌 비율</span>
         <span>{percent(analysis.rangedRatio)}</span>
       </PanelRow>
       <PanelRow>
-        <span>대시 의존도</span>
+        <span>물러선 정도</span>
         <span>{dashReliance(dashCount)}</span>
       </PanelRow>
       <PanelRow>
-        <span>분석 신뢰도</span>
+        <span>기록의 확신</span>
         <span>{Math.round(analysis.confidence)}%</span>
       </PanelRow>
 
@@ -72,7 +74,7 @@ export default function AnalysisPanel({ analysis, dashCount, onContinue }: Analy
 
       <PanelActions>
         <PanelButton type="button" onClick={onContinue} autoFocus>
-          계속
+          더 나아간다
         </PanelButton>
       </PanelActions>
     </Panel>

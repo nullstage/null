@@ -6,12 +6,14 @@ import { DIRECTOR_DIALOGUE } from "@/game/data/directorRules";
 import type { DeceptionResult } from "@/game/types/game";
 import { theme } from "@/styles/theme";
 
+import { STYLE_LABEL } from "./AnalysisPanel";
 import Panel, { PanelActions, PanelButton, PanelRow } from "./Panel";
 
 /**
  * 역기만 판정 결과. (MVP_PLAN §6)
  *
  * 예측이 빗나갔고 방을 통과했으면 성공이다. 의도적 기만인지는 추론하지 않는다.
+ * 화면에는 "기록이 맞았는가"로 보여준다. 기록자가 자기 장부를 확인하는 장면이다.
  */
 
 const Verdict = styled.p<{ succeeded: boolean }>`
@@ -37,23 +39,23 @@ export interface DeceptionPanelProps {
 
 export default function DeceptionPanel({ result, onContinue }: DeceptionPanelProps) {
   return (
-    <Panel title="DIRECTOR PREDICTION">
+    <Panel title="「판결」">
       <Verdict succeeded={result.succeeded}>
-        {result.succeeded ? "PREDICTION FAILED" : "PREDICTION CONFIRMED"}
+        {result.succeeded ? "기록이 어긋났다" : "기록대로였다"}
       </Verdict>
 
       <PanelRow>
-        <span>예측한 방식</span>
-        <span>{result.predictedStyle}</span>
+        <span>적어 둔 방식</span>
+        <span>{STYLE_LABEL[result.predictedStyle]}</span>
       </PanelRow>
       <PanelRow>
-        <span>실제 사용한 방식</span>
-        <span>{result.actualStyle}</span>
+        <span>실제로 택한 방식</span>
+        <span>{STYLE_LABEL[result.actualStyle]}</span>
       </PanelRow>
       {result.succeeded && (
         <PanelRow>
-          <span>보상</span>
-          <span>체력 {result.healedAmount} 회복</span>
+          <span>되돌려받은 것</span>
+          <span>생명 {result.healedAmount}</span>
         </PanelRow>
       )}
 
@@ -63,7 +65,7 @@ export default function DeceptionPanel({ result, onContinue }: DeceptionPanelPro
 
       <PanelActions>
         <PanelButton type="button" onClick={onContinue} autoFocus>
-          보스전으로
+          심판대로
         </PanelButton>
       </PanelActions>
     </Panel>

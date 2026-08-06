@@ -60,21 +60,24 @@ export const DEFAULT_BOSS_WEIGHTS: BossPatternWeights = BOSS_WEIGHTS_BY_STYLE.MI
 /**
  * Director 대사.
  *
+ * 화자는 NULL의 기록자이자 심판이다. 시험받는 자를 지켜보고 적어 두는 쪽이므로
+ * 감탄하거나 위협하지 않는다. 담담한 고어체 단문으로 쓴다. (사용자 확정 톤)
+ *
  * OQ-012 미결정 — 카운터 예고에서 어디까지 공개할지 정해지지 않았다.
  * 현재 문구는 스타일과 대응 방향까지만 말하고 적 구성은 밝히지 않는 수준으로 작성했다.
- * OQ-021 미결정 — 영문 헤더 + 한국어 본문 혼용 표기도 확정 전이다.
+ * OQ-021 해소 — 영문 헤더는 쓰지 않고 「기록」/「판결」 계열 한국어 표기로 통일한다.
  */
 export const DIRECTOR_DIALOGUE: Record<string, string> = {
-  analysis_ranged: "거리를 유지하는 것이 네 유일한 장점인 것 같군.",
-  analysis_melee: "파고드는 것 말고는 할 줄 아는 게 없나.",
-  analysis_mobile: "많이도 움직이는군. 발이 닿는 곳을 세어 두었다.",
-  analysis_mixed: "아직 네가 무엇을 하려는지 모르겠다.",
-  counter_ranged: "다음 방에서는 그 거리를 유지하기 어려울 것이다.",
-  counter_melee: "다음 방에서는 그렇게 쉽게 붙지 못할 것이다.",
-  counter_mobile: "다음 방에서는 네가 지나갈 자리를 먼저 밟아 두었다.",
-  counter_mixed: "판단을 유보하겠다. 마음껏 해봐라.",
-  deception_success: "…예측이 빗나갔다.",
-  deception_failed: "예상대로군.",
+  analysis_ranged: "가까이 오는 법을 잊었군.",
+  analysis_melee: "주먹을 믿는 자였나.",
+  analysis_mobile: "멈추지 않는다고 닿지 않는 것은 아니다.",
+  analysis_mixed: "아직 네 이름을 적을 자리를 찾지 못했다.",
+  counter_ranged: "다음 방에는 네가 설 거리가 남지 않을 것이다.",
+  counter_melee: "다음 방에서는 그 거리를 좁히기 어려울 것이다.",
+  counter_mobile: "네가 지나갈 자리를 먼저 적어 두었다.",
+  counter_mixed: "판단을 미루겠다. 더 보여라.",
+  deception_success: "기록이 어긋났다. 다시 본다.",
+  deception_failed: "적어 둔 그대로였다.",
 };
 
 export const analysisDialogueId = (style: PlayStyle): string =>

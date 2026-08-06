@@ -68,7 +68,7 @@ export default function UpgradePanel({ choices, onSelect }: UpgradePanelProps) {
   };
 
   return (
-    <Panel title="UPGRADE">
+    <Panel title="「주어진 것」">
       <Choices>
         {choices.map((choice) => (
           <Choice

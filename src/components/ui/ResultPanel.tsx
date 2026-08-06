@@ -2,17 +2,28 @@
 
 import styled from "@emotion/styled";
 
-import type { RunResult } from "@/game/types/game";
+import type { BossPattern, RunResult } from "@/game/types/game";
 import { theme } from "@/styles/theme";
 
+import { STYLE_LABEL } from "./AnalysisPanel";
 import Panel, { PanelActions, PanelButton, PanelRow } from "./Panel";
 
 /**
  * 결과 리포트.
  *
+ * 기록자가 이 시험의 장부를 덮는 장면이다. 통계표가 아니라 남겨진 기록으로 읽히게 쓴다.
+ *
  * OQ-019 미결정 — 표시 항목이 확정되지 않았다.
  * 현재는 "분석 → 카운터 → 역기만"이 실제로 일어났음을 보여주는 최소 항목만 넣었다.
  */
+
+/** 패턴 키를 그대로 노출하면 기록이 아니라 로그로 보인다. */
+const PATTERN_LABEL: Record<BossPattern, string> = {
+  slash: "베기",
+  dash: "짓쳐듦",
+  projectile: "던짐",
+  slam: "내리침",
+};
 
 const Verdict = styled.p<{ cleared: boolean }>`
   margin: 0 0 ${theme.space(5)};
@@ -45,57 +56,61 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
 
   return (
-    <Panel title="RUN REPORT">
-      <Verdict cleared={result.cleared}>{result.cleared ? "RUN CLEARED" : "RUN FAILED"}</Verdict>
+    <Panel title="「남은 기록」">
+      <Verdict cleared={result.cleared}>
+        {result.cleared ? "시험을 지났다" : "돌아오지 못했다"}
+      </Verdict>
 
       <PanelRow>
-        <span>총 소요 시간</span>
+        <span>머문 시간</span>
         <span>
           {minutes}분 {seconds}초
         </span>
       </PanelRow>
       <PanelRow>
-        <span>최종 분석 결과</span>
-        <span>{result.finalStyle}</span>
+        <span>끝내 택한 방식</span>
+        <span>{STYLE_LABEL[result.finalStyle]}</span>
       </PanelRow>
       <PanelRow>
-        <span>Director 예측</span>
+        <span>기록의 판결</span>
         <span>
           {result.deception
             ? result.deception.succeeded
-              ? "실패 (역기만 성공)"
-              : "적중"
-            : "판정 전"}
+              ? "어긋났다"
+              : "들어맞았다"
+            : "판결 전"}
         </span>
       </PanelRow>
 
       <Section>
-        <SectionTitle>방별 분석 추이</SectionTitle>
+        <SectionTitle>방마다 적힌 것</SectionTitle>
         {result.rooms.map((room) => (
           <PanelRow key={room.roomIndex}>
             <span>
-              방 {room.roomIndex} · {room.roomId}
+              {room.roomIndex}번째 방 · {room.roomId}
             </span>
-            <span>{room.analysis?.style ?? "-"}</span>
+            <span>{room.analysis ? STYLE_LABEL[room.analysis.style] : "-"}</span>
           </PanelRow>
         ))}
       </Section>
 
       <Section>
-        <SectionTitle>보스 패턴 사용</SectionTitle>
-        {(Object.entries(result.bossPatternUsage) as [string, number][]).map(([pattern, count]) => (
-          <PanelRow key={pattern}>
-            <span>{pattern}</span>
-            <span>
-              {count}회 · 가중치 {result.bossWeights[pattern as keyof typeof result.bossWeights]}
-            </span>
-          </PanelRow>
-        ))}
+        <SectionTitle>심판자가 쓴 것</SectionTitle>
+        {(Object.entries(result.bossPatternUsage) as [BossPattern, number][]).map(
+          ([pattern, count]) => (
+            <PanelRow key={pattern}>
+              <span>{PATTERN_LABEL[pattern]}</span>
+              <span>
+                {count}회 · 비중 {result.bossWeights[pattern]}
+              </span>
+            </PanelRow>
+          ),
+        )}
       </Section>
 
       <PanelActions>
         <PanelButton type="button" onClick={onRestart} autoFocus>
-          다시 시작
+          다시 선다
         </PanelButton>
       </PanelActions>
     </Panel>
