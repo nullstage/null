@@ -10,6 +10,7 @@ import Phaser from "phaser";
 
 import { eventBus } from "../EventBus";
 import { runState } from "../systems/RunState";
+import { SILHOUETTE, TEXTURE } from "../types/combat";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -27,16 +28,22 @@ export class BootScene extends Phaser.Scene {
     this.scene.start("Ready");
   }
 
-  /** 에셋 없이도 화면에서 형태를 구분할 수 있게 단색 사각형 텍스처를 만든다. */
+  /**
+   * 에셋 없이도 형태를 구분할 수 있게 단색 사각형 텍스처를 만든다. (OQ-024)
+   * 색은 `types/combat.ts`의 팔레트를 따른다. 스프라이트가 들어오면 이 함수만 걷어내면 된다.
+   */
   private createPlaceholderTextures(): void {
     const swatches: Record<string, number> = {
-      px_player: 0x6fd3ff,
-      px_chaser: 0xff6b6b,
-      px_ranged: 0xffd166,
-      px_mobility: 0xb388ff,
-      px_boss: 0xff3b6b,
-      px_ground: 0x2a2f3a,
-      px_hazard: 0xff8a3d,
+      [TEXTURE.player]: SILHOUETTE.player,
+      [TEXTURE.playerAttack]: SILHOUETTE.playerAttack,
+      [TEXTURE.chaser]: SILHOUETTE.chaser,
+      [TEXTURE.ranged]: SILHOUETTE.ranged,
+      [TEXTURE.mobility]: SILHOUETTE.mobility,
+      [TEXTURE.boss]: SILHOUETTE.boss,
+      [TEXTURE.enemyAttack]: SILHOUETTE.enemyAttack,
+      [TEXTURE.telegraph]: SILHOUETTE.telegraph,
+      [TEXTURE.hazard]: SILHOUETTE.hazard,
+      [TEXTURE.solid]: SILHOUETTE.solid,
     };
 
     for (const [key, color] of Object.entries(swatches)) {

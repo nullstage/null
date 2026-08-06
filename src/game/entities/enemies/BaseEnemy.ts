@@ -10,10 +10,19 @@
 import type Phaser from "phaser";
 
 import { ENEMIES, type EnemyDefinition } from "../../data/enemies";
+import type { CombatArena } from "../../types/combat";
 import type { EnemyType } from "../../types/game";
 
 export interface EnemyDeps {
   scene: Phaser.Scene;
+  /**
+   * 지형과 공격체 그룹.
+   * 본체는 `arena.enemyBodies`에, 투사체·장판은 `arena.enemyAttacks`에 넣는다.
+   * 본체에는 반드시 `setData("enemy", this)`를 걸어야 씬이 피해를 전달할 수 있다.
+   */
+  arena: CombatArena;
+  /** 플레이어의 현재 위치. 추격·조준에 쓴다. 플레이어 객체를 직접 참조하지 않는다. */
+  getPlayerPosition: () => { x: number; y: number };
   /** 사망 시 RoomController에 알린다. 이 호출이 빠지면 방이 끝나지 않는다. */
   onDefeated: () => void;
 }

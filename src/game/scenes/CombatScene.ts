@@ -27,7 +27,15 @@ import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems
 import { RoomController } from "../systems/RoomController";
 import { rollUpgradeChoices } from "../systems/UpgradeSystem";
 import { runState } from "../systems/RunState";
-import type { CombatTelemetry, EnemySpawn, EnemyType, RoomId, RoomPreset } from "../types/game";
+import { createArena, type CombatArena } from "../types/combat";
+import type {
+  AttackMode,
+  CombatTelemetry,
+  EnemySpawn,
+  EnemyType,
+  RoomId,
+  RoomPreset,
+} from "../types/game";
 
 export interface CombatSceneData {
   roomId?: RoomId;
@@ -36,10 +44,12 @@ export interface CombatSceneData {
 /** 방 3이 마지막 일반 방이다. 이후는 보스전이다. */
 const LAST_COMBAT_ROOM_INDEX = 3;
 
+
 export class CombatScene extends Phaser.Scene {
   private roomId: RoomId = FIXED_ROOM_SEQUENCE[0];
   private telemetry = new CombatTelemetryRecorder();
   private player!: Player;
+  private arena!: CombatArena;
   private room!: RoomController;
   private enemies: BaseEnemy[] = [];
   private subscriptions: (() => void)[] = [];
@@ -61,6 +71,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.player = new Player({
       scene: this,
+      arena: this.arena,
       telemetry: this.telemetry,
       upgrades: runState.selectedUpgrades,
       onDamaged: (amount) => runState.damage(amount),
@@ -79,7 +90,9 @@ export class CombatScene extends Phaser.Scene {
       onRoomClear: (telemetry) => this.handleRoomClear(telemetry),
     });
 
-    this.player.spawn(VIEWPORT.width * 0.15, VIEWPORT.height * 0.6);
+    this.player.spawn(VIEWPORT.width * 0.15, this.arena.bounds.floorY - 80);
+    // 충돌 연결은 플레이어 스프라이트가 생긴 뒤에 건다.
+    this.wireCollisions();
 
     runState.beginRoom(this.roomId);
     this.room.start(this.roomId);
@@ -102,14 +115,68 @@ export class CombatScene extends Phaser.Scene {
 
   // ────────────────────────────── 방 구성 ──────────────────────────────
 
-  /** 팀원 담당: 방 템플릿(가로형/발판형)에 맞는 지형을 만든다. */
+  /**
+   * 지형과 충돌 그룹을 만든다.
+   *
+   * 플레이어·적·보스를 각각 다른 사람이 만들기 때문에 서로를 직접 참조하지 않는다.
+   * 각자 `arena`의 그룹에만 오브젝트를 넣고, 누가 누구를 때렸는지는 여기서만 판정한다.
+   */
   private buildStage(): void {
-    this.cameras.main.setBackgroundColor("#12151c");
+    this.cameras.main.setBackgroundColor("#0a0709");
+    this.arena = createArena(this, VIEWPORT);
+  }
+
+  /** 충돌 판정은 이 한 곳에서만 건다. 엔티티가 서로를 알 필요가 없다. */
+  private wireCollisions(): void {
+    const arena = this.arena;
+
+    this.physics.add.collider(arena.enemyBodies, arena.solids);
+
+    // 플레이어 공격 → 적. 적중 기록이 분류의 유일한 근거다. (MVP_PLAN §4)
+    this.physics.add.overlap(arena.playerAttacks, arena.enemyBodies, (attackObj, bodyObj) => {
+      const attack = attackObj as Phaser.GameObjects.GameObject;
+      const enemy = (bodyObj as Phaser.GameObjects.GameObject).getData("enemy") as
+        | BaseEnemy
+        | undefined;
+      if (!enemy || enemy.isDefeated) return;
+
+      // 한 번 휘두른 공격이 같은 적을 여러 프레임 때리지 않게 한다.
+      const hitSet = (attack.getData("hitEnemies") as Set<BaseEnemy> | undefined) ?? new Set();
+      if (hitSet.has(enemy)) return;
+      hitSet.add(enemy);
+      attack.setData("hitEnemies", hitSet);
+
+      enemy.takeDamage((attack.getData("damage") as number) ?? 0);
+
+      const mode = attack.getData("mode") as AttackMode | undefined;
+      if (mode) this.player.notifyHit(mode);
+
+      if (attack.getData("consumeOnHit")) attack.destroy();
+    });
+
+    const playerBody = this.player.sprite;
+    if (!playerBody) return;
+
+    // 적 공격체 → 플레이어
+    this.physics.add.overlap(arena.enemyAttacks, playerBody, (attackObj) => {
+      const attack = attackObj as Phaser.GameObjects.GameObject;
+      this.player.takeDamage((attack.getData("damage") as number) ?? undefined);
+      if (attack.getData("consumeOnHit")) attack.destroy();
+    });
+
+    // 적 본체 접촉 → 플레이어
+    this.physics.add.overlap(arena.enemyBodies, playerBody, (bodyObj) => {
+      const enemy = (bodyObj as Phaser.GameObjects.GameObject).getData("enemy") as
+        | BaseEnemy
+        | undefined;
+      if (!enemy || enemy.isDefeated) return;
+      this.player.takeDamage(enemy.definition.contactDamage);
+    });
   }
 
   private spawnEnemy(spawn: EnemySpawn, _preset: RoomPreset): void {
     const enemy = this.createEnemy(spawn.type);
-    enemy.spawn(VIEWPORT.width * spawn.xRatio, VIEWPORT.height * 0.6);
+    enemy.spawn(VIEWPORT.width * spawn.xRatio, this.arena.bounds.floorY - 60);
     this.enemies.push(enemy);
     this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
   }
@@ -117,6 +184,11 @@ export class CombatScene extends Phaser.Scene {
   private createEnemy(type: EnemyType): BaseEnemy {
     const deps = {
       scene: this,
+      arena: this.arena,
+      getPlayerPosition: () => {
+        const sprite = this.player.sprite as Phaser.GameObjects.Sprite | null;
+        return { x: sprite?.x ?? 0, y: sprite?.y ?? 0 };
+      },
       onDefeated: () => {
         this.room.onEnemyDefeated();
         this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);

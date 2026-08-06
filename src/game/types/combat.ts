@@ -1,0 +1,96 @@
+/**
+ * 전투 물리 계약.
+ *
+ * 플레이어·적·보스를 각각 다른 사람이 만들기 때문에, 서로를 직접 참조하지 않고
+ * 여기 정의된 그룹에만 오브젝트를 넣는다. 실제 충돌 연결은 씬이 한 곳에서 건다.
+ * 이 규칙이 깨지면 누가 누구를 때렸는지 추적할 수 없게 된다.
+ *
+ * 오브젝트에 실어 보내는 데이터 규약:
+ *   attack.setData("damage", 12)          // 공격체 필수
+ *   attack.setData("mode", "MELEE")       // 플레이어 공격체 필수. 분류의 근거가 된다.
+ *   attack.setData("consumeOnHit", true)  // 맞으면 사라지는 투사체
+ *   body.setData("enemy", this)           // 적 본체 필수. 씬이 이걸로 피해를 전달한다.
+ */
+
+import type Phaser from "phaser";
+
+export interface CombatArena {
+  /** 바닥과 발판. 플레이어와 적이 올라선다. */
+  solids: Phaser.Physics.Arcade.StaticGroup;
+  /** 적 본체. 플레이어 공격의 대상이자 접촉 피해원이다. */
+  enemyBodies: Phaser.Physics.Arcade.Group;
+  /** 플레이어가 만든 공격체. 근접 히트박스와 투사체를 모두 여기 넣는다. */
+  playerAttacks: Phaser.Physics.Arcade.Group;
+  /** 적이 만든 공격체. 투사체·장판·돌진 히트박스를 모두 여기 넣는다. */
+  enemyAttacks: Phaser.Physics.Arcade.Group;
+  /** 방의 크기와 바닥 높이. 스폰과 순찰 범위를 여기서 가져다 쓴다. */
+  bounds: { width: number; height: number; floorY: number };
+}
+
+/**
+ * 도형 플레이스홀더 팔레트. (OQ-024)
+ *
+ * 스프라이트가 없는 동안 형태를 구분하기 위한 색이다. 시작 화면의 붉은 톤에 맞춘다.
+ * 스프라이트가 들어오면 텍스처 키만 바꾸면 되도록, 색을 코드 곳곳에 흩뿌리지 않는다.
+ */
+export const SILHOUETTE = {
+  /** 플레이어는 배경에서 가장 밝아야 한다. 어디 있는지 즉시 보여야 하기 때문이다. */
+  player: 0xf2e9e4,
+  playerAttack: 0xffd9dd,
+  /** 적은 역할별로 색을 나눈다. 카운터 관계가 눈으로 구분돼야 한다. (MVP_PLAN §2) */
+  chaser: 0xc8383c,
+  ranged: 0x9a5f86,
+  mobility: 0x5f8fa6,
+  boss: 0xff3b6b,
+  enemyAttack: 0xff6b6b,
+  /** 예고 표시. 실제 피해 전에 반드시 먼저 보여야 한다. (DEC-004) */
+  telegraph: 0xffb547,
+  hazard: 0xff8a3d,
+  solid: 0x241a1f,
+} as const;
+
+/** 플레이스홀더 텍스처 키. `BootScene`이 만든다. */
+export const TEXTURE = {
+  player: "px_player",
+  chaser: "px_chaser",
+  ranged: "px_ranged",
+  mobility: "px_mobility",
+  boss: "px_boss",
+  solid: "px_ground",
+  hazard: "px_hazard",
+  telegraph: "px_telegraph",
+  playerAttack: "px_player_attack",
+  enemyAttack: "px_enemy_attack",
+} as const;
+
+/** 바닥 두께. 스폰 높이 계산의 기준이 된다. */
+export const FLOOR_HEIGHT = 48;
+
+/**
+ * 바닥과 충돌 그룹을 만든다. 전투방과 보스방이 같은 구조를 쓴다.
+ * 발판이 필요한 방 템플릿은 여기 만든 `solids`에 덧붙이면 된다. (MVP_PLAN §2-3)
+ */
+export const createArena = (
+  scene: Phaser.Scene,
+  viewport: { width: number; height: number },
+): CombatArena => {
+  const { width, height } = viewport;
+  const floorY = height - FLOOR_HEIGHT;
+
+  const solids = scene.physics.add.staticGroup();
+  const floor = solids.create(
+    width / 2,
+    floorY + FLOOR_HEIGHT / 2,
+    TEXTURE.solid,
+  ) as Phaser.Physics.Arcade.Sprite;
+  floor.setDisplaySize(width, FLOOR_HEIGHT).refreshBody();
+
+  return {
+    solids,
+    enemyBodies: scene.physics.add.group(),
+    // 공격체는 중력을 받지 않는다. 투사체가 바닥으로 떨어지면 안 된다.
+    playerAttacks: scene.physics.add.group({ allowGravity: false }),
+    enemyAttacks: scene.physics.add.group({ allowGravity: false }),
+    bounds: { width, height, floorY },
+  };
+};

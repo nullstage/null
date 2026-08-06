@@ -18,10 +18,13 @@ import type Phaser from "phaser";
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
+import type { CombatArena } from "../types/combat";
 import type { AttackMode, UpgradeId } from "../types/game";
 
 export interface PlayerDeps {
   scene: Phaser.Scene;
+  /** 지형과 공격체 그룹. 만든 히트박스·투사체는 `arena.playerAttacks`에 넣는다. */
+  arena: CombatArena;
   telemetry: CombatTelemetryRecorder;
   /** 획득한 강화 목록. 효과 적용은 전투 담당이 한다. */
   upgrades: readonly UpgradeId[];

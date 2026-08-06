@@ -17,10 +17,12 @@ import { Boss } from "../entities/Boss";
 import { Player } from "../entities/Player";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
+import { createArena, type CombatArena } from "../types/combat";
 
 export class BossScene extends Phaser.Scene {
   private telemetry = new CombatTelemetryRecorder();
   private player!: Player;
+  private arena!: CombatArena;
   private boss!: Boss;
   private subscriptions: (() => void)[] = [];
   private finished = false;
@@ -34,11 +36,14 @@ export class BossScene extends Phaser.Scene {
     this.subscriptions = [];
     runState.setPhase("BOSS");
 
-    this.cameras.main.setBackgroundColor("#171017");
+    this.cameras.main.setBackgroundColor("#140b10");
     this.telemetry.begin(this.time.now);
+
+    this.arena = createArena(this, VIEWPORT);
 
     this.player = new Player({
       scene: this,
+      arena: this.arena,
       telemetry: this.telemetry,
       upgrades: runState.selectedUpgrades,
       onDamaged: (amount) => runState.damage(amount),
