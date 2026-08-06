@@ -371,7 +371,7 @@ export default function SettingsPanel({
               {volumeRow("마스터 볼륨", "master")}
               {volumeRow("배경음악", "bgm")}
               {volumeRow("효과음", "sfx")}
-              <Note>마스터와 효과음은 소리가 붙는 대로 적용됩니다. 지금은 값만 저장됩니다.</Note>
+              <Note>효과음은 지금 메뉴 소리에만 적용됩니다. 전투 소리는 추가되는 대로 함께 따릅니다.</Note>
             </>
           ) : (
             <>
