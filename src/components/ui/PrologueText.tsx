@@ -2,18 +2,24 @@
 
 import styled from "@emotion/styled";
 import gsap from "gsap";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { theme } from "@/styles/theme";
 
 /**
- * 런을 시작할 때 한 번 지나가는 프롤로그.
+ * 런을 시작할 때 지나가는 프롤로그.
  *
- * 로딩이 걷힌 뒤 검은 화면에 두 줄이 차례로 떠오른다.
- * 다시 볼 필요가 없는 사람도 있으니 아무 입력으로 건너뛸 수 있게 한다.
+ * 검은 화면에 한 줄씩 띄우고, 다음 줄은 사용자가 눌러야 나온다.
+ * 기다리는 동안 줄 옆에서 역삼각형이 깜빡인다. 읽는 속도를 강제하지 않기 위함이다.
  */
 
 const LINES = ["시험받는 자는 셀 수 없이 많았으나,", "돌아온 자의 이름을 아는 이는 없었다."];
+
+/** 한 줄이 떠오르는 데 걸리는 시간. */
+const LINE_IN_SEC = 0.8;
+
+const prefersReducedMotion = (): boolean =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const Screen = styled.div`
   position: absolute;
@@ -23,9 +29,15 @@ const Screen = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
+  gap: 20px;
   background: #000;
   cursor: pointer;
+`;
+
+const LineRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
 `;
 
 const Line = styled.p`
@@ -36,103 +48,147 @@ const Line = styled.p`
   letter-spacing: 0.04em;
   line-height: 1.6;
   color: #fff;
-  text-align: center;
   white-space: nowrap;
   user-select: none;
 `;
 
-const Skip = styled.span`
-  position: absolute;
-  right: 42px;
-  bottom: 36px;
-  font-family: ${theme.font.mono};
-  font-size: 12px;
-  letter-spacing: 0.22em;
-  color: rgba(255, 255, 255, 0.32);
-  user-select: none;
+/** 다음을 기다린다는 신호. 대화창 아래에서 깜빡이는 그 표시다. */
+const Caret = styled.span`
+  width: 0;
+  height: 0;
+  align-self: center;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid rgba(200, 56, 60, 0.9);
+  opacity: 0;
 `;
 
 export default function PrologueText({ onDone }: { onDone: () => void }) {
   const screenRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
-  const skipRef = useRef<HTMLSpanElement>(null);
+  const caretRef = useRef<HTMLSpanElement>(null);
 
-  // 건너뛰기와 자연 종료가 겹쳐도 한 번만 넘어가야 한다.
+  /** 지금까지 띄운 줄 수. */
+  const [visible, setVisible] = useState(0);
+  /** 현재 줄이 다 떠서 다음 입력을 받을 수 있는 상태인지. */
+  const readyRef = useRef(false);
+  const lineTweenRef = useRef<gsap.core.Tween | null>(null);
   const doneRef = useRef(false);
 
   const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
-    onDone();
+
+    gsap.killTweensOf([screenRef.current, caretRef.current, ...lineRefs.current]);
+    gsap.to(screenRef.current, {
+      autoAlpha: 0,
+      duration: prefersReducedMotion() ? 0 : 0.6,
+      ease: "power2.out",
+      onComplete: onDone,
+    });
   }, [onDone]);
 
-  const skip = useCallback(() => {
-    if (doneRef.current) return;
-    // 남은 연출을 지우고 곧바로 어둡게 덮은 뒤 넘긴다.
-    gsap.killTweensOf([screenRef.current, skipRef.current, ...lineRefs.current]);
-    gsap.to(screenRef.current, { autoAlpha: 0, duration: 0.25, onComplete: finish });
-  }, [finish]);
+  /** 누를 때마다 한 걸음 나아간다. 아직 떠오르는 중이면 그것부터 끝낸다. */
+  const advance = useCallback(() => {
+    if (doneRef.current || visible === 0) return;
 
+    if (!readyRef.current) {
+      lineTweenRef.current?.progress(1);
+      return;
+    }
+    if (visible < LINES.length) {
+      setVisible((count) => count + 1);
+      return;
+    }
+    finish();
+  }, [finish, visible]);
+
+  // 배경이 자리잡은 뒤 첫 줄을 띄운다.
   useLayoutEffect(() => {
-    const lines = lineRefs.current.filter((line): line is HTMLParagraphElement => line !== null);
-    gsap.set([...lines, skipRef.current], { autoAlpha: 0 });
-
-    const mm = gsap.matchMedia();
-
-    mm.add("(prefers-reduced-motion: reduce)", () => {
-      gsap.set([...lines, skipRef.current], { autoAlpha: 1 });
-      const timer = window.setTimeout(finish, 2200);
-      return () => window.clearTimeout(timer);
-    });
-
-    mm.add("(prefers-reduced-motion: no-preference)", () => {
-      const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
-
-      tl.fromTo(screenRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.5 });
-
-      lines.forEach((line, index) => {
-        tl.fromTo(
-          line,
-          { autoAlpha: 0, y: 10 },
-          { autoAlpha: 1, y: 0, duration: 1.1 },
-          // 첫 줄은 배경이 자리잡은 뒤, 다음 줄은 앞 줄을 읽을 틈을 두고 나온다.
-          index === 0 ? 0.6 : ">+=0.9",
-        );
-      });
-
-      tl.fromTo(skipRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4 }, 1.2)
-        // 두 줄을 다 읽을 시간을 준 뒤 넘어간다.
-        .to([...lines, skipRef.current], { autoAlpha: 0, duration: 0.8 }, ">+=1.8")
-        .to(screenRef.current, { autoAlpha: 0, duration: 0.6, onComplete: finish });
-    });
-
-    return () => mm.revert();
-    // onDone은 부모에서 안정적으로 유지한다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const tween = gsap.fromTo(
+      screenRef.current,
+      { autoAlpha: 0 },
+      {
+        autoAlpha: 1,
+        duration: prefersReducedMotion() ? 0 : 0.5,
+        ease: "power2.out",
+        onComplete: () => setVisible(1),
+      },
+    );
+    return () => {
+      tween.kill();
+    };
   }, []);
+
+  // 줄이 늘어날 때마다 그 줄을 띄우고, 다 뜨면 역삼각형을 깜빡인다.
+  useLayoutEffect(() => {
+    if (visible === 0) return;
+
+    const line = lineRefs.current[visible - 1];
+    if (!line) return;
+
+    readyRef.current = false;
+    gsap.killTweensOf(caretRef.current);
+    gsap.set(caretRef.current, { autoAlpha: 0, y: 0 });
+
+    const markReady = () => {
+      readyRef.current = true;
+      if (prefersReducedMotion()) {
+        gsap.set(caretRef.current, { autoAlpha: 1 });
+        return;
+      }
+      gsap.to(caretRef.current, { autoAlpha: 1, duration: 0.25 });
+      gsap.to(caretRef.current, {
+        y: 4,
+        duration: 0.55,
+        ease: "sine.inOut",
+        repeat: -1,
+        yoyo: true,
+      });
+    };
+
+    if (prefersReducedMotion()) {
+      gsap.set(line, { autoAlpha: 1, y: 0 });
+      markReady();
+      return;
+    }
+
+    lineTweenRef.current = gsap.fromTo(
+      line,
+      { autoAlpha: 0, y: 10 },
+      { autoAlpha: 1, y: 0, duration: LINE_IN_SEC, ease: "power2.out", onComplete: markReady },
+    );
+
+    return () => {
+      lineTweenRef.current?.kill();
+    };
+  }, [visible]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      skip();
+      // 스페이스는 기본 스크롤 동작이 있다.
+      if (event.key === " ") event.preventDefault();
+      advance();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [skip]);
+  }, [advance]);
 
   return (
-    <Screen ref={screenRef} onPointerDown={skip}>
-      {LINES.map((text, index) => (
-        <Line
-          key={text}
-          ref={(element) => {
-            lineRefs.current[index] = element;
-          }}
-        >
-          {text}
-        </Line>
+    <Screen ref={screenRef} onPointerDown={advance}>
+      {LINES.slice(0, visible).map((text, index) => (
+        <LineRow key={text}>
+          <Line
+            ref={(element) => {
+              lineRefs.current[index] = element;
+            }}
+          >
+            {text}
+          </Line>
+          {index === visible - 1 && <Caret ref={caretRef} />}
+        </LineRow>
       ))}
-      <Skip ref={skipRef}>아무 키나 눌러 건너뛰기</Skip>
     </Screen>
   );
 }
