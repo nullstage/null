@@ -16,8 +16,9 @@
 import type Phaser from "phaser";
 
 import { BOSS, PLAYER } from "../config/gameBalance";
+import { deathBurst } from "../systems/CombatVfx";
 import { pickBossPattern } from "../systems/DirectorPolicy";
-import { TEXTURE, type CombatArena } from "../types/combat";
+import { SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
 import type { BossPattern, BossPatternWeights } from "../types/game";
 
 /**
@@ -468,6 +469,8 @@ export class Boss {
 
     sprite.setVelocity(0, 0);
     sprite.clearTint();
+    // 런의 마지막 타격이다. 일반 적보다 크게 터져야 끝났다는 게 전해진다.
+    deathBurst(this.scene, sprite.x, sprite.y, SILHOUETTE.boss);
     // 파티클 대신 빠른 축소와 페이드로 처리한다. 에셋을 추가하지 않기 위해서다. (OQ-024)
     this.scene.tweens.add({
       targets: sprite,

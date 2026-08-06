@@ -67,6 +67,18 @@ const VFX = {
     size: PIXEL,
     color: 0xff8a94,
   },
+  /**
+   * 적이 죽는 순간.
+   *
+   * 맞을 때와 죽을 때가 같은 연출이면 마지막 한 대가 언제 들어갔는지 알 수 없다.
+   * 파편을 두 배로 뿌리고, 바깥으로 퍼지는 도트 링을 하나 더 얹어 확실히 구분한다.
+   */
+  death: {
+    shards: 16,
+    lifeMs: 380,
+    speed: { min: 180, max: 420 },
+    ring: { points: 22, radius: 14, growTo: 3.4, lifeMs: 300, dot: 3 },
+  },
   hitStopMs: 45,
   depth: 40,
 } as const;
@@ -337,6 +349,64 @@ export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
       onComplete: () => shard.destroy(),
     });
   }
+};
+
+/**
+ * 적이 쓰러지는 순간의 연출.
+ *
+ * 사라지는 트윈만으로는 "죽었다"가 아니라 "없어졌다"로 보인다.
+ * 퍼지는 링이 있어야 그 자리에서 무언가 터졌다는 인상이 남는다.
+ *
+ * @param color 그 적의 실루엣 색. 누가 죽었는지 색으로 구분된다.
+ */
+export const deathBurst = (scene: Phaser.Scene, x: number, y: number, color: number): void => {
+  const { death } = VFX;
+
+  for (let i = 0; i < death.shards; i += 1) {
+    const shard = scene.add.rectangle(x, y, PIXEL, PIXEL, color);
+    shard.setDepth(VFX.depth);
+    shard.setBlendMode(Phaser.BlendModes.ADD);
+
+    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const speed = Phaser.Math.Between(death.speed.min, death.speed.max);
+    const travel = death.lifeMs / 1000;
+
+    scene.tweens.add({
+      targets: shard,
+      x: x + Math.cos(angle) * speed * travel,
+      y: y + Math.sin(angle) * speed * travel + 30,
+      alpha: 0,
+      duration: death.lifeMs,
+      ease: "power2.out",
+      onComplete: () => shard.destroy(),
+    });
+  }
+
+  // 링은 점을 원형으로 찍은 뒤 통째로 키운다. 선으로 그리면 커질 때 두께까지 같이 굵어진다.
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.fillStyle(color, 1);
+  for (let i = 0; i < death.ring.points; i += 1) {
+    const angle = (i / death.ring.points) * Math.PI * 2;
+    ring.fillRect(
+      Math.cos(angle) * death.ring.radius - death.ring.dot / 2,
+      Math.sin(angle) * death.ring.radius - death.ring.dot / 2,
+      death.ring.dot,
+      death.ring.dot,
+    );
+  }
+
+  scene.tweens.add({
+    targets: ring,
+    scale: death.ring.growTo,
+    alpha: 0,
+    duration: death.ring.lifeMs,
+    ease: "power2.out",
+    onComplete: () => ring.destroy(),
+  });
+
+  pulseHitFx(scene, 0.7);
 };
 
 /**
