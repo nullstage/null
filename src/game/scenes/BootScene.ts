@@ -9,8 +9,15 @@
 import Phaser from "phaser";
 
 import { eventBus } from "../EventBus";
+import { assetPath } from "../config/gameConfig";
 import { runState } from "../systems/RunState";
-import { SILHOUETTE, TEXTURE } from "../types/combat";
+import {
+  PLAYER_SPRITE,
+  SILHOUETTE,
+  TEXTURE,
+  playerAnimKey,
+  type PlayerAnimState,
+} from "../types/combat";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -18,14 +25,43 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 예: this.load.image("player", assetPath("sprites/player.png"));
+    // 적과 보스는 아직 도형이다. 플레이어만 스프라이트로 교체됐다. (OQ-024)
+    this.load.spritesheet(PLAYER_SPRITE.key, assetPath(PLAYER_SPRITE.path), {
+      frameWidth: PLAYER_SPRITE.frameWidth,
+      frameHeight: PLAYER_SPRITE.frameHeight,
+    });
     this.createPlaceholderTextures();
   }
 
   create(): void {
+    this.registerPlayerAnimations();
     runState.reset(this.time.now);
     runState.setPhase("READY");
     this.scene.start("Ready");
+  }
+
+  /**
+   * 플레이어 애니메이션 등록.
+   *
+   * 씬마다 다시 만들지 않고 부팅 때 한 번만 만든다. 전투방과 보스방이 같은 것을 쓴다.
+   * 시트가 6열이므로 프레임 번호는 `행 * 6 + 열`로 계산한다.
+   */
+  private registerPlayerAnimations(): void {
+    for (const [state, spec] of Object.entries(PLAYER_SPRITE.states)) {
+      const key = playerAnimKey(state as PlayerAnimState);
+      if (this.anims.exists(key)) continue;
+
+      const start = spec.row * PLAYER_SPRITE.columns;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers(PLAYER_SPRITE.key, {
+          start,
+          end: start + spec.frames - 1,
+        }),
+        frameRate: spec.fps,
+        repeat: spec.loop ? -1 : 0,
+      });
+    }
   }
 
   /**

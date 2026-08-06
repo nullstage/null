@@ -63,6 +63,32 @@ export const TEXTURE = {
   enemyAttack: "px_enemy_attack",
 } as const;
 
+/**
+ * 플레이어 스프라이트시트. `sprite-gen`이 뽑은 `manifest.json`의 값을 옮겨 적었다.
+ *
+ * 시트를 다시 생성하면 manifest의 `animation.rows`와 이 표가 어긋나지 않는지 확인해야 한다.
+ * 어긋나면 엉뚱한 행이 재생되는데, 화면에서만 보이고 오류로는 드러나지 않는다.
+ */
+export const PLAYER_SPRITE = {
+  key: "player_sheet",
+  /** 288x192, 6열 4행 */
+  path: "sprites/player/player.png",
+  frameWidth: 48,
+  frameHeight: 48,
+  columns: 6,
+  states: {
+    idle: { row: 0, frames: 4, fps: 4, loop: true },
+    run: { row: 1, frames: 6, fps: 12, loop: true },
+    attack: { row: 2, frames: 6, fps: 14, loop: false },
+    jump: { row: 3, frames: 4, fps: 8, loop: false },
+  },
+} as const;
+
+export type PlayerAnimState = keyof typeof PLAYER_SPRITE.states;
+
+/** 애니메이션 키. 씬과 엔티티가 같은 문자열을 쓰도록 한 곳에서 만든다. */
+export const playerAnimKey = (state: PlayerAnimState): string => `player-${state}`;
+
 /** 바닥 두께. 스폰 높이 계산의 기준이 된다. */
 export const FLOOR_HEIGHT = 48;
 

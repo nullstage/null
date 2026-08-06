@@ -14,6 +14,22 @@
 
 이 게임은 붉은 달 아래 폐허, 「기록자」가 지켜보는 시험장이다. 색은 재와 피 두 가지로 좁힌다.
 
+## 도트 기법 (가장 중요)
+
+산나비식 도트를 따른다. 스타일 지시보다 이 두 가지가 결과를 더 크게 가른다.
+
+**1. 실루엣 중심 채우기.**
+선을 먼저 따지 않는다. **덩어리 색면으로 형태를 먼저 잡는다.**
+캐릭터가 작아도 멀리서 보았을 때 휘날리는 망토, 후드, 검의 형태가 즉시 읽혀야 한다.
+실루엣 가독성이 디테일보다 항상 우선한다. 전투 중 48px로 축소되면 안쪽 묘사는 어차피 사라진다.
+
+**2. 안티에일리어싱 최소화.**
+비스듬한 선에서 계단 현상이 튀지 않도록 **규칙적인 픽셀 배치(2-2-2 또는 1-1-1)** 를 지킨다.
+경계면을 흐릿하게 뭉개지 않는다. 화면에서 칼같이 떨어져야 한다.
+반투명 경계가 많으면 `sprite-gen`의 크로마 추출에서도 지저분한 알파가 남는다.
+
+이 두 조항은 `sprite-gen`의 `--style` 계약에도 그대로 넣었다. 두 곳이 어긋나면 안 된다.
+
 ---
 
 ## 공통 스타일 블록
@@ -22,9 +38,13 @@
 
 ```text
 2D game sprite, side-view idle pose, pixel art, 6-to-7-head-tall realistic proportions,
-dark fantasy, gothic ruin atmosphere, strong readable silhouette, minimal facial detail,
+dark fantasy, gothic ruin atmosphere, minimal facial detail,
+forms built as solid color masses rather than line drawings,
+silhouette readability above all: cloak, hood and blade must read clearly at small size,
 near-black body with a single glowing accent color, dramatic rim light from behind,
-limited palette of ash grey and blood red, clean 1px outline, no anti-aliased blur,
+limited palette of ash grey and blood red,
+regular stair-stepped diagonals (2-2-2 or 1-1-1), crisp hard edges,
+no anti-aliasing, no smeared or feathered boundaries,
 full body visible, centered, flat solid magenta background (#FF00FF) for chroma keying
 ```
 

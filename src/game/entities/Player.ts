@@ -22,8 +22,21 @@ import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
-import { SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
+import {
+  PLAYER_SPRITE,
+  SILHOUETTE,
+  TEXTURE,
+  playerAnimKey,
+  type CombatArena,
+  type PlayerAnimState,
+} from "../types/combat";
 import type { AttackMode, UpgradeId } from "../types/game";
+
+/** 도트 확대 배율. 48px 셀을 화면에서 이 배수로 키운다. */
+const SPRITE_SCALE = 1.6;
+
+/** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
+const RANGED_MODE_TINT = 0xffc9d4;
 
 /** gameBalance로 옮겨야 할 임시 수치. 확정 전까지 여기서만 관리한다. */
 const TUNING = {
@@ -141,6 +154,8 @@ export class Player {
   private dashFollowupUntilMs = 0;
   private lastAfterimageAtMs = 0;
 
+  /** 공격 애니메이션이 끝나는 시각. 그 전에는 다른 상태가 끼어들지 못한다. */
+  private attackAnimUntilMs = 0;
   private invulnerableUntilMs = 0;
   private blinkTween: Phaser.Tweens.Tween | null = null;
 
@@ -164,12 +179,20 @@ export class Player {
   spawn(x: number, y: number): void {
     const { body, depth } = TUNING;
 
-    const sprite = this.scene.physics.add.sprite(x, y, TEXTURE.player);
-    sprite.setDisplaySize(body.width, body.height);
+    const sprite = this.scene.physics.add.sprite(x, y, PLAYER_SPRITE.key);
+    // 도트는 정수 배율로만 키운다. 소수 배율은 픽셀 격자를 무너뜨린다.
+    sprite.setScale(SPRITE_SCALE);
     sprite.setDepth(depth.player);
     sprite.setCollideWorldBounds(true);
+    // 그림에는 망토와 검이 넓게 퍼져 있다. 충돌 판정은 몸통만 잡아야 억울한 피격이 없다.
+    sprite.body.setSize(body.width, body.height);
+    sprite.body.setOffset(
+      (PLAYER_SPRITE.frameWidth - body.width) / 2,
+      PLAYER_SPRITE.frameHeight - body.height,
+    );
     this.baseScale = { x: sprite.scaleX, y: sprite.scaleY };
     this.sprite = sprite;
+    this.playAnim("idle");
 
     // 씬은 적 충돌만 걸어준다. 플레이어가 바닥을 밟는 건 플레이어 책임이다.
     this.scene.physics.add.collider(sprite, this.deps.arena.solids);
@@ -212,6 +235,8 @@ export class Player {
     if (this.justPressed("DASH")) this.dash();
     if (this.justPressed("ATTACK")) this.attack();
     if (this.justPressed("SWITCH_MODE")) this.switchMode();
+
+    this.syncAnim();
   }
 
   destroy(): void {
@@ -273,6 +298,11 @@ export class Player {
 
   /** 모드에 맞는 공격으로 넘긴다. 쿨타임 판정은 각 공격 안에 있다. */
   private attack(): void {
+    // 공격 그림이 끝까지 나오도록 이동·점프 상태가 끼어들지 못하게 잠근다.
+    const spec = PLAYER_SPRITE.states.attack;
+    this.attackAnimUntilMs = this.scene.time.now + (spec.frames / spec.fps) * 1000;
+    this.playAnim("attack", true);
+
     if (this.mode === "MELEE") this.attackMelee();
     else this.attackRanged();
   }
@@ -505,8 +535,9 @@ export class Player {
     if (!sprite || nowMs - this.lastAfterimageAtMs < TUNING.feedback.afterimageIntervalMs) return;
     this.lastAfterimageAtMs = nowMs;
 
-    const ghost = this.scene.add.image(sprite.x, sprite.y, TEXTURE.player);
-    ghost.setDisplaySize(TUNING.body.width, TUNING.body.height);
+    const ghost = this.scene.add.image(sprite.x, sprite.y, PLAYER_SPRITE.key, sprite.frame.name);
+    ghost.setScale(sprite.scaleX, sprite.scaleY);
+    ghost.setFlipX(sprite.flipX);
     ghost.setDepth(TUNING.depth.afterimage);
     ghost.setTintFill(SILHOUETTE.playerAttack);
     ghost.setAlpha(0.45);
@@ -519,11 +550,43 @@ export class Player {
     });
   }
 
+  /**
+   * 애니메이션 전환.
+   *
+   * 같은 상태를 다시 요청하면 무시한다. 매 프레임 play를 부르면 1프레임에서 멈춘 것처럼 보인다.
+   * 공격은 한 번 시작하면 끝날 때까지 다른 상태가 끊지 못한다. 휘두르다 만 그림이 나오면 안 된다.
+   */
+  private playAnim(state: PlayerAnimState, force = false): void {
+    const sprite = this.sprite;
+    if (!sprite) return;
+
+    const key = playerAnimKey(state);
+    if (!force && sprite.anims.currentAnim?.key === key) return;
+    if (!force && this.attackAnimUntilMs > this.scene.time.now) return;
+
+    sprite.play(key, true);
+  }
+
+  /** 지금 몸 상태에 맞는 애니메이션을 고른다. 공격 중이면 건드리지 않는다. */
+  private syncAnim(): void {
+    if (this.isDead || this.attackAnimUntilMs > this.scene.time.now) return;
+
+    const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!body) return;
+
+    if (!this.isGrounded) this.playAnim("jump");
+    else if (Math.abs(body.velocity.x) > 1) this.playAnim("run");
+    else this.playAnim("idle");
+  }
+
   /** 모드가 색으로 구분돼야 HUD를 보지 않고도 지금 무엇을 쏘는지 안다. */
   private applyModeTint(): void {
-    // 사망 연출의 붉은 tint를 늦게 도착한 플래시 복구가 덮어쓰면 안 된다.
     if (this.isDead) return;
-    this.sprite?.setTint(this.mode === "MELEE" ? SILHOUETTE.player : SILHOUETTE.playerAttack);
+    const sprite = this.sprite;
+    if (!sprite) return;
+    // 스프라이트를 통째로 칠하면 도트가 죽는다. 원거리일 때만 아주 옅게 물들인다.
+    if (this.mode === "MELEE") sprite.clearTint();
+    else sprite.setTint(RANGED_MODE_TINT);
   }
 
   // ────────────────────────────── 내부 유틸 ──────────────────────────────
