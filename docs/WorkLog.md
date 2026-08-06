@@ -129,6 +129,106 @@
 
 - 전투가 붙은 뒤 실제 플레이로 재검증한다. 현재는 적이 스텁이라 F2 스킵으로 흐름만 확인했다.
 
+### 15:05 — 시작 화면 Figma 디자인 적용
+
+- 상태: DONE
+- 관련 계획: P-012
+- 관련 결정: DEC-008
+- 관련 질문: OQ-026 (신규 OPEN)
+- 관련 AI 로그: AI-004
+
+#### 작업
+
+- 사용자가 `src/` 최상단에 넣어 둔 이미지 4장을 `public/assets/title/`로 옮기고 이름을 정리했다.
+  - `background.png` → `background.png`
+  - `title.png` → `title-logo.png`
+  - `subtitle.png` → `subtitle.png`
+  - `decoration.png` → `ornament.png`
+- `src/components/ui/TitleScreen.tsx` 신규. Figma `Frame 1`(node `1:33`)의 좌표를 그대로 옮겼다.
+- `HUDOverlay`가 `phase === "READY"`일 때 이 화면을 띄우고, 입력 시 `ui:continue`를 발행한다.
+- `ReadyScene`에서 플레이스홀더 텍스트와 자체 키·포인터 리스너를 제거했다.
+  `CombatScene`·`BossScene`과 같은 `SHUTDOWN → cleanup()` 구독 해제 패턴을 적용했다.
+- `theme.font.ui`(Pretendard) 추가, `app/globals.css`에 Pretendard 동적 서브셋 `@import` 추가.
+
+#### 오류 및 원인
+
+- **시작 화면이 뜨지 않을 조건이 있었다.**
+  - 원인: `RunState.reset()`이 첫 줄에서 `this.phase = "READY"`로 필드를 직접 대입해,
+    뒤따르는 `setPhase("READY")`가 중복 가드(`if (this.phase === phase) return`)에 걸렸다.
+    결과적으로 `phase:change`가 한 번도 발행되지 않는다. `BootScene.shutdown()`이 이를 보완하는 것처럼
+    보이지만, Phaser는 씬의 `shutdown` 메서드를 자동 호출하지 않는다(다른 씬들은 `events.once(SHUTDOWN)`을 쓴다).
+  - 수정: 직접 대입을 제거하고, 모든 필드를 비운 뒤 마지막에 `this.setPhase("READY")`를 호출한다.
+
+- **배경이 의도보다 훨씬 어둡게 나왔다.**
+  - 재현: 첫 구현본을 브라우저에서 Figma 스크린샷과 대조. 붉은 달이 거의 보이지 않았다.
+  - 원인: 전달받은 `background.png`가 이미 Figma의 `image 1` + `image 2`(`rgba(0,0,0,0.46)` + `blur(6px)`)를
+    합쳐 내보낸 결과물인데, 코드에서 같은 오버레이를 한 번 더 얹어 이중 적용됐다.
+  - 수정: 오버레이 레이어를 제거하고 배경 이미지만 깔았다. 이유를 주석으로 남겼다.
+
+#### 검증
+
+- `npm run typecheck` / `npm run lint` / `npm run build` 통과
+- `npm run dev` 후 브라우저 직접 확인
+  - Figma node `1:33` 스크린샷과 타이틀·서브타이틀·장식·안내 문구 위치 대조 일치
+  - 장식(`ornament.png`)은 Figma에서 상하 반전 상태라 `scaleY(-1)` 적용, 내보낸 원본과 대조 확인
+  - 아무 키 입력 → 시작 화면이 사라지고 `COMBAT` HUD(근거리 / ROOM 1 / 적 2) 표시
+  - 콘솔 오류 0
+
+#### 남은 작업
+
+- 조작 안내를 어디에 표시할지 미결정 (OQ-026). 현재는 어디에도 없다.
+- 적·플레이어가 스텁이라 전투 화면 자체는 여전히 비어 있다 (P-003·P-004).
+- `next dev`가 `CLAUDE.md` 끝에 `nextjs-agent-rules` 블록을 자동 추가한다. 커밋 여부를 정해야 한다.
+
+### 15:45 — 로딩 화면·시작 화면 연출과 화면 전환
+
+- 상태: DONE
+- 관련 계획: P-013
+- 관련 결정: DEC-009
+- 관련 질문: OQ-027 (신규 OPEN)
+- 관련 AI 로그: AI-005
+
+#### 작업
+
+- `LoadingScreen.tsx` 신규. 시작 화면 에셋 4장을 프리로드한다.
+  흰 배경 + 검은 `LOADING` + 장식, 배경에 번개처럼 내리꽂히는 세로 픽셀 글리치(GSAP).
+- `ScreenFade.tsx` 신규. 검게 덮은 시점에 `ui:continue`를 발행하고 다시 걷는다.
+- 시작 화면 → 전투 전환을 `none → cover → load → none` 3단계로 두고,
+  덮인 뒤 로딩 화면을 한 번 더 보여 준다. 로딩 컴포넌트를 그대로 재사용한다.
+- `TitleScreen.tsx`에 등장 타임라인 추가 — 배경 페이드인·아주 느린 줌아웃,
+  타이틀 낙하, 장식이 위에서 아래로 자람, 서브타이틀, 안내 문구 페이드인 후 무한 펄스.
+- `titleAssets.ts` 신규. 로딩 화면과 시작 화면이 같은 에셋 목록을 본다.
+- `theme.z`에 `loading: 40`, `transition: 50` 추가.
+- `ornament.png`를 상하 반전해 저장하고 CSS `scaleY(-1)`을 제거했다.
+
+#### 오류 및 원인
+
+- **시작 화면 위아래에 붉은 띠(레터박스)가 남았다.**
+  - 재현: 16:9가 아닌 창(1404×840, 1316×904)에서 접속
+  - 원인: 배경 이미지가 16:9 무대 안에 있어 무대 크기까지만 채웠다.
+  - 수정: 배경을 무대 밖으로 빼서 화면 전체를 `object-fit: cover`로 덮게 했다.
+    배경은 잘려도 되고 타이틀은 잘리면 안 되므로 둘의 좌표계를 분리했다.
+
+- **로딩 화면이 걷히는 동안 흰색이 검게 탁해졌다.**
+  - 원인: 페이드아웃이 끝난 뒤에 시작 화면을 붙여서, 걷히는 동안 아래가 비어 있었다.
+  - 수정: `onReveal`을 추가해 걷히기 **시작**할 때 시작 화면을 먼저 붙인다.
+
+#### 검증
+
+- `npm run typecheck` / `npm run lint` / `npm run build` 통과
+- 브라우저 직접 확인
+  - 로딩(흰 배경·검은 LOADING·글리치) → 걷히며 시작 화면이 드러남 → 타이틀 등장 → 안내 문구 펄스
+  - 클릭·키 입력 → 검은 페이드 → `근거리 / ROOM 1 / 적 2` HUD
+  - 1404×840(16:9 아님)에서 배경이 화면 전체(1920×1149 뷰포트에서 2014×1206)를 덮어 여백 0
+  - 콘솔 오류 0
+
+#### 남은 작업
+
+- 로딩 화면 디자인은 Figma 시안이 없는 임시안이다 (OQ-027).
+- 배경을 `cover`로 덮으면서 창 비율에 따라 Figma 원본과 구도가 조금 달라진다. 의도한 맞바꿈이다.
+- 백그라운드 탭에서는 브라우저가 `requestAnimationFrame`을 늦춰 연출이 멈춘 것처럼 보인다.
+  탭으로 돌아오면 이어서 재생된다. 정상 동작이며, 자동화 검증 시 이 점을 감안해야 한다.
+
 ---
 
 ## 기록 템플릿

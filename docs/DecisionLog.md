@@ -180,6 +180,86 @@ React   --emit-->  EventBus  --subscribe-->  Phaser
 
 ---
 
+## DEC-008 — 시작 화면은 Figma 디자인을 React 레이어로 구현한다
+
+- 날짜: 2026-08-06
+- 상태: ACCEPTED
+- 관련 질문: OQ-024, OQ-026
+
+### 결정
+
+시작 화면(Figma `Frame 1`, node `1:33`)을 Phaser 씬이 아니라 React 컴포넌트
+`src/components/ui/TitleScreen.tsx`로 그린다. `ReadyScene`은 화면을 그리지 않고
+`ui:continue` 이벤트만 기다린다. 시작 입력(키·클릭)도 React가 단독으로 받는다.
+
+에셋은 `public/assets/title/`에 두고 `assetPath()`로 참조한다.
+배치는 1920×1080 디자인 좌표를 그대로 쓰고, `--u`(디자인 1px의 실제 px) 하나로 스케일한다.
+
+### 이유
+
+- 배경 블러·웹폰트·투명 PNG 겹치기는 DOM이 Phaser보다 훨씬 짧게 끝난다.
+- DEC-006에서 이미 "UI는 React DOM 오버레이"로 경계를 그었다. 시작 화면은 UI다.
+- 입력 지점을 한 곳으로 모아야 런이 두 번 시작되지 않는다.
+
+### 대안
+
+- Phaser `ReadyScene`에서 이미지로 렌더 — 블러와 한글 웹폰트 처리 비용이 크고,
+  캔버스 내부 좌표계에 묶여 1920×1080 디자인 좌표를 그대로 못 쓴다.
+- Next.js `next/image` 정적 임포트 — `basePath` 처리는 편하지만 기존 `assetPath()`
+  규약과 이중이 되고, `next-env.d.ts`가 없으면 `npm run typecheck`가 깨진다.
+
+### 영향
+
+- `src/components/ui/TitleScreen.tsx` 신규, `HUDOverlay`가 `phase === "READY"`에 렌더한다.
+- `ReadyScene`에서 플레이스홀더 텍스트와 자체 입력 처리를 제거했다. 조작 안내가 사라져 OQ-026을 등록했다.
+- `RunState.reset()`이 `phase` 필드를 직접 대입해 `phase:change`를 발행하지 않던 문제를 함께 고쳤다.
+  이 이벤트가 없으면 React가 READY 화면을 띄우지 못한다.
+- `theme.font.ui`(Pretendard)와 `app/globals.css`의 웹폰트 `@import`가 추가됐다.
+
+---
+
+## DEC-009 — 화면 연출은 GSAP, 전환은 ScreenFade 한 곳에서
+
+- 날짜: 2026-08-06
+- 상태: ACCEPTED
+- 관련 질문: OQ-027
+
+### 결정
+
+- 시작 화면 등장과 로딩 화면 연출은 GSAP 타임라인으로 만든다. 이미 의존성에 있고 순서 제어가 쉽다.
+- 화면 사이 전환은 `src/components/ui/ScreenFade.tsx` 하나만 쓴다.
+  검게 덮은 시점(`onCovered`)에 다음 화면으로 넘기고 다시 걷는다.
+- 시작 화면 → 전투 전환은 `none → cover → load → none` 3단계다.
+  덮인 뒤 로딩 화면을 한 번 더 보여 주고 전투로 들어간다.
+  그래서 `theme.z.loading`(60)이 `theme.z.transition`(50)보다 위다.
+- 로딩 화면은 시작 화면 에셋 네 장을 미리 받고, **걷히기 시작할 때** 다음 화면을 먼저 붙인다.
+  다 걷힌 뒤에 붙이면 그 사이 빈 화면이 보인다.
+- 시작 화면 배경은 16:9 무대 밖에 두고 화면 전체를 덮는다(`object-fit: cover`).
+  무대 안에 두면 16:9가 아닌 창에서 빈 띠가 남는다. 배경은 잘려도 되고 타이틀은 잘리면 안 된다.
+- 모든 연출은 `gsap.matchMedia()`로 `prefers-reduced-motion`을 존중한다.
+
+### 이유
+
+- 전환 길이가 화면마다 달라지면 게임 전체의 리듬이 흐트러진다. 한 컴포넌트로 묶어 고정한다.
+- 배경 이미지가 1MB를 넘어 프리로드 없이는 시작 화면에서 배경이 뒤늦게 튀어나온다.
+
+### 대안
+
+- CSS `@keyframes` — 요소별 순서를 맞추기 어렵고, 길이를 조정할 때 손댈 곳이 흩어진다.
+- 전환 없이 즉시 교체 — 구현은 가장 짧지만 화면이 툭툭 끊긴다.
+- 배경까지 `contain` — Figma 구도는 정확히 보존되지만 창 비율이 다르면 빈 띠가 남는다.
+
+### 영향
+
+- `LoadingScreen.tsx`, `ScreenFade.tsx`, `titleAssets.ts` 신규. `TitleScreen.tsx`에 등장 타임라인 추가.
+- `HUDOverlay`가 로딩·전환 상태를 함께 관리한다.
+- `theme.z`에 `loading: 40`, `transition: 50` 추가.
+- `ornament.png`는 Figma 렌더 방향(상하 반전)으로 파일 자체를 뒤집었다.
+  CSS `transform`으로 뒤집으면 GSAP이 같은 속성을 덮어써 충돌한다.
+- 로딩 화면 디자인은 Figma 시안이 없어 임시안이다. OQ-027로 남겼다.
+
+---
+
 ## 새 결정 템플릿
 
 ```md
