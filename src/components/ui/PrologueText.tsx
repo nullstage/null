@@ -6,6 +6,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { theme } from "@/styles/theme";
 
+import { glitchBolt } from "./glitch";
+
 /**
  * 런을 시작할 때 지나가는 프롤로그.
  *
@@ -17,9 +19,19 @@ import { theme } from "@/styles/theme";
 
 const LINES = ["시험받는 자는 셀 수 없이 많았으나,", "돌아온 자의 이름을 아는 이는 없었다."];
 
-/** 한 줄이 떠오르고 사라지는 데 걸리는 시간. */
-const LINE_IN_SEC = 0.9;
-const LINE_OUT_SEC = 0.45;
+/** 한 글자가 찍히는 간격. 글자 수만큼 곱해 한 줄의 등장 시간이 된다. */
+const PER_CHAR_SEC = 0.055;
+/** 지워질 때는 그냥 옅어진다. 찍히는 것과 대칭을 이루지 않아야 여운이 남는다. */
+const LINE_OUT_SEC = 0.7;
+
+/** 배경 글리치 줄기 수. 로딩보다 적게 둔다. 여기서는 글자가 주인공이다. */
+const GLITCH_BOLTS = 2;
+
+/** 줄이 지워진 뒤 다음 줄이 나올 때까지 비워 두는 시간. 숨 돌릴 틈이 있어야 문장이 남는다. */
+const LINE_GAP_SEC = 0.65;
+
+/** 검은 화면이 자리잡고 첫 줄이 나올 때까지의 시간. */
+const OPENING_HOLD_SEC = 0.6;
 
 /**
  * 필름 그레인. 외부 이미지 없이 SVG 난수를 그대로 배경으로 쓴다.
@@ -60,6 +72,20 @@ const Noise = styled.div`
   opacity: 0.05;
   mix-blend-mode: screen;
   pointer-events: none;
+`;
+
+/** 로딩 화면과 같은 세로 픽셀 글리치. 두 화면이 같은 세계로 보이게 한다. */
+const Bolt = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 120px;
+  opacity: 0;
+  transform-origin: 50% 0%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  will-change: transform, opacity;
 `;
 
 /** 위아래 어둠. 화면을 좁혀 보이게 해서 시선을 가운데로 모은다. */
@@ -108,11 +134,14 @@ const Caret = styled.span`
 export default function PrologueText({ onDone }: { onDone: () => void }) {
   const screenRef = useRef<HTMLDivElement>(null);
   const noiseRef = useRef<HTMLDivElement>(null);
+  const boltsRef = useRef<(HTMLDivElement | null)[]>([]);
   const lineRef = useRef<HTMLParagraphElement>(null);
   const caretRef = useRef<HTMLSpanElement>(null);
 
   /** 지금 보여 주는 줄. -1이면 아직 배경만 떠 있다. */
   const [index, setIndex] = useState(-1);
+  /** 지금까지 찍힌 글자 수. */
+  const [typed, setTyped] = useState(0);
 
   const readyRef = useRef(false);
   const busyRef = useRef(false);
@@ -157,25 +186,28 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
         },
       })
       .to(caretRef.current, { autoAlpha: 0, duration: out * 0.35 }, 0)
-      // 새겨진 방향 그대로 지워진다. 들어온 길로 나가야 한 동작으로 읽힌다.
-      .to(
-        lineRef.current,
-        { clipPath: "inset(0% 0% 0% 100%)", duration: out, ease: "power2.inOut" },
-        0,
-      );
+      // 찍힐 때와 대칭을 이루지 않는다. 그냥 옅어져야 여운이 남는다.
+      .to(lineRef.current, { autoAlpha: 0, duration: out, ease: "power1.in" }, 0)
+      // 빈 화면으로 잠깐 둔다. 바로 다음 줄이 나오면 앞 문장이 읽히기 전에 밀려난다.
+      .to({}, { duration: prefersReducedMotion() ? 0 : LINE_GAP_SEC });
   }, [finish, index]);
 
   // 배경을 먼저 세우고 첫 줄로 넘어간다.
   useLayoutEffect(() => {
     const reduced = prefersReducedMotion();
 
-    // 배경은 한 번 밝아지고 그대로 있는다. 계속 움직이면 글자와 시선을 다툰다.
-    const intro = gsap.timeline({ onComplete: () => setIndex(0) });
-    intro.fromTo(
-      screenRef.current,
-      { autoAlpha: 0 },
-      { autoAlpha: 1, duration: reduced ? 0 : 0.6, ease: "power2.out" },
-    );
+    /**
+     * 검은 화면을 처음부터 불투명하게 깐다.
+     *
+     * 페이드인을 넣으면 그 사이 아래의 전투 씬이 비친다. 로딩이 다 걷힌 뒤에야
+     * 이 화면이 마운트되기 때문이다. 어차피 앞 화면이 걷히는 중이라 페이드가 필요 없다.
+     */
+    gsap.set(screenRef.current, { autoAlpha: 1 });
+
+    // 첫 줄은 조금 뜸을 들이고 나온다. 화면이 바뀌자마자 글자가 뜨면 급해 보인다.
+    const intro = gsap
+      .timeline({ onComplete: () => setIndex(0) })
+      .to({}, { duration: reduced ? 0 : OPENING_HOLD_SEC });
 
     if (reduced) return () => intro.kill();
 
@@ -190,9 +222,23 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
       opacity: () => gsap.utils.random(0.04, 0.06),
     });
 
+    // 검은 배경이라 밝은 색을 얹는다. 로딩보다 훨씬 뜸하게 친다.
+    const bolts = boltsRef.current
+      .filter((bolt): bolt is HTMLDivElement => bolt !== null)
+      .map((bolt) =>
+        glitchBolt(bolt, {
+          tints: ["rgba(255, 255, 255, 0.5)", "rgba(200, 56, 60, 0.85)"],
+          restMin: 1.6,
+          restMax: 4.5,
+          lengthMin: 60,
+          lengthMax: 260,
+        }),
+      );
+
     return () => {
       intro.kill();
       grain.kill();
+      for (const bolt of bolts) bolt.kill();
     };
   }, []);
 
@@ -201,6 +247,7 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
     if (index < 0 || !lineRef.current) return;
 
     readyRef.current = false;
+    setTyped(0);
     gsap.killTweensOf(caretRef.current);
     gsap.set(caretRef.current, { autoAlpha: 0 });
 
@@ -220,18 +267,36 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
       );
     };
 
-    // 왼쪽에서 오른쪽으로 새겨진다. 기록이 적히는 것처럼 보여야 한다.
-    // 페이드나 이동을 겹치지 않는다. 움직이는 것이 둘 이상이면 문장이 눈에 안 들어온다.
-    lineTweenRef.current = gsap.fromTo(
-      lineRef.current,
-      { clipPath: "inset(0% 100% 0% 0%)" },
-      {
-        clipPath: "inset(0% 0% 0% 0%)",
-        duration: reduced ? 0 : LINE_IN_SEC,
-        ease: "power2.inOut",
-        onComplete: markReady,
+    // 앞 줄이 페이드로 사라졌으므로 투명도를 되돌려 놓는다.
+    gsap.set(lineRef.current, { autoAlpha: 1 });
+
+    const text = LINES[index];
+
+    /**
+     * 한 글자씩 찍는다. 기록이 적히는 것처럼 보여야 한다.
+     *
+     * 문자열을 직접 자르지 않고 카운터를 트윈한다. 그래야 중간에 progress(1)로
+     * 건너뛸 때도 같은 완료 경로를 탄다.
+     */
+    const counter = { chars: 0 };
+    let shown = 0;
+
+    lineTweenRef.current = gsap.to(counter, {
+      chars: text.length,
+      duration: reduced ? 0 : text.length * PER_CHAR_SEC,
+      ease: "none",
+      onUpdate: () => {
+        const next = Math.floor(counter.chars);
+        // 글자 수가 실제로 바뀔 때만 다시 그린다. 매 프레임 갱신할 이유가 없다.
+        if (next === shown) return;
+        shown = next;
+        setTyped(next);
       },
-    );
+      onComplete: () => {
+        setTyped(text.length);
+        markReady();
+      },
+    });
 
     return () => {
       lineTweenRef.current?.kill();
@@ -252,11 +317,19 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
     <Screen ref={screenRef} onPointerDown={advance}>
       <Glow />
       <Noise ref={noiseRef} />
+      {Array.from({ length: GLITCH_BOLTS }, (_, boltIndex) => (
+        <Bolt
+          key={boltIndex}
+          ref={(element) => {
+            boltsRef.current[boltIndex] = element;
+          }}
+        />
+      ))}
       <Vignette />
 
       {index >= 0 && (
         <LineRow>
-          <Line ref={lineRef}>{LINES[index]}</Line>
+          <Line ref={lineRef}>{LINES[index].slice(0, typed)}</Line>
           <Caret ref={caretRef} />
         </LineRow>
       )}

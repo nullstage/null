@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { theme } from "@/styles/theme";
 
+import { glitchBolt } from "./glitch";
+
 import { TITLE_ASSETS, TITLE_ASSET_LIST } from "./titleAssets";
 
 /**
@@ -71,30 +73,6 @@ const Caption = styled.p`
   color: #000;
 `;
 
-/**
- * 줄기 하나의 수명: 위에서 아래로 내리꽂히고 → 두 번 깜빡이고 → 사라진다.
- * 사라진 뒤에는 불규칙한 간격을 두고 다른 자리에서 다시 친다.
- */
-const glitchBolt = (element: HTMLDivElement, tints: string[]): gsap.core.Timeline =>
-  gsap
-    .timeline({ repeat: -1, repeatRefresh: true, delay: gsap.utils.random(0, 2.2) })
-    .set(element, {
-      left: () => `${gsap.utils.random(2, 98)}%`,
-      top: () => `${gsap.utils.random(0, 68)}%`,
-      height: () => gsap.utils.random(50, 300),
-      width: () => gsap.utils.random(1, 3),
-      backgroundColor: () => gsap.utils.random(tints),
-      scaleY: 0,
-      opacity: 1,
-    })
-    // 내리꽂히는 순간. 감속을 주면 번개보다 빗줄기처럼 보여서 등속으로 둔다.
-    .to(element, { scaleY: 1, duration: 0.05, ease: "none" })
-    .to(element, { opacity: 0.2, duration: 0.03 })
-    .to(element, { opacity: 1, duration: 0.03 })
-    .to(element, { opacity: 0, duration: 0.07 })
-    // 다음 글리치까지 쉬는 구간. 이게 없으면 계속 지직거려서 눈이 아프다.
-    .to({}, { duration: () => gsap.utils.random(0.5, 2.6) });
-
 export default function LoadingScreen({
   ready,
   onReveal,
@@ -146,9 +124,16 @@ export default function LoadingScreen({
     const mm = gsap.matchMedia();
 
     mm.add("(prefers-reduced-motion: no-preference)", () => {
-      const tints = ["rgba(0, 0, 0, 0.55)", "rgba(200, 56, 60, 0.75)", "rgba(60, 170, 190, 0.6)"];
       for (const bolt of boltsRef.current) {
-        if (bolt) glitchBolt(bolt, tints);
+        if (!bolt) continue;
+        // 흰 배경이라 어두운 색을 얹는다.
+        glitchBolt(bolt, {
+          tints: ["rgba(0, 0, 0, 0.55)", "rgba(200, 56, 60, 0.75)", "rgba(60, 170, 190, 0.6)"],
+          restMin: 0.5,
+          restMax: 2.6,
+          lengthMin: 50,
+          lengthMax: 300,
+        });
       }
 
       // 아주 가끔 화면 전체가 한 프레임 어긋난다.
