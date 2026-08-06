@@ -581,7 +581,11 @@ export class Player {
     ghost.setDepth(TUNING.depth.afterimage);
     // 형태가 아니라 지나간 궤적으로 읽혀야 한다. 실루엣만 붉게 남긴다.
     ghost.setTintFill(SILHOUETTE.chaser);
-    ghost.setAlpha(TUNING.feedback.afterimageAlpha);
+    // 느려질수록 잔상이 좁게 겹쳐 가산 블렌드로 밝기가 쌓인다.
+    // 속도에 비례해 옅게 남겨야 대시 후반에 뭉치지 않는다.
+    const speed = Math.abs((sprite.body as Phaser.Physics.Arcade.Body).velocity.x);
+    const intensity = Phaser.Math.Clamp(speed / (PLAYER.moveSpeed * 2.2), 0, 1);
+    ghost.setAlpha(TUNING.feedback.afterimageAlpha * intensity);
     // 잔상끼리 겹치는 자리가 밝아져 궤적이 선처럼 이어진다.
     ghost.setBlendMode(Phaser.BlendModes.ADD);
 
