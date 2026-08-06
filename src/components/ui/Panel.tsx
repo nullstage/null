@@ -19,26 +19,59 @@ const Backdrop = styled.div`
   z-index: ${theme.z.panel};
   display: grid;
   place-items: center;
-  background: rgba(6, 8, 12, 0.72);
   padding: ${theme.space(6)};
+
+  /* 시작 화면·일시정지와 같은 붉은 어둠. 패널만 푸른 톤이면 다른 게임처럼 보인다. */
+  background:
+    radial-gradient(90% 70% at 50% 0%, rgba(112, 34, 35, 0.34) 0%, rgba(6, 5, 6, 0) 72%),
+    rgba(6, 5, 6, 0.84);
 `;
 
 const Frame = styled.section`
+  position: relative;
   width: min(560px, 100%);
-  border: 1px solid ${theme.color.border};
-  border-radius: ${theme.radius};
-  background: ${theme.color.panel};
+  /* 도트 화면과 맞물리도록 모서리를 깎지 않는다. */
+  border: 1px solid rgba(200, 56, 60, 0.4);
+  background: rgba(12, 9, 11, 0.94);
   color: ${theme.color.text};
   font-family: ${theme.font.mono};
   padding: ${theme.space(7)};
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 24px 60px rgba(0, 0, 0, 0.6);
+
+  /* 위쪽 붉은 띠. 창이 어디서 시작하는지 한눈에 잡아 준다. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      rgba(200, 56, 60, 0) 0%,
+      rgba(200, 56, 60, 0.9) 50%,
+      rgba(200, 56, 60, 0) 100%
+    );
+  }
 `;
 
 const Heading = styled.h2`
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 ${theme.space(5)};
-  font-size: 14px;
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 16px;
   letter-spacing: 0.22em;
-  color: ${theme.color.accent};
+  color: #fff;
+
+  &::before {
+    content: "✦";
+    font-size: 12px;
+    letter-spacing: 0;
+    color: rgba(200, 56, 60, 0.95);
+  }
 `;
 
 export interface PanelProps {
@@ -96,22 +129,37 @@ export const PanelActions = styled.div`
 export const PanelButton = styled.button`
   flex: 1;
   padding: ${theme.space(3)} ${theme.space(4)};
-  border: 1px solid ${theme.color.border};
-  border-radius: 6px;
-  background: transparent;
-  color: ${theme.color.text};
-  font-family: inherit;
-  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 15px;
+  color: #fff;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    letter-spacing 0.18s ease;
 
+  /* 시작 화면 메뉴와 같은 규칙. 고르면 가운데가 붉게 진해진다. */
   &:hover:not(:disabled) {
-    border-color: ${theme.color.accent};
-    color: ${theme.color.accent};
+    letter-spacing: 0.06em;
+    border-color: rgba(200, 56, 60, 0.75);
+    background: linear-gradient(
+      90deg,
+      rgba(112, 34, 35, 0) 0%,
+      rgba(112, 34, 35, 0.75) 50%,
+      rgba(112, 34, 35, 0) 100%
+    );
   }
 
   &:disabled {
-    opacity: 0.45;
+    opacity: 0.4;
     cursor: default;
   }
 `;
