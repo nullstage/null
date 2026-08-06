@@ -24,6 +24,7 @@ import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
+import PrologueText from "./ui/PrologueText";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
 import { setSfxVolume } from "./ui/sfx";
@@ -106,9 +107,9 @@ export default function HUDOverlay() {
   const [loadingVisible, setLoadingVisible] = useState(true);
   /**
    * 시작 화면 → 전투 전환 단계.
-   * `cover`에서 검게 덮고, 덮인 뒤 `load`에서 로딩 화면을 보여 준 다음 전투로 넘어간다.
+   * `cover`에서 검게 덮고, `load`에서 로딩 화면을, `prologue`에서 도입 문구를 보여 준 뒤 전투로 넘어간다.
    */
-  const [transition, setTransition] = useState<"none" | "cover" | "load">("none");
+  const [transition, setTransition] = useState<"none" | "cover" | "load" | "prologue">("none");
 
   /**
    * 첫 방문 안내를 띄울지. 서버 렌더 결과와 어긋나지 않도록 마운트 후에 판단한다.
@@ -186,6 +187,7 @@ export default function HUDOverlay() {
   const markAssetsReady = useCallback(() => setAssetsReady(true), []);
   const hideLoading = useCallback(() => setLoadingVisible(false), []);
   const beginRun = useCallback(() => setTransition("cover"), []);
+  const startPrologue = useCallback(() => setTransition("prologue"), []);
   const endTransition = useCallback(() => setTransition("none"), []);
   const noop = useCallback(() => {}, []);
 
@@ -241,8 +243,10 @@ export default function HUDOverlay() {
 
       {/* 전환용 로딩. 커버 위에 뜨므로 검정에서 흰 로딩으로 바로 넘어간다. */}
       {transition === "load" && (
-        <LoadingScreen key="transition" ready onReveal={noop} onDone={endTransition} />
+        <LoadingScreen key="transition" ready onReveal={noop} onDone={startPrologue} />
       )}
+
+      {transition === "prologue" && <PrologueText onDone={endTransition} />}
 
       {showCombatHud && (
         <CombatHud>
