@@ -4,7 +4,14 @@ import styled from "@emotion/styled";
 import gsap from "gsap";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { KEY_BINDINGS } from "@/game/config/inputConfig";
+import {
+  KEY_BINDINGS,
+  REBINDABLE_ACTIONS,
+  resetKeyBindings,
+  setKeyBinding,
+  toBindingName,
+  type GameAction,
+} from "@/game/config/inputConfig";
 import { theme } from "@/styles/theme";
 
 import type { AudioSettings } from "./settingsStore";
@@ -18,15 +25,17 @@ import type { AudioSettings } from "./settingsStore";
 
 type Category = "sound" | "control";
 
-const CONTROL_ROWS: { label: string; keys: string[] }[] = [
-  { label: "이동", keys: [KEY_BINDINGS.MOVE_LEFT, KEY_BINDINGS.MOVE_RIGHT] },
-  { label: "점프", keys: [KEY_BINDINGS.JUMP] },
-  { label: "대시", keys: [KEY_BINDINGS.DASH] },
-  { label: "공격", keys: [KEY_BINDINGS.ATTACK] },
-  { label: "모드 전환", keys: [KEY_BINDINGS.SWITCH_MODE] },
-  { label: "확인", keys: [KEY_BINDINGS.CONFIRM] },
-  { label: "디버그", keys: [KEY_BINDINGS.TOGGLE_DEBUG] },
-];
+const ACTION_LABELS: Record<GameAction, string> = {
+  MOVE_LEFT: "왼쪽 이동",
+  MOVE_RIGHT: "오른쪽 이동",
+  JUMP: "점프",
+  DASH: "대시",
+  ATTACK: "공격",
+  SWITCH_MODE: "모드 전환",
+  CONFIRM: "확인",
+  TOGGLE_DEBUG: "디버그 패널",
+  DEBUG_SKIP_ROOM: "방 건너뛰기",
+};
 
 const Overlay = styled.div`
   position: absolute;
@@ -179,17 +188,43 @@ const Value = styled.span`
   color: rgba(255, 255, 255, 0.6);
 `;
 
-/** 참고 디자인의 선택 버튼처럼 채워진 사각형. 지금은 표시 전용이다. */
-const KeyCap = styled.span`
-  min-width: 78px;
+/** 참고 디자인의 선택 버튼처럼 채워진 사각형. 누르면 다음 키 입력을 받는다. */
+const KeyCap = styled.button<{ listening: boolean }>`
+  min-width: 96px;
   padding: 9px 16px;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid
+    ${({ listening }) => (listening ? "rgba(200,56,60,0.9)" : "rgba(255,255,255,0.16)")};
+  background: ${({ listening }) => (listening ? "rgba(200,56,60,0.3)" : "rgba(255,255,255,0.06)")};
   font-family: ${theme.font.mono};
   font-size: 13px;
   letter-spacing: 0.06em;
   color: #fff;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    border-color: rgba(200, 56, 60, 0.6);
+  }
+`;
+
+const ResetButton = styled.button`
+  margin: 20px 20px 0;
+  padding: 10px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 14px;
+  color: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: rgba(200, 56, 60, 0.75);
+  }
 `;
 
 const Note = styled.p`
@@ -237,6 +272,11 @@ export default function SettingsPanel({
   const rootRef = useRef<HTMLDivElement>(null);
   const [category, setCategory] = useState<Category>("sound");
 
+  /** 지금 다시 지정하려고 키 입력을 기다리는 동작. */
+  const [listening, setListening] = useState<GameAction | null>(null);
+  /** KEY_BINDINGS는 가변 객체라 React가 변화를 모른다. 바뀔 때마다 강제로 다시 그린다. */
+  const [bindingVersion, setBindingVersion] = useState(0);
+
   useLayoutEffect(() => {
     const mm = gsap.matchMedia();
     mm.add("(prefers-reduced-motion: no-preference)", () => {
@@ -250,14 +290,35 @@ export default function SettingsPanel({
   }, []);
 
   // 설정이 열려 있는 동안에는 시작 화면 메뉴가 키 입력을 받지 않아야 한다.
+  // 키를 다시 지정하는 중이면 그 입력을 여기서 가로챈다.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       event.stopPropagation();
-      if (event.key === "Escape") onClose();
+
+      if (!listening) {
+        if (event.key === "Escape") onClose();
+        return;
+      }
+
+      event.preventDefault();
+
+      if (event.key === "Escape") {
+        setListening(null);
+        return;
+      }
+
+      const name = toBindingName(event.code);
+      // 받을 수 없는 키는 무시하고 계속 기다린다.
+      if (!name) return;
+
+      setKeyBinding(listening, name);
+      setBindingVersion((version) => version + 1);
+      setListening(null);
     };
+
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [onClose]);
+  }, [listening, onClose]);
 
   const volumeRow = (label: string, key: keyof AudioSettings) => (
     <Row key={key}>
@@ -315,17 +376,34 @@ export default function SettingsPanel({
           ) : (
             <>
               <SectionTitle>조작키</SectionTitle>
-              {CONTROL_ROWS.map((row) => (
-                <Row key={row.label}>
-                  <RowLabel>{row.label}</RowLabel>
+              {REBINDABLE_ACTIONS.map((action) => (
+                <Row key={`${action}-${bindingVersion}`}>
+                  <RowLabel>{ACTION_LABELS[action]}</RowLabel>
                   <RowControl>
-                    {row.keys.map((key) => (
-                      <KeyCap key={key}>{key}</KeyCap>
-                    ))}
+                    <KeyCap
+                      type="button"
+                      listening={listening === action}
+                      onClick={() => setListening(action)}
+                    >
+                      {listening === action ? "키 입력…" : KEY_BINDINGS[action]}
+                    </KeyCap>
                   </RowControl>
                 </Row>
               ))}
-              <Note>키 변경은 아직 지원하지 않습니다. (OQ-004)</Note>
+              <Note>
+                바꿀 키를 눌러 새 키를 입력하세요. Esc를 누르면 취소됩니다. 이미 쓰는 키를 고르면 두
+                동작이 서로 자리를 바꿉니다. 디버그 키(F1·F2)는 고정입니다.
+              </Note>
+              <ResetButton
+                type="button"
+                onClick={() => {
+                  resetKeyBindings();
+                  setListening(null);
+                  setBindingVersion((version) => version + 1);
+                }}
+              >
+                기본값으로 되돌리기
+              </ResetButton>
             </>
           )}
         </Content>

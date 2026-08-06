@@ -3,6 +3,7 @@
 import styled from "@emotion/styled";
 import { useCallback, useEffect, useState } from "react";
 
+import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS } from "@/game/data/directorRules";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
 import type {
@@ -121,6 +122,8 @@ export default function HUDOverlay() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNeedsFirstVisit(!hasVisitedBefore());
     setAudio(loadAudioSettings());
+    // 씬이 만들어지기 전에 바인딩을 올려둬야 첫 방부터 바뀐 키가 먹는다.
+    loadKeyBindings();
   }, []);
 
   const changeAudio = useCallback((next: AudioSettings) => {
