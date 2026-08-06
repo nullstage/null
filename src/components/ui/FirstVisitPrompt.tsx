@@ -6,6 +6,8 @@ import { useLayoutEffect, useRef } from "react";
 
 import { theme } from "@/styles/theme";
 
+import { SFX, playSfx } from "./sfx";
+
 /**
  * 첫 방문 안내.
  *
@@ -120,6 +122,8 @@ export default function FirstVisitPrompt({ onConfirm }: { onConfirm: () => void 
   }, []);
 
   const confirm = () => {
+    // 이 클릭이 소리를 여는 입력이다. 여기서 한 번 울려 두면 언락 여부도 바로 드러난다.
+    playSfx(SFX.select);
     markVisited();
     onConfirm();
   };

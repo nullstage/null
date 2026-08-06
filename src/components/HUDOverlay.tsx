@@ -26,6 +26,7 @@ import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
+import { setSfxVolume } from "./ui/sfx";
 import {
   DEFAULT_AUDIO,
   loadAudioSettings,
@@ -125,6 +126,11 @@ export default function HUDOverlay() {
     // 씬이 만들어지기 전에 바인딩을 올려둬야 첫 방부터 바뀐 키가 먹는다.
     loadKeyBindings();
   }, []);
+
+  // 효과음은 컴포넌트 밖에서도 울리므로 모듈 쪽 음량을 따로 맞춰 둔다.
+  useEffect(() => {
+    setSfxVolume(audio.master * audio.sfx);
+  }, [audio]);
 
   const changeAudio = useCallback((next: AudioSettings) => {
     setAudio(next);

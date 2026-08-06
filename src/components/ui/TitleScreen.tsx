@@ -8,6 +8,7 @@ import { theme } from "@/styles/theme";
 
 import SettingsPanel from "./SettingsPanel";
 import type { AudioSettings } from "./settingsStore";
+import { SFX, playSfx } from "./sfx";
 import { TITLE_ASSETS } from "./titleAssets";
 
 /**
@@ -174,6 +175,8 @@ export default function TitleScreen({
     (index: number) => {
       const item = MENU_ITEMS[index];
       if (!item || item.disabled) return;
+
+      playSfx(SFX.select);
       if (item.id === "new") start();
       if (item.id === "settings") setSettingsOpen(true);
     },
