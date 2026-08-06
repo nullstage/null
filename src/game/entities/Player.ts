@@ -244,10 +244,18 @@ export class Player {
 
     const direction =
       (this.keys.MOVE_RIGHT?.isDown ? 1 : 0) - (this.keys.MOVE_LEFT?.isDown ? 1 : 0);
-    if (direction !== 0 || this.isGrounded) {
+    if (this.isGrounded) {
+      body.setVelocityX(direction * PLAYER.moveSpeed);
+    } else if (direction !== 0 && Math.sign(body.velocity.x) === direction &&
+               Math.abs(body.velocity.x) > PLAYER.moveSpeed) {
+      // 대시 관성이 이동 속도보다 빠른데 같은 방향을 누르고 있다.
+      // 여기서 moveSpeed로 덮어쓰면 속도가 뚝 떨어져 대시가 끊긴 것처럼 보인다.
+      body.setVelocityX(body.velocity.x * TUNING.airDragPerFrame);
+    } else if (direction !== 0) {
+      // 반대로 꺾거나 이미 느려졌으면 조작을 그대로 받는다. 공중 제어권은 남겨야 한다.
       body.setVelocityX(direction * PLAYER.moveSpeed);
     } else {
-      // 공중에서 손을 떼면 대시 속도가 서서히 죽는다. 즉시 0으로 만들면 포물선이 끊긴다.
+      // 손을 떼면 서서히 죽는다. 즉시 0으로 만들면 포물선이 끊긴다.
       body.setVelocityX(body.velocity.x * TUNING.airDragPerFrame);
     }
     if (direction !== 0) {
