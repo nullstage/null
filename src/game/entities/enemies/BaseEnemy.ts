@@ -5,6 +5,9 @@
  * 시스템 담당이 요구하는 계약은 두 가지뿐이다.
  *   1. 사망 시 반드시 `defeat()`를 거친다. RoomController의 클리어 판정이 여기에 걸려 있다.
  *   2. 체력·공격력은 `data/enemies.ts` 정의만 사용한다. 분석 결과로 이 값을 올리지 않는다. (DEC-004)
+ *
+ * 3종이 공유하는 것은 "몸을 만들고, 맞으면 반응하고, 죽으면 사라지는" 부분뿐이다.
+ * 행동은 각 하위 클래스가 전부 따로 가진다. 역할이 눈으로 구분돼야 하기 때문이다. (MVP_PLAN §2)
  */
 
 import type Phaser from "phaser";
@@ -12,6 +15,23 @@ import type Phaser from "phaser";
 import { ENEMIES, type EnemyDefinition } from "../../data/enemies";
 import type { CombatArena } from "../../types/combat";
 import type { EnemyType } from "../../types/game";
+
+/** 스폰 팝인 시간(ms). 적이 한 프레임 만에 나타나면 어디서 나왔는지 인지하지 못한다. */
+const SPAWN_POP_MS = 180;
+/** 스폰 시작 크기 비율. 0으로 두면 물리 바디까지 사라져 바닥을 통과할 수 있다. */
+const SPAWN_POP_SCALE = 0.6;
+/** 피격 흰색 플래시 유지 시간(ms). 짧아야 타격이 "찍히듯" 보인다. */
+const HIT_FLASH_MS = 90;
+/** 피격 스케일 펀치. 도형뿐이라 크기 변화가 유일한 타격감이다. */
+const HIT_PUNCH_MS = 90;
+const HIT_PUNCH_SCALE = 1.22;
+/** 사망 축소·페이드 시간(ms). 파티클 대신 쓴다. */
+const DEATH_MS = 240;
+/** 사망 회전량(도). 축소만 하면 그냥 사라지는 것처럼 보인다. */
+const DEATH_SPIN_DEG = 200;
+/** 잔상 한 장의 수명(ms)과 시작 투명도. */
+const AFTERIMAGE_MS = 200;
+const AFTERIMAGE_ALPHA = 0.45;
 
 export interface EnemyDeps {
   scene: Phaser.Scene;
@@ -30,17 +50,24 @@ export interface EnemyDeps {
 export abstract class BaseEnemy {
   readonly definition: EnemyDefinition;
   protected readonly scene: Phaser.Scene;
+  protected readonly arena: CombatArena;
+  /** 플레이어 위치는 이 함수로만 얻는다. Player를 직접 참조하지 않는다. */
+  protected readonly getPlayerPosition: () => { x: number; y: number };
   private readonly onDefeated: () => void;
 
-  /** 팀원 담당: 실제 스프라이트/바디로 교체한다. */
-  sprite: Phaser.GameObjects.GameObject | null = null;
+  /** 본체. 스프라이트가 들어오면 텍스처 키만 바뀐다. */
+  sprite: Phaser.Physics.Arcade.Sprite | null = null;
 
   hp: number;
   private defeated = false;
+  /** 상태 표시용 tint. 피격 플래시가 끝나면 이 색으로 되돌린다. */
+  private stateTint: number | null = null;
 
   protected constructor(type: EnemyType, deps: EnemyDeps) {
     this.definition = ENEMIES[type];
     this.scene = deps.scene;
+    this.arena = deps.arena;
+    this.getPlayerPosition = deps.getPlayerPosition;
     this.onDefeated = deps.onDefeated;
     this.hp = this.definition.hp;
   }
@@ -49,8 +76,44 @@ export abstract class BaseEnemy {
 
   abstract update(time: number, deltaMs: number): void;
 
+  /**
+   * 본체 생성. 3종이 크기만 다르게 호출한다.
+   *
+   * 바닥 collider는 씬이 `enemyBodies` 그룹 전체에 이미 걸어두었으므로 여기서 다시 걸지 않는다.
+   * 같은 충돌을 두 곳에서 관리하면 나중에 어느 쪽이 밀어낸 건지 추적할 수 없다. (CombatScene.wireCollisions)
+   */
+  protected spawnBody(
+    x: number,
+    y: number,
+    texture: string,
+    width: number,
+    height: number,
+  ): Phaser.Physics.Arcade.Sprite {
+    const body = this.arena.enemyBodies.create(x, y, texture) as Phaser.Physics.Arcade.Sprite;
+    body.setDisplaySize(width, height);
+    // 화면 밖으로 밀려나면 플레이어가 처리할 수 없는 적이 된다.
+    body.setCollideWorldBounds(true);
+    // 씬이 이 데이터로만 피해 대상을 찾는다. 빠지면 적이 무적이 된다.
+    body.setData("enemy", this);
+    this.sprite = body;
+
+    const { scaleX, scaleY } = body;
+    body.setScale(scaleX * SPAWN_POP_SCALE, scaleY * SPAWN_POP_SCALE);
+    this.scene.tweens.add({
+      targets: body,
+      scaleX,
+      scaleY,
+      duration: SPAWN_POP_MS,
+      ease: "Back.easeOut",
+    });
+
+    return body;
+  }
+
   takeDamage(amount: number): void {
     if (this.defeated) return;
+    // 죽는 타격도 맞았다는 게 보여야 한다. 감산보다 먼저 연출한다.
+    this.playHitFeedback();
     this.hp -= amount;
     if (this.hp <= 0) this.defeat();
   }
@@ -59,6 +122,7 @@ export abstract class BaseEnemy {
   protected defeat(): void {
     if (this.defeated) return;
     this.defeated = true;
+    this.playDeathEffect();
     this.destroy();
     this.onDefeated();
   }
@@ -68,7 +132,85 @@ export abstract class BaseEnemy {
   }
 
   destroy(): void {
-    // 팀원 담당: 스프라이트와 타이머 정리
+    this.sprite?.destroy();
     this.sprite = null;
+  }
+
+  // ────────────────────────────── 연출 ──────────────────────────────
+
+  /** 상태 표시색. 예고 중에는 예고색, 평소에는 원래 색이다. */
+  protected setStateTint(color: number | null): void {
+    this.stateTint = color;
+    if (!this.sprite) return;
+    if (color === null) this.sprite.clearTint();
+    else this.sprite.setTint(color);
+  }
+
+  /** 돌진처럼 빠른 이동에 남기는 잔상. 도형이라 속도감을 이걸로만 표현할 수 있다. */
+  protected spawnAfterimage(): void {
+    const body = this.sprite;
+    if (!body) return;
+
+    const ghost = this.scene.add.image(body.x, body.y, body.texture.key);
+    ghost.setScale(body.scaleX, body.scaleY);
+    ghost.setTintFill(this.stateTint ?? 0xffffff);
+    ghost.setAlpha(AFTERIMAGE_ALPHA);
+    ghost.setDepth(body.depth - 1);
+    this.scene.tweens.add({
+      targets: ghost,
+      alpha: 0,
+      duration: AFTERIMAGE_MS,
+      onComplete: () => ghost.destroy(),
+    });
+  }
+
+  private playHitFeedback(): void {
+    const body = this.sprite;
+    if (!body) return;
+
+    body.setTintFill(0xffffff);
+    this.scene.time.delayedCall(HIT_FLASH_MS, () => {
+      if (!body.active) return;
+      if (this.stateTint === null) body.clearTint();
+      else body.setTint(this.stateTint);
+    });
+
+    const { scaleX, scaleY } = body;
+    this.scene.tweens.add({
+      targets: body,
+      scaleX: scaleX * HIT_PUNCH_SCALE,
+      scaleY: scaleY * HIT_PUNCH_SCALE,
+      duration: HIT_PUNCH_MS,
+      yoyo: true,
+      onComplete: () => {
+        // yoyo가 끝나도 부동소수 오차가 남는다. 원래 크기로 확실히 되돌린다.
+        if (body.active) body.setScale(scaleX, scaleY);
+      },
+    });
+  }
+
+  /**
+   * 사망 연출. 본체를 물리에서 떼어내 축소·페이드시킨 뒤 지운다.
+   * 떼어내지 않으면 죽은 적이 사라지는 동안에도 접촉 피해를 준다.
+   */
+  private playDeathEffect(): void {
+    const body = this.sprite;
+    if (!body) return;
+
+    // `destroy()`가 이 스프라이트를 즉시 지우지 않도록 참조를 먼저 끊는다.
+    this.sprite = null;
+    this.arena.enemyBodies.remove(body);
+    body.disableBody(false, false);
+
+    this.scene.tweens.add({
+      targets: body,
+      scaleX: 0,
+      scaleY: 0,
+      alpha: 0,
+      angle: DEATH_SPIN_DEG,
+      duration: DEATH_MS,
+      ease: "Quad.easeIn",
+      onComplete: () => body.destroy(),
+    });
   }
 }
