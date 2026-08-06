@@ -21,7 +21,10 @@ import { theme } from "@/styles/theme";
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
+import LoadingScreen from "./ui/LoadingScreen";
 import ResultPanel from "./ui/ResultPanel";
+import ScreenFade from "./ui/ScreenFade";
+import TitleScreen from "./ui/TitleScreen";
 import UpgradePanel from "./ui/UpgradePanel";
 
 /**
@@ -86,6 +89,16 @@ export default function HUDOverlay() {
   const [activePanel, setActivePanel] = useState<ActivePanel>("none");
   const [debugVisible, setDebugVisible] = useState(false);
 
+  /** 시작 화면 에셋 프리로드 완료 여부. 로딩 화면이 걷히기 시작할 때 켠다. */
+  const [assetsReady, setAssetsReady] = useState(false);
+  /** 로딩 화면 자체의 존재 여부. 다 걷힌 뒤에 내린다. */
+  const [loadingVisible, setLoadingVisible] = useState(true);
+  /**
+   * 시작 화면 → 전투 전환 단계.
+   * `cover`에서 검게 덮고, 덮인 뒤 `load`에서 로딩 화면을 보여 준 다음 전투로 넘어간다.
+   */
+  const [transition, setTransition] = useState<"none" | "cover" | "load">("none");
+
   useGameEvent("phase:change", ({ phase: next }) => setPhase(next));
   useGameEvent("hud:update", ({ hud: next }) => setHud(next));
 
@@ -129,6 +142,19 @@ export default function HUDOverlay() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // ScreenFade는 마운트 시점의 콜백을 그대로 쓰므로 참조가 흔들리면 안 된다.
+  const markAssetsReady = useCallback(() => setAssetsReady(true), []);
+  const hideLoading = useCallback(() => setLoadingVisible(false), []);
+  const beginRun = useCallback(() => setTransition("cover"), []);
+  const endTransition = useCallback(() => setTransition("none"), []);
+  const noop = useCallback(() => {}, []);
+
+  // 완전히 검어진 시점. 전투로 넘기고, 그 위에 로딩 화면을 띄운다.
+  const enterRun = useCallback(() => {
+    emitGameEvent("ui:continue", {});
+    setTransition("load");
+  }, []);
+
   const continueFromPanel = useCallback(() => {
     setActivePanel("none");
     emitGameEvent("ui:continue", {});
@@ -152,6 +178,23 @@ export default function HUDOverlay() {
 
   return (
     <Layer>
+      {loadingVisible && (
+        <LoadingScreen
+          ready={phase !== "BOOT"}
+          onReveal={markAssetsReady}
+          onDone={hideLoading}
+        />
+      )}
+
+      {assetsReady && phase === "READY" && <TitleScreen onStart={beginRun} />}
+
+      {transition !== "none" && <ScreenFade onCovered={enterRun} onDone={noop} />}
+
+      {/* 전환용 로딩. 커버 위에 뜨므로 검정에서 흰 로딩으로 바로 넘어간다. */}
+      {transition === "load" && (
+        <LoadingScreen key="transition" ready onReveal={noop} onDone={endTransition} />
+      )}
+
       {showCombatHud && (
         <CombatHud>
           <HealthBar>

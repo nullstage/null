@@ -1,0 +1,201 @@
+"use client";
+
+import styled from "@emotion/styled";
+import gsap from "gsap";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+import { theme } from "@/styles/theme";
+
+import { TITLE_ASSETS, TITLE_ASSET_LIST } from "./titleAssets";
+
+/**
+ * 로딩 화면. 시작 화면 에셋을 미리 받아 둔다.
+ *
+ * 배경 이미지가 1MB를 넘어서, 미리 받지 않으면 시작 화면에서 배경이 나중에 튀어나온다.
+ * 로드가 순식간에 끝나도 최소 시간은 보여 준다. 한 프레임 깜빡이는 것이 더 어색하다.
+ *
+ * 진행률은 표시하지 않는다. 받을 것이 네 장뿐이라 숫자가 의미를 갖기 전에 끝난다.
+ */
+
+/** 로드가 빨라도 이 시간만큼은 유지한다. */
+const MIN_VISIBLE_MS = 900;
+
+/** 동시에 돌아다니는 글리치 줄기 수. 늘릴수록 노이즈가 심해진다. */
+const GLITCH_BOLTS = 5;
+
+const prefersReducedMotion = (): boolean =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const Screen = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: ${theme.z.loading};
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: #fff;
+  overflow: hidden;
+  pointer-events: none;
+`;
+
+/**
+ * 번개처럼 순간적으로 내리꽂히는 세로 픽셀 줄기.
+ * 위치·길이·굵기·색은 GSAP이 매 반복마다 다시 뽑는다.
+ */
+const Bolt = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 120px;
+  opacity: 0;
+  transform-origin: 50% 0%;
+  mix-blend-mode: multiply;
+  will-change: transform, opacity;
+`;
+
+/** 에셋은 시작 화면 방향(첨탑이 위)으로 저장돼 있다. 로딩에서는 뒤집어 쓴다. */
+const Mark = styled.img`
+  width: 68px;
+  height: 120px;
+  transform: scaleY(-1);
+`;
+
+const Caption = styled.p`
+  margin: 0;
+  font-family: ${theme.font.mono};
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  color: #000;
+`;
+
+/**
+ * 줄기 하나의 수명: 위에서 아래로 내리꽂히고 → 두 번 깜빡이고 → 사라진다.
+ * 사라진 뒤에는 불규칙한 간격을 두고 다른 자리에서 다시 친다.
+ */
+const glitchBolt = (element: HTMLDivElement, tints: string[]): gsap.core.Timeline =>
+  gsap
+    .timeline({ repeat: -1, repeatRefresh: true, delay: gsap.utils.random(0, 2.2) })
+    .set(element, {
+      left: () => `${gsap.utils.random(2, 98)}%`,
+      top: () => `${gsap.utils.random(0, 68)}%`,
+      height: () => gsap.utils.random(50, 300),
+      width: () => gsap.utils.random(1, 3),
+      backgroundColor: () => gsap.utils.random(tints),
+      scaleY: 0,
+      opacity: 1,
+    })
+    // 내리꽂히는 순간. 감속을 주면 번개보다 빗줄기처럼 보여서 등속으로 둔다.
+    .to(element, { scaleY: 1, duration: 0.05, ease: "none" })
+    .to(element, { opacity: 0.2, duration: 0.03 })
+    .to(element, { opacity: 1, duration: 0.03 })
+    .to(element, { opacity: 0, duration: 0.07 })
+    // 다음 글리치까지 쉬는 구간. 이게 없으면 계속 지직거려서 눈이 아프다.
+    .to({}, { duration: () => gsap.utils.random(0.5, 2.6) });
+
+export default function LoadingScreen({
+  ready,
+  onReveal,
+  onDone,
+}: {
+  /** 게임 쪽 준비 여부. 에셋이 다 받아져도 이게 false면 계속 기다린다. */
+  ready: boolean;
+  /** 걷히기 시작하는 순간. 다음 화면을 여기서 미리 붙여야 흰 화면 밑이 비지 않는다. */
+  onReveal: () => void;
+  /** 다 걷힌 순간. 부모가 이 컴포넌트를 내리면 된다. */
+  onDone: () => void;
+}) {
+  const screenRef = useRef<HTMLDivElement>(null);
+  const boltsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  const [loaded, setLoaded] = useState(0);
+  const [minTimePassed, setMinTimePassed] = useState(false);
+
+  const total = TITLE_ASSET_LIST.length;
+
+  // 에셋 프리로드. 실패해도 진행을 막지 않는다. 로딩 화면에 갇히는 편이 더 나쁘다.
+  useEffect(() => {
+    let cancelled = false;
+    const count = () => {
+      if (!cancelled) setLoaded((n) => n + 1);
+    };
+
+    const images = TITLE_ASSET_LIST.map((src) => {
+      const image = new Image();
+      image.onload = count;
+      image.onerror = count;
+      image.src = src;
+      return image;
+    });
+
+    const timer = window.setTimeout(() => setMinTimePassed(true), MIN_VISIBLE_MS);
+
+    return () => {
+      cancelled = true;
+      for (const image of images) {
+        image.onload = null;
+        image.onerror = null;
+      }
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const mm = gsap.matchMedia();
+
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      const tints = ["rgba(0, 0, 0, 0.55)", "rgba(200, 56, 60, 0.75)", "rgba(60, 170, 190, 0.6)"];
+      for (const bolt of boltsRef.current) {
+        if (bolt) glitchBolt(bolt, tints);
+      }
+
+      // 아주 가끔 화면 전체가 한 프레임 어긋난다.
+      gsap
+        .timeline({ repeat: -1, repeatRefresh: true, delay: 1.2 })
+        .to(screenRef.current, { x: () => gsap.utils.random(-6, 6), duration: 0.04 })
+        .to(screenRef.current, { x: 0, duration: 0.04 })
+        .to({}, { duration: () => gsap.utils.random(1.5, 4) });
+    });
+
+    return () => mm.revert();
+  }, []);
+
+  const finished = loaded >= total && ready && minTimePassed;
+
+  useEffect(() => {
+    if (!finished) return;
+
+    onReveal();
+
+    const tween = gsap.to(screenRef.current, {
+      autoAlpha: 0,
+      duration: prefersReducedMotion() ? 0 : 0.6,
+      ease: "power2.out",
+      onComplete: onDone,
+    });
+
+    return () => {
+      tween.kill();
+    };
+    // onReveal·onDone은 부모에서 안정적으로 유지한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
+  return (
+    <Screen ref={screenRef}>
+      {Array.from({ length: GLITCH_BOLTS }, (_, index) => (
+        <Bolt
+          key={index}
+          ref={(element) => {
+            boltsRef.current[index] = element;
+          }}
+        />
+      ))}
+
+      <Mark src={TITLE_ASSETS.ornament} alt="" draggable={false} />
+      <Caption>LOADING</Caption>
+    </Screen>
+  );
+}

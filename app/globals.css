@@ -1,3 +1,6 @@
+/* 시작 화면 지정 서체(Figma). 한글 동적 서브셋이라 필요한 글자만 내려받는다. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
 *,
 *::before,
 *::after {
