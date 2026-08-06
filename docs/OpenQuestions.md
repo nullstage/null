@@ -23,7 +23,7 @@
 |---|---|---|---|---|---|---|
 | OQ-001 | 게임 엔진과 Web 기술 스택 | Phaser 3+TS+Vite / Next.js 조합 / Godot Web | Next.js + Phaser 3 + GSAP + Emotion + TypeScript | 개발 시작 전 | RESOLVED | DEC-005 |
 | OQ-002 | GitHub Pages 저장소명과 배포 base 경로 | `nullstage/null` / 다른 저장소 | `nullstage/null` 사용, `basePath = /null` | 최초 배포 전 | RESOLVED | DEC-005 |
-| OQ-025 | `nullstage/null` 저장소가 public이며 GitHub Pages를 사용할 수 있는가 | public 전환 / private 유지 후 다른 저장소 사용 | private 조직 저장소는 Pages 사용에 유료 플랜이 필요하다. public 전환 권장 | 최초 배포 전 | BLOCKED | - |
+| OQ-025 | `nullstage/null` 저장소가 public이며 GitHub Pages를 사용할 수 있는가 | public 전환 / private 유지 후 다른 저장소 사용 | 저장소 설정 완료. `https://nullstage.github.io/null/` 배포 확인 | 최초 배포 전 | RESOLVED | DEC-005 |
 | OQ-003 | 기본 해상도와 화면 비율 | 1280×720 / 960×540 / 반응형 | 내부 1280×720 고정 + Scale.FIT. **코드 임시값 적용 중** | UI 구현 전 | OPEN | - |
 | OQ-004 | 키 바인딩 | WASD+마우스 / 방향키+ZXC / 혼합 | 키보드 단독. **코드 임시값 적용 중** | 전투 구현 전 | OPEN | - |
 | OQ-023 | 테스트 프레임워크를 도입할 것인가 | Vitest 도입 / 도입 안 함 | DirectorPolicy가 순수 함수라 검증 가치가 크다. Vitest + 분류 규칙 테스트만 권장 | Day 2 시작 전 | OPEN | - |
