@@ -92,8 +92,13 @@ const TUNING = {
     punchMs: 70,
     punchScale: 1.16,
     blinkMs: 90,
-    afterimageIntervalMs: 30,
-    afterimageFadeMs: 220,
+    /** 잔상 간격. 촘촘할수록 빠르게 지나간 것처럼 보인다. */
+    afterimageIntervalMs: 20,
+    afterimageFadeMs: 280,
+    afterimageAlpha: 0.6,
+    /** 잔상이 진행 반대로 밀리는 거리. 몸이 앞서 나간 느낌을 만든다. */
+    afterimageDriftPx: 16,
+    afterimageStretch: 1.35,
     deathMs: 320,
     hitShakeMs: 90,
     hitShakeIntensity: 0.004,
@@ -539,13 +544,21 @@ export class Player {
     ghost.setScale(sprite.scaleX, sprite.scaleY);
     ghost.setFlipX(sprite.flipX);
     ghost.setDepth(TUNING.depth.afterimage);
-    ghost.setTintFill(SILHOUETTE.playerAttack);
-    ghost.setAlpha(0.45);
+    // 형태가 아니라 지나간 궤적으로 읽혀야 한다. 실루엣만 붉게 남긴다.
+    ghost.setTintFill(SILHOUETTE.chaser);
+    ghost.setAlpha(TUNING.feedback.afterimageAlpha);
+    // 잔상끼리 겹치는 자리가 밝아져 궤적이 선처럼 이어진다.
+    ghost.setBlendMode(Phaser.BlendModes.ADD);
+
+    const { feedback } = TUNING;
     this.scene.tweens.add({
       targets: ghost,
       alpha: 0,
-      scaleX: ghost.scaleX * 0.7,
-      duration: TUNING.feedback.afterimageFadeMs,
+      // 진행 반대로 밀리며 늘어난다. 제자리에서 사라지면 속도가 안 붙는다.
+      x: ghost.x - this.facing * feedback.afterimageDriftPx,
+      scaleX: ghost.scaleX * feedback.afterimageStretch,
+      duration: feedback.afterimageFadeMs,
+      ease: "power2.out",
       onComplete: () => ghost.destroy(),
     });
   }
