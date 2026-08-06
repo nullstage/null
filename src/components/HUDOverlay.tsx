@@ -21,9 +21,17 @@ import { theme } from "@/styles/theme";
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
+import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
+import {
+  DEFAULT_AUDIO,
+  loadAudioSettings,
+  saveAudioSettings,
+  type AudioSettings,
+} from "./ui/settingsStore";
+import TitleBgm from "./ui/TitleBgm";
 import TitleScreen from "./ui/TitleScreen";
 import UpgradePanel from "./ui/UpgradePanel";
 
@@ -35,6 +43,7 @@ import UpgradePanel from "./ui/UpgradePanel";
  */
 
 type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result";
+
 
 const Layer = styled.div`
   position: absolute;
@@ -98,6 +107,28 @@ export default function HUDOverlay() {
    * `cover`에서 검게 덮고, 덮인 뒤 `load`에서 로딩 화면을 보여 준 다음 전투로 넘어간다.
    */
   const [transition, setTransition] = useState<"none" | "cover" | "load">("none");
+
+  /**
+   * 첫 방문 안내를 띄울지. 서버 렌더 결과와 어긋나지 않도록 마운트 후에 판단한다.
+   * 안내가 떠 있는 동안에는 로딩을 끝내지 않는다. 버튼 클릭이 소리를 여는 입력이기 때문이다.
+   */
+  const [needsFirstVisit, setNeedsFirstVisit] = useState(false);
+  const [audio, setAudio] = useState<AudioSettings>(DEFAULT_AUDIO);
+
+  useEffect(() => {
+    // 정적 프리렌더에는 localStorage가 없다. 초기값으로 읽으면 하이드레이션이 어긋나므로
+    // 마운트 뒤에 한 번 읽는다. (DEC-005 정적 내보내기)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNeedsFirstVisit(!hasVisitedBefore());
+    setAudio(loadAudioSettings());
+  }, []);
+
+  const changeAudio = useCallback((next: AudioSettings) => {
+    setAudio(next);
+    saveAudioSettings(next);
+  }, []);
+
+  const confirmFirstVisit = useCallback(() => setNeedsFirstVisit(false), []);
 
   useGameEvent("phase:change", ({ phase: next }) => setPhase(next));
   useGameEvent("hud:update", ({ hud: next }) => setHud(next));
@@ -176,17 +207,26 @@ export default function HUDOverlay() {
   const inCombat = phase === "COMBAT" || phase === "BOSS";
   const showCombatHud = hud !== null && inCombat && activePanel === "none";
 
+  // 로딩 화면에서 시작해 시작 화면까지 흐르고, 전투로 넘어가는 순간 꺼진다.
+  // 첫 방문 안내가 떠 있는 동안은 어차피 브라우저가 소리를 막으므로 켜지 않는다.
+  const titleBgmPlaying =
+    !needsFirstVisit && (loadingVisible || (phase === "READY" && transition === "none"));
+
   return (
     <Layer>
-      {loadingVisible && (
-        <LoadingScreen
-          ready={phase !== "BOOT"}
-          onReveal={markAssetsReady}
-          onDone={hideLoading}
-        />
+      {/* 마스터는 다른 소리에도 곱해질 값이라 여기서 함께 반영한다. */}
+      <TitleBgm playing={titleBgmPlaying} volume={audio.master * audio.bgm} />
+
+      {needsFirstVisit && <FirstVisitPrompt onConfirm={confirmFirstVisit} />}
+
+      {/* 첫 방문 안내가 먼저다. 뒤에서 로딩이 돌면 안내 화면이 지저분해진다. */}
+      {loadingVisible && !needsFirstVisit && (
+        <LoadingScreen ready={phase !== "BOOT"} onReveal={markAssetsReady} onDone={hideLoading} />
       )}
 
-      {assetsReady && phase === "READY" && <TitleScreen onStart={beginRun} />}
+      {assetsReady && phase === "READY" && (
+        <TitleScreen onStart={beginRun} audio={audio} onAudioChange={changeAudio} />
+      )}
 
       {transition !== "none" && <ScreenFade onCovered={enterRun} onDone={noop} />}
 

@@ -2,10 +2,12 @@
 
 import styled from "@emotion/styled";
 import gsap from "gsap";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { theme } from "@/styles/theme";
 
+import SettingsPanel from "./SettingsPanel";
+import type { AudioSettings } from "./settingsStore";
 import { TITLE_ASSETS } from "./titleAssets";
 
 /**
@@ -72,27 +74,92 @@ const Art = styled.img<{ left: number; top: number; w: number; h: number }>`
   user-select: none;
 `;
 
-const PressAnyKey = styled.p`
+/** 메뉴 항목. 디자인 좌표 기준 폭 480, 높이 62, 세로 간격 78. */
+const MENU_LEFT = (DESIGN.width - 480) / 2;
+const MENU_TOP = 744;
+const MENU_STEP = 78;
+
+const Menu = styled.nav`
   position: absolute;
-  left: calc(var(--u) * 839.13);
-  top: calc(var(--u) * 836.1);
-  margin: 0;
-  font-family: ${theme.font.ui};
-  font-weight: 700;
-  font-size: calc(var(--u) * 32);
-  line-height: normal;
-  color: rgba(108, 106, 106, 0.8);
-  white-space: nowrap;
-  user-select: none;
+  left: calc(var(--u) * ${MENU_LEFT});
+  top: calc(var(--u) * ${MENU_TOP});
+  width: calc(var(--u) * 480);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * ${MENU_STEP - 62});
 `;
 
-export default function TitleScreen({ onStart }: { onStart: () => void }) {
+/**
+ * 배경은 가운데만 진하고 양 끝으로 갈수록 투명해지는 가로 그라데이션이다.
+ * 사각형 테두리를 그리지 않아야 배경 아트를 가리지 않는다.
+ */
+const MenuItem = styled.button<{ selected: boolean; disabled: boolean }>`
+  height: calc(var(--u) * 62);
+  border: none;
+  padding: 0;
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: calc(var(--u) * 32);
+  line-height: 1;
+  color: #fff;
+  opacity: ${({ disabled }) => (disabled ? 0.32 : 1)};
+  cursor: ${({ disabled }) => (disabled ? "default" : "pointer")};
+  user-select: none;
+  transition:
+    background 0.25s ease,
+    letter-spacing 0.25s ease;
+
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, ${({ selected }) => (selected ? 0.72 : 0.42)}) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+
+  ${({ selected, disabled }) =>
+    selected && !disabled
+      ? `
+    letter-spacing: 0.06em;
+    background: linear-gradient(
+      90deg,
+      rgba(112, 34, 35, 0) 0%,
+      rgba(112, 34, 35, 0.78) 50%,
+      rgba(112, 34, 35, 0) 100%
+    );
+  `
+      : ""}
+`;
+
+type MenuId = "new" | "continue" | "settings";
+
+/**
+ * 이어하기는 저장 기능이 없어 비활성이다.
+ * 세이브·로드는 MVP 범위 밖이라 임의로 구현하지 않는다. (CLAUDE.md 규칙 3, OQ-028)
+ */
+const MENU_ITEMS: { id: MenuId; label: string; disabled: boolean }[] = [
+  { id: "new", label: "처음부터", disabled: false },
+  { id: "continue", label: "이어하기", disabled: true },
+  { id: "settings", label: "설정", disabled: false },
+];
+
+export default function TitleScreen({
+  onStart,
+  audio,
+  onAudioChange,
+}: {
+  onStart: () => void;
+  audio: AudioSettings;
+  onAudioChange: (next: AudioSettings) => void;
+}) {
   const screenRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLImageElement>(null);
   const logoRef = useRef<HTMLImageElement>(null);
   const ornamentRef = useRef<HTMLImageElement>(null);
   const subtitleRef = useRef<HTMLImageElement>(null);
-  const pressRef = useRef<HTMLParagraphElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
+
+  const [selected, setSelected] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // 키와 클릭이 같은 프레임에 겹쳐도 런이 두 번 시작되지 않게 한다.
   const startedRef = useRef(false);
@@ -103,16 +170,44 @@ export default function TitleScreen({ onStart }: { onStart: () => void }) {
     onStart();
   }, [onStart]);
 
+  const run = useCallback(
+    (index: number) => {
+      const item = MENU_ITEMS[index];
+      if (!item || item.disabled) return;
+      if (item.id === "new") start();
+      if (item.id === "settings") setSettingsOpen(true);
+    },
+    [start],
+  );
+
   useEffect(() => {
+    if (settingsOpen) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
-      // F1 디버그 토글 등 기능키와 브라우저 단축키는 시작 입력으로 치지 않는다.
-      if (event.key.length > 1 && event.key.startsWith("F")) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      start();
+
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        setSelected((index) => (index + 1) % MENU_ITEMS.length);
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        setSelected((index) => (index - 1 + MENU_ITEMS.length) % MENU_ITEMS.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setSelected((index) => {
+          run(index);
+          return index;
+        });
+      }
     };
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [start]);
+  }, [run, settingsOpen]);
 
   // 첫 페인트 전에 초기 상태를 잡아야 요소가 한 프레임 번쩍이지 않는다.
   useLayoutEffect(() => {
@@ -121,7 +216,7 @@ export default function TitleScreen({ onStart }: { onStart: () => void }) {
       logoRef.current,
       ornamentRef.current,
       subtitleRef.current,
-      pressRef.current,
+      menuRef.current,
     ];
     gsap.set(targets, { autoAlpha: 0 });
 
@@ -162,27 +257,24 @@ export default function TitleScreen({ onStart }: { onStart: () => void }) {
           { autoAlpha: 1, y: 0, duration: 1.0, ease: "power2.out" },
           1.5,
         )
-        .fromTo(pressRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8 }, 2.3)
+        .fromTo(
+          menuRef.current,
+          { autoAlpha: 0, y: 18 },
+          { autoAlpha: 1, y: 0, duration: 0.9, ease: "power2.out" },
+          2.2,
+        )
         // 아주 느린 줌아웃. 정지 화면처럼 보이지 않게 하는 정도로만 움직인다.
-        .to(backdropRef.current, { scale: 1, duration: 24, ease: "none" }, 2.2)
-        // 안내 문구는 계속 숨 쉰다. 아케이드 시작 화면의 관례다.
-        .to(
-          pressRef.current,
-          { autoAlpha: 0.3, duration: 1.3, ease: "sine.inOut", repeat: -1, yoyo: true },
-          3.1,
-        );
+        .to(backdropRef.current, { scale: 1, duration: 24, ease: "none" }, 2.2);
     });
 
     return () => mm.revert();
   }, []);
 
   return (
-    <Screen ref={screenRef} onPointerDown={start} data-node-id="1:33">
+    <Screen ref={screenRef} data-node-id="1:33">
       <Backdrop ref={backdropRef} src={TITLE_ASSETS.background} alt="" draggable={false} />
 
       <Stage>
-        <PressAnyKey ref={pressRef}>아무키나 누르세요</PressAnyKey>
-
         <Art
           ref={logoRef}
           src={TITLE_ASSETS.logo}
@@ -213,7 +305,30 @@ export default function TitleScreen({ onStart }: { onStart: () => void }) {
           h={348.505}
           draggable={false}
         />
+
+        <Menu ref={menuRef}>
+          {MENU_ITEMS.map((item, index) => (
+            <MenuItem
+              key={item.id}
+              type="button"
+              selected={index === selected}
+              disabled={item.disabled}
+              onPointerEnter={() => setSelected(index)}
+              onPointerDown={() => run(index)}
+            >
+              {item.label}
+            </MenuItem>
+          ))}
+        </Menu>
       </Stage>
+
+      {settingsOpen && (
+        <SettingsPanel
+          audio={audio}
+          onAudioChange={onAudioChange}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </Screen>
   );
 }
