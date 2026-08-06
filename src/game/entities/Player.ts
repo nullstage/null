@@ -239,6 +239,9 @@ export class Player {
       this.dashRechargeAtMs = time + TUNING.dash.rechargeMs;
     }
 
+    // 대시가 끝나도 관성으로 계속 날아간다. 그 구간에도 잔상을 이어야 궤적이 안 끊긴다.
+    if (Math.abs(body.velocity.x) > PLAYER.moveSpeed * 1.15) this.trailAfterimage(time);
+
     const direction =
       (this.keys.MOVE_RIGHT?.isDown ? 1 : 0) - (this.keys.MOVE_LEFT?.isDown ? 1 : 0);
     if (direction !== 0 || this.isGrounded) {
