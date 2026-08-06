@@ -24,6 +24,7 @@ import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
+import PauseMenu from "./ui/PauseMenu";
 import PrologueText from "./ui/PrologueText";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
@@ -59,33 +60,95 @@ const Layer = styled.div`
   }
 `;
 
+/**
+ * 전투 HUD.
+ *
+ * 시작 화면과 같은 붉은 다크 판타지 톤을 쓴다. 둥근 모서리와 하늘색 강조는
+ * 기본 테마에서 온 값이라 게임 화면과 따로 놀았다. 각지게 두고 색을 붉게 맞춘다.
+ */
 const CombatHud = styled.div`
   position: absolute;
-  top: ${theme.space(4)};
-  left: ${theme.space(4)};
+  top: 22px;
+  left: 26px;
   z-index: ${theme.z.hud};
   display: flex;
-  align-items: center;
-  gap: ${theme.space(4)};
-  font-family: ${theme.font.mono};
-  font-size: 13px;
-  color: ${theme.color.textMuted};
+  flex-direction: column;
+  gap: 9px;
   pointer-events: none;
 `;
 
 const HealthBar = styled.div`
-  width: 200px;
-  height: 10px;
-  border: 1px solid ${theme.color.border};
-  border-radius: 999px;
+  position: relative;
+  width: 268px;
+  height: 14px;
+  /* 도트 화면이라 모서리를 깎지 않는다. 안쪽 그림자로 판 위에 얹힌 금속처럼 보이게 한다. */
+  border: 1px solid rgba(200, 56, 60, 0.45);
+  background: rgba(8, 6, 7, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 `;
 
-const HealthFill = styled.div<{ ratio: number }>`
+/**
+ * 줄어드는 체력을 뒤에서 늦게 따라오는 층.
+ * 얼마나 깎였는지가 한 박자 남아 있어야 맞은 것이 눈에 들어온다.
+ */
+const HealthGhost = styled.div<{ ratio: number }>`
+  position: absolute;
+  inset: 0;
   width: ${({ ratio }) => Math.max(0, Math.min(1, ratio)) * 100}%;
-  height: 100%;
-  background: ${({ ratio }) => (ratio > 0.3 ? theme.color.accent : theme.color.danger)};
-  transition: width 0.2s ease;
+  background: rgba(255, 255, 255, 0.28);
+  transition: width 0.55s ease 0.12s;
+`;
+
+const HealthFill = styled.div<{ ratio: number }>`
+  position: absolute;
+  inset: 0;
+  width: ${({ ratio }) => Math.max(0, Math.min(1, ratio)) * 100}%;
+  background: ${({ ratio }) =>
+    ratio > 0.3
+      ? "linear-gradient(180deg, #e05055 0%, #a3242a 100%)"
+      : "linear-gradient(180deg, #ff8a3d 0%, #c8383c 100%)"};
+  transition: width 0.18s ease;
+`;
+
+/** 체력바 위를 지나는 눈금. 남은 칸 수를 셀 수 있어야 위험한 순간이 읽힌다. */
+const HealthTicks = styled.div`
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0 24px,
+    rgba(0, 0, 0, 0.55) 24px 26px
+  );
+`;
+
+const StatusRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: ${theme.font.mono};
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.5);
+`;
+
+/** 지금 무엇을 들고 있는지. 모드 전환이 핵심 조작이라 가장 눈에 띄어야 한다. */
+const ModeTag = styled.span<{ mode: "MELEE" | "RANGED" }>`
+  padding: 3px 10px;
+  border-left: 2px solid ${({ mode }) => (mode === "MELEE" ? "#e05055" : "#9a5f86")};
+  background: ${({ mode }) =>
+    mode === "MELEE"
+      ? "linear-gradient(90deg, rgba(224,80,85,0.3) 0%, rgba(224,80,85,0) 100%)"
+      : "linear-gradient(90deg, rgba(154,95,134,0.32) 0%, rgba(154,95,134,0) 100%)"};
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: #fff;
+`;
+
+const HpText = styled.span`
+  color: rgba(255, 255, 255, 0.72);
 `;
 
 export default function HUDOverlay() {
@@ -100,6 +163,8 @@ export default function HUDOverlay() {
   const [bossWeights, setBossWeights] = useState<BossPatternWeights>(DEFAULT_BOSS_WEIGHTS);
   const [activePanel, setActivePanel] = useState<ActivePanel>("none");
   const [debugVisible, setDebugVisible] = useState(false);
+  /** Esc로 연 일시정지 메뉴. 열려 있는 동안 전투 씬은 멈춰 있다. */
+  const [paused, setPaused] = useState(false);
 
   /** 시작 화면 에셋 프리로드 완료 여부. 로딩 화면이 걷히기 시작할 때 켠다. */
   const [assetsReady, setAssetsReady] = useState(false);
@@ -183,6 +248,29 @@ export default function HUDOverlay() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  /**
+   * Esc 일시정지. 여는 것도 닫는 것도 여기 한 곳에서만 처리한다.
+   * PauseMenu가 따로 Esc를 들으면 한 번 눌러 연 즉시 닫힌다.
+   *
+   * 분석·강화 같은 패널이 떠 있을 때는 이미 게임이 멈춰 있으므로 받지 않는다.
+   * 설정 창은 capture 단계에서 Esc를 가로채므로 여기까지 오지 않는다.
+   */
+  useEffect(() => {
+    const pausable = phase === "COMBAT" || phase === "BOSS";
+    if (!pausable || activePanel !== "none" || transition !== "none") return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setPaused((open) => {
+        emitGameEvent(open ? "game:resume" : "game:pause", {});
+        return !open;
+      });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePanel, phase, transition]);
+
   // ScreenFade는 마운트 시점의 콜백을 그대로 쓰므로 참조가 흔들리면 안 된다.
   const markAssetsReady = useCallback(() => setAssetsReady(true), []);
   const hideLoading = useCallback(() => setLoadingVisible(false), []);
@@ -202,7 +290,8 @@ export default function HUDOverlay() {
     emitGameEvent("ui:continue", {});
   }, []);
 
-  const restartRun = useCallback(() => {
+  /** 런 관련 화면 상태를 전부 비운다. 이전 런 값이 다음 화면에 남으면 안 된다. */
+  const clearRunState = useCallback(() => {
     setActivePanel("none");
     setHud(null);
     setRoomId("");
@@ -211,8 +300,25 @@ export default function HUDOverlay() {
     setDeception(null);
     setResult(null);
     setBossWeights(DEFAULT_BOSS_WEIGHTS);
-    emitGameEvent("run:restart", {});
   }, []);
+
+  const restartRun = useCallback(() => {
+    clearRunState();
+    emitGameEvent("run:restart", {});
+  }, [clearRunState]);
+
+  const resumeGame = useCallback(() => {
+    setPaused(false);
+    emitGameEvent("game:resume", {});
+  }, []);
+
+  /** 나가기. 진행 중인 런을 버리고 시작 화면으로 되돌린다. */
+  const exitToTitle = useCallback(() => {
+    setPaused(false);
+    clearRunState();
+    setTransition("none");
+    emitGameEvent("run:abort", {});
+  }, [clearRunState]);
 
   // 전투 중에만 HUD를 띄운다. 시작 화면과 결과 화면에 이전 런의 값이 남으면 안 된다.
   const inCombat = phase === "COMBAT" || phase === "BOSS";
@@ -256,18 +362,36 @@ export default function HUDOverlay() {
       {showCombatHud && (
         <CombatHud>
           <HealthBar>
+            {/* 흰 층이 먼저 남고 붉은 층이 앞서 줄어든다. 순서가 바뀌면 깎인 양이 안 보인다. */}
+            <HealthGhost ratio={hud.hp / hud.maxHp} />
             <HealthFill ratio={hud.hp / hud.maxHp} />
+            <HealthTicks />
           </HealthBar>
-          <span>{hud.mode === "MELEE" ? "근거리" : "원거리"}</span>
-          {phase === "BOSS" ? (
-            <span>BOSS</span>
-          ) : (
-            <>
-              <span>ROOM {hud.roomIndex}</span>
-              <span>적 {hud.enemiesRemaining}</span>
-            </>
-          )}
+
+          <StatusRow>
+            <ModeTag mode={hud.mode}>{hud.mode === "MELEE" ? "검" : "총"}</ModeTag>
+            <HpText>
+              {hud.hp} / {hud.maxHp}
+            </HpText>
+            {phase === "BOSS" ? (
+              <span>BOSS</span>
+            ) : (
+              <>
+                <span>ROOM {hud.roomIndex}</span>
+                <span>남은 적 {hud.enemiesRemaining}</span>
+              </>
+            )}
+          </StatusRow>
         </CombatHud>
+      )}
+
+      {paused && (
+        <PauseMenu
+          audio={audio}
+          onAudioChange={changeAudio}
+          onResume={resumeGame}
+          onExit={exitToTitle}
+        />
       )}
 
       {debugVisible && (

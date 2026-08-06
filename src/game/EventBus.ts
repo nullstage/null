@@ -39,6 +39,11 @@ export interface GameEventMap {
   "upgrade:select": { upgradeId: UpgradeId };
   "ui:continue": Record<string, never>;
   "run:restart": Record<string, never>;
+  /** 일시정지 메뉴가 열리고 닫힐 때. 전투 씬의 시간을 멈췄다 되돌린다. */
+  "game:pause": Record<string, never>;
+  "game:resume": Record<string, never>;
+  /** 일시정지 메뉴의 나가기. 진행 중인 런을 버리고 시작 화면으로 돌아간다. */
+  "run:abort": Record<string, never>;
 
   /** 양방향 */
   "debug:toggle": { visible: boolean };

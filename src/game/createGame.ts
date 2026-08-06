@@ -9,14 +9,51 @@
 
 import Phaser from "phaser";
 
+import { eventBus } from "./EventBus";
 import { VIEWPORT } from "./config/gameConfig";
 import { BootScene } from "./scenes/BootScene";
 import { BossScene } from "./scenes/BossScene";
 import { CombatScene } from "./scenes/CombatScene";
 import { ReadyScene } from "./scenes/ReadyScene";
+import { runState } from "./systems/RunState";
 
-export const createGame = (parent: HTMLElement): Phaser.Game =>
-  new Phaser.Game({
+/** 일시정지가 의미 있는 씬. 시작 화면은 멈출 것이 없다. */
+const PAUSABLE_SCENES = ["Combat", "Boss"] as const;
+
+/**
+ * 일시정지 메뉴(React)와 씬을 잇는다.
+ *
+ * React는 씬을 직접 만지지 않는다. (DEC-006) 여기가 이벤트를 씬 제어로 바꾸는 유일한 지점이다.
+ * 씬마다 같은 구독을 달면 방을 넘길 때 restart 되면서 구독이 끊기거나 중복된다.
+ */
+const wireLifecycle = (game: Phaser.Game): void => {
+  const forEachLive = (fn: (key: string) => void) => {
+    for (const key of PAUSABLE_SCENES) {
+      if (game.scene.isActive(key) || game.scene.isPaused(key)) fn(key);
+    }
+  };
+
+  const unsubscribe = [
+    eventBus.on("game:pause", () => forEachLive((key) => game.scene.pause(key))),
+    eventBus.on("game:resume", () => forEachLive((key) => game.scene.resume(key))),
+    eventBus.on("run:abort", () => {
+      // 멈춘 채로 stop하면 다음에 되살아날 때 타이머가 어긋난다. 먼저 풀고 내린다.
+      forEachLive((key) => {
+        game.scene.resume(key);
+        game.scene.stop(key);
+      });
+      runState.reset(game.loop.time);
+      game.scene.start("Ready");
+    }),
+  ];
+
+  game.events.once(Phaser.Core.Events.DESTROY, () => {
+    for (const off of unsubscribe) off();
+  });
+};
+
+export const createGame = (parent: HTMLElement): Phaser.Game => {
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
     width: VIEWPORT.width,
@@ -36,3 +73,7 @@ export const createGame = (parent: HTMLElement): Phaser.Game =>
     },
     scene: [BootScene, ReadyScene, CombatScene, BossScene],
   });
+
+  wireLifecycle(game);
+  return game;
+};
