@@ -9,14 +9,26 @@ import { theme } from "@/styles/theme";
 /**
  * 런을 시작할 때 지나가는 프롤로그.
  *
- * 검은 화면에 한 줄씩 띄우고, 다음 줄은 사용자가 눌러야 나온다.
- * 기다리는 동안 줄 옆에서 역삼각형이 깜빡인다. 읽는 속도를 강제하지 않기 위함이다.
+ * 한 번에 한 줄만 보여 준다. 다음 줄로 넘어가면 앞 줄은 사라진다.
+ * 여러 줄을 쌓아 두면 읽는 순서가 흐려지고, 마지막 줄의 무게가 죽는다.
+ *
+ * 다음 줄은 사용자가 눌러야 나온다. 읽는 속도를 강제하지 않는다.
  */
 
 const LINES = ["시험받는 자는 셀 수 없이 많았으나,", "돌아온 자의 이름을 아는 이는 없었다."];
 
-/** 한 줄이 떠오르는 데 걸리는 시간. */
-const LINE_IN_SEC = 0.8;
+/** 한 줄이 떠오르고 사라지는 데 걸리는 시간. */
+const LINE_IN_SEC = 0.9;
+const LINE_OUT_SEC = 0.45;
+
+/**
+ * 필름 그레인. 외부 이미지 없이 SVG 난수를 그대로 배경으로 쓴다.
+ * 에셋을 추가하면 로딩이 하나 늘어난다. 이 정도 노이즈는 파일로 둘 값어치가 없다.
+ */
+const NOISE_URL =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'>" +
+  "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter>" +
+  "<rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
 const prefersReducedMotion = (): boolean =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -25,19 +37,50 @@ const Screen = styled.div`
   position: absolute;
   inset: 0;
   z-index: ${theme.z.prologue};
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
   background: #000;
   cursor: pointer;
 `;
 
+/** 가운데만 아주 옅게 밝은 바탕. 글자가 허공에 뜨지 않게 받쳐 준다. */
+const Glow = styled.div`
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(52% 38% at 50% 50%, rgba(112, 34, 35, 0.5) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+`;
+
+/** 그레인은 화면보다 크게 잡아 두고 흔든다. 가장자리가 비지 않게 하려는 것이다. */
+const Noise = styled.div`
+  position: absolute;
+  inset: -12%;
+  background-image: ${NOISE_URL};
+  opacity: 0.05;
+  mix-blend-mode: screen;
+  pointer-events: none;
+`;
+
+/** 위아래 어둠. 화면을 좁혀 보이게 해서 시선을 가운데로 모은다. */
+const Vignette = styled.div`
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0) 30%,
+    rgba(0, 0, 0, 0) 70%,
+    rgba(0, 0, 0, 0.9) 100%
+  );
+  pointer-events: none;
+`;
+
 const LineRow = styled.div`
+  position: relative;
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  align-items: center;
+  gap: 16px;
 `;
 
 const Line = styled.p`
@@ -56,7 +99,6 @@ const Line = styled.p`
 const Caret = styled.span`
   width: 0;
   height: 0;
-  align-self: center;
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
   border-top: 8px solid rgba(200, 56, 60, 0.9);
@@ -65,13 +107,16 @@ const Caret = styled.span`
 
 export default function PrologueText({ onDone }: { onDone: () => void }) {
   const screenRef = useRef<HTMLDivElement>(null);
-  const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const noiseRef = useRef<HTMLDivElement>(null);
+  const lineRef = useRef<HTMLParagraphElement>(null);
   const caretRef = useRef<HTMLSpanElement>(null);
 
-  /** 지금까지 띄운 줄 수. */
-  const [visible, setVisible] = useState(0);
-  /** 현재 줄이 다 떠서 다음 입력을 받을 수 있는 상태인지. */
+  /** 지금 보여 주는 줄. -1이면 아직 배경만 떠 있다. */
+  const [index, setIndex] = useState(-1);
+
   const readyRef = useRef(false);
+  const busyRef = useRef(false);
   const lineTweenRef = useRef<gsap.core.Tween | null>(null);
   const doneRef = useRef(false);
 
@@ -79,95 +124,134 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
     if (doneRef.current) return;
     doneRef.current = true;
 
-    gsap.killTweensOf([screenRef.current, caretRef.current, ...lineRefs.current]);
+    gsap.killTweensOf([screenRef.current, caretRef.current, lineRef.current]);
     gsap.to(screenRef.current, {
       autoAlpha: 0,
-      duration: prefersReducedMotion() ? 0 : 0.6,
+      duration: prefersReducedMotion() ? 0 : 0.7,
       ease: "power2.out",
       onComplete: onDone,
     });
   }, [onDone]);
 
-  /** 누를 때마다 한 걸음 나아간다. 아직 떠오르는 중이면 그것부터 끝낸다. */
+  /** 앞 줄을 지우고 다음 줄로 넘어간다. */
   const advance = useCallback(() => {
-    if (doneRef.current || visible === 0) return;
+    if (doneRef.current || busyRef.current || index < 0) return;
 
+    // 아직 떠오르는 중이면 그것부터 끝낸다. 두 번 눌러야 넘어가면 답답하다.
     if (!readyRef.current) {
       lineTweenRef.current?.progress(1);
       return;
     }
-    if (visible < LINES.length) {
-      setVisible((count) => count + 1);
-      return;
-    }
-    finish();
-  }, [finish, visible]);
 
-  // 배경이 자리잡은 뒤 첫 줄을 띄운다.
+    const last = index >= LINES.length - 1;
+    busyRef.current = true;
+    readyRef.current = false;
+    gsap.killTweensOf(caretRef.current);
+
+    const out = prefersReducedMotion() ? 0 : LINE_OUT_SEC;
+    gsap
+      .timeline({
+        onComplete: () => {
+          busyRef.current = false;
+          if (last) finish();
+          else setIndex((current) => current + 1);
+        },
+      })
+      .to(caretRef.current, { autoAlpha: 0, duration: out * 0.4 }, 0)
+      // 위로 빠지며 글자가 벌어진다. 사라지는 방향을 눈이 따라가게 된다.
+      .to(
+        lineRef.current,
+        { autoAlpha: 0, y: -14, letterSpacing: "0.16em", duration: out, ease: "power2.in" },
+        0,
+      );
+  }, [finish, index]);
+
+  // 배경을 먼저 세우고 첫 줄로 넘어간다.
   useLayoutEffect(() => {
-    const tween = gsap.fromTo(
+    const reduced = prefersReducedMotion();
+
+    const intro = gsap.timeline({ onComplete: () => setIndex(0) });
+    intro.fromTo(
       screenRef.current,
       { autoAlpha: 0 },
-      {
-        autoAlpha: 1,
-        duration: prefersReducedMotion() ? 0 : 0.5,
-        ease: "power2.out",
-        onComplete: () => setVisible(1),
-      },
+      { autoAlpha: 1, duration: reduced ? 0 : 0.6, ease: "power2.out" },
     );
+    if (!reduced) {
+      intro.fromTo(glowRef.current, { scale: 1.25, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 1.6 }, 0);
+    }
+
+    if (reduced) return () => intro.kill();
+
+    // 아주 느린 확대·수축. 정지 화면처럼 보이지 않을 정도로만 움직인다.
+    const breath = gsap.to(glowRef.current, {
+      scale: 1.08,
+      duration: 6,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+      delay: 1.6,
+    });
+
+    // 그레인은 매 반복마다 자리를 새로 뽑는다. 같은 무늬가 반복되면 정지 화면으로 보인다.
+    const grain = gsap.to(noiseRef.current, {
+      duration: 0.09,
+      repeat: -1,
+      repeatRefresh: true,
+      ease: "none",
+      x: () => gsap.utils.random(-14, 14),
+      y: () => gsap.utils.random(-14, 14),
+      opacity: () => gsap.utils.random(0.035, 0.075),
+    });
+
     return () => {
-      tween.kill();
+      intro.kill();
+      breath.kill();
+      grain.kill();
     };
   }, []);
 
-  // 줄이 늘어날 때마다 그 줄을 띄우고, 다 뜨면 역삼각형을 깜빡인다.
+  // 줄이 바뀔 때마다 떠오르게 하고, 다 뜨면 역삼각형을 깜빡인다.
   useLayoutEffect(() => {
-    if (visible === 0) return;
-
-    const line = lineRefs.current[visible - 1];
-    if (!line) return;
+    if (index < 0 || !lineRef.current) return;
 
     readyRef.current = false;
     gsap.killTweensOf(caretRef.current);
     gsap.set(caretRef.current, { autoAlpha: 0, y: 0 });
 
+    const reduced = prefersReducedMotion();
+
     const markReady = () => {
       readyRef.current = true;
-      if (prefersReducedMotion()) {
+      if (reduced) {
         gsap.set(caretRef.current, { autoAlpha: 1 });
         return;
       }
       gsap.to(caretRef.current, { autoAlpha: 1, duration: 0.25 });
-      gsap.to(caretRef.current, {
-        y: 4,
-        duration: 0.55,
-        ease: "sine.inOut",
-        repeat: -1,
-        yoyo: true,
-      });
+      gsap.to(caretRef.current, { y: 4, duration: 0.55, ease: "sine.inOut", repeat: -1, yoyo: true });
     };
 
-    if (prefersReducedMotion()) {
-      gsap.set(line, { autoAlpha: 1, y: 0 });
-      markReady();
-      return;
-    }
-
+    // 자간이 좁아지며 맺힌다. 글자가 모여 문장이 되는 느낌을 준다.
     lineTweenRef.current = gsap.fromTo(
-      line,
-      { autoAlpha: 0, y: 10 },
-      { autoAlpha: 1, y: 0, duration: LINE_IN_SEC, ease: "power2.out", onComplete: markReady },
+      lineRef.current,
+      { autoAlpha: 0, y: 12, letterSpacing: "0.22em" },
+      {
+        autoAlpha: 1,
+        y: 0,
+        letterSpacing: "0.04em",
+        duration: reduced ? 0 : LINE_IN_SEC,
+        ease: "power2.out",
+        onComplete: markReady,
+      },
     );
 
     return () => {
       lineTweenRef.current?.kill();
     };
-  }, [visible]);
+  }, [index]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      // 스페이스는 기본 스크롤 동작이 있다.
       if (event.key === " ") event.preventDefault();
       advance();
     };
@@ -177,18 +261,16 @@ export default function PrologueText({ onDone }: { onDone: () => void }) {
 
   return (
     <Screen ref={screenRef} onPointerDown={advance}>
-      {LINES.slice(0, visible).map((text, index) => (
-        <LineRow key={text}>
-          <Line
-            ref={(element) => {
-              lineRefs.current[index] = element;
-            }}
-          >
-            {text}
-          </Line>
-          {index === visible - 1 && <Caret ref={caretRef} />}
+      <Glow ref={glowRef} />
+      <Noise ref={noiseRef} />
+      <Vignette />
+
+      {index >= 0 && (
+        <LineRow>
+          <Line ref={lineRef}>{LINES[index]}</Line>
+          <Caret ref={caretRef} />
         </LineRow>
-      ))}
+      )}
     </Screen>
   );
 }
