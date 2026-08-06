@@ -18,6 +18,7 @@ import { Player } from "../entities/Player";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { createArena, type CombatArena } from "../types/combat";
+import type { AttackMode } from "../types/game";
 
 export class BossScene extends Phaser.Scene {
   private telemetry = new CombatTelemetryRecorder();
@@ -55,11 +56,18 @@ export class BossScene extends Phaser.Scene {
 
     this.boss = new Boss({
       scene: this,
+      arena: this.arena,
+      getPlayerPosition: () => {
+        const sprite = this.player.sprite;
+        return { x: sprite?.x ?? 0, y: sprite?.y ?? 0 };
+      },
       weights: runState.bossWeights,
       onPatternSelected: (pattern) => runState.recordBossPattern(pattern),
       onDefeated: () => this.finish(true),
     });
-    this.boss.spawn(VIEWPORT.width * 0.8, VIEWPORT.height * 0.6);
+    this.boss.spawn(VIEWPORT.width * 0.8, this.arena.bounds.floorY - 90);
+
+    this.wireCollisions();
 
     // 확정된 가중치를 UI(F1 디버그 패널)에 한 번 더 알린다.
     eventBus.emit("boss:weights", { weights: runState.bossWeights });
@@ -74,6 +82,43 @@ export class BossScene extends Phaser.Scene {
     if (this.finished) return;
     this.player.update(time, deltaMs);
     this.boss.update(time, deltaMs);
+  }
+
+  /**
+   * 충돌 판정은 여기 한 곳에서만 건다. 전투방과 같은 규약이다. (types/combat.ts)
+   * 보스는 접촉 피해를 주지 않는다. 패턴 공격체로만 때린다. (MVP_PLAN §8)
+   */
+  private wireCollisions(): void {
+    const arena = this.arena;
+
+    this.physics.add.overlap(arena.playerAttacks, arena.enemyBodies, (attackObj, bodyObj) => {
+      const attack = attackObj as Phaser.GameObjects.GameObject;
+      const target = (bodyObj as Phaser.GameObjects.GameObject).getData("enemy") as Boss | undefined;
+      if (!target || target.isDefeated) return;
+
+      // 한 번 휘두른 공격이 같은 대상을 여러 프레임 때리지 않게 한다.
+      const hitSet = (attack.getData("hitEnemies") as Set<unknown> | undefined) ?? new Set();
+      if (hitSet.has(target)) return;
+      hitSet.add(target);
+      attack.setData("hitEnemies", hitSet);
+
+      target.takeDamage((attack.getData("damage") as number) ?? 0);
+
+      // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
+      const mode = attack.getData("mode") as AttackMode | undefined;
+      if (mode) this.player.notifyHit(mode);
+
+      if (attack.getData("consumeOnHit")) attack.destroy();
+    });
+
+    const playerBody = this.player.sprite;
+    if (!playerBody) return;
+
+    this.physics.add.overlap(arena.enemyAttacks, playerBody, (attackObj) => {
+      const attack = attackObj as Phaser.GameObjects.GameObject;
+      this.player.takeDamage((attack.getData("damage") as number) ?? undefined);
+      if (attack.getData("consumeOnHit")) attack.destroy();
+    });
   }
 
   private finish(cleared: boolean): void {
