@@ -104,12 +104,12 @@ const TUNING = {
     punchScale: 1.16,
     blinkMs: 90,
     /** 잔상 간격. 촘촘할수록 빠르게 지나간 것처럼 보인다. */
-    afterimageIntervalMs: 12,
-    afterimageFadeMs: 170,
-    afterimageAlpha: 0.6,
+    afterimageIntervalMs: 16,
+    afterimageFadeMs: 150,
+    afterimageAlpha: 0.3,
     /** 잔상이 진행 반대로 밀리는 거리. 몸이 앞서 나간 느낌을 만든다. */
     afterimageDriftPx: 16,
-    afterimageStretch: 1.35,
+    afterimageStretch: 1.2,
     deathMs: 320,
     hitShakeMs: 90,
     hitShakeIntensity: 0.004,
