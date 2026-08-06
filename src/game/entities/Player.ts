@@ -71,6 +71,8 @@ const TUNING = {
 
   dash: {
     durationMs: 150,
+    /** 공중 대시가 받는 중력 비율. 0이면 일자로 날아 딱딱하다. */
+    airGravityScale: 0.35,
     /** 충전 하나가 다시 차는 데 걸리는 시간 */
     rechargeMs: 900,
   },
@@ -83,6 +85,9 @@ const TUNING = {
     dashFollowupWindowMs: 600,
     dashChargeBonus: 1,
   },
+
+  /** 공중에서 입력이 없을 때 수평 속도가 줄어드는 비율(프레임당). 1이면 영원히 날아간다. */
+  airDragPerFrame: 0.94,
 
   /** 피격 시 뒤로 밀린다. 연타로 갇히지 않게 하는 안전장치이기도 하다. */
   knockback: { x: 220, y: -180 },
@@ -230,7 +235,12 @@ export class Player {
 
     const direction =
       (this.keys.MOVE_RIGHT?.isDown ? 1 : 0) - (this.keys.MOVE_LEFT?.isDown ? 1 : 0);
-    body.setVelocityX(direction * PLAYER.moveSpeed);
+    if (direction !== 0 || this.isGrounded) {
+      body.setVelocityX(direction * PLAYER.moveSpeed);
+    } else {
+      // 공중에서 손을 떼면 대시 속도가 서서히 죽는다. 즉시 0으로 만들면 포물선이 끊긴다.
+      body.setVelocityX(body.velocity.x * TUNING.airDragPerFrame);
+    }
     if (direction !== 0) {
       this.facing = direction > 0 ? 1 : -1;
       sprite.setFlipX(this.facing < 0);
@@ -288,7 +298,13 @@ export class Player {
     const speed = PLAYER.dashDistance / (TUNING.dash.durationMs / 1000);
     body.setVelocity(this.facing * speed, 0);
     // 대시 중에는 중력을 끊는다. 공중 대시가 아래로 처지면 회피기로 못 쓴다.
-    body.setAllowGravity(false);
+    if (this.isGrounded) {
+      // 지상 대시는 회피기다. 직선이어야 판단하기 쉽다.
+      body.setAllowGravity(false);
+    } else {
+      // 공중 대시는 중력을 조금 남겨 호를 그린다. 완전히 끄면 일자로 날아 딱딱하다.
+      body.setGravityY(-this.scene.physics.world.gravity.y * (1 - TUNING.dash.airGravityScale));
+    }
     this.lastAfterimageAtMs = 0;
     this.trailAfterimage(now);
   }
@@ -296,7 +312,9 @@ export class Player {
   private endDash(): void {
     this.isDashing = false;
     const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
-    body?.setAllowGravity(true);
+    if (!body) return;
+    body.setAllowGravity(true);
+    body.setGravityY(0);
   }
 
   // ────────────────────────────── 공격 ──────────────────────────────
