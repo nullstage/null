@@ -48,8 +48,13 @@ const RANGED_MODE_TINT = 0xffc9d4;
 
 /** gameBalance로 옮겨야 할 임시 수치. 확정 전까지 여기서만 관리한다. */
 const TUNING = {
-  /** 도형 플레이스홀더의 몸 크기. 스프라이트가 들어오면 프레임 크기로 대체된다. */
-  body: { width: 26, height: 44 },
+  /**
+   * 충돌 바디 크기. 그림 전체가 아니라 몸통만 잡는다.
+   *
+   * 높이는 그림 속 캐릭터 키에 맞춘다. 프레임 높이(48)에 맞추면 바디 바닥이
+   * 발끝보다 아래로 내려가, 캐릭터가 지면에서 떠 있는 것처럼 보인다.
+   */
+  body: { width: 26, height: 40 },
 
   melee: {
     /** 적 hp 24~30 기준 3~4방. MVP_PLAN §12 밸런스 목표에 맞춘 시작값이다. */
@@ -219,9 +224,10 @@ export class Player {
     sprite.setCollideWorldBounds(true);
     // 그림에는 망토와 검이 넓게 퍼져 있다. 충돌 판정은 몸통만 잡아야 억울한 피격이 없다.
     sprite.body.setSize(body.width, body.height);
+    // 바디 바닥을 그림의 발끝(footY)에 맞춘다. 프레임 아래 여백만큼 뜨는 것을 막는다.
     sprite.body.setOffset(
       (PLAYER_SPRITE.frameWidth - body.width) / 2,
-      PLAYER_SPRITE.frameHeight - body.height,
+      PLAYER_SPRITE.footY - body.height,
     );
     this.baseScale = { x: sprite.scaleX, y: sprite.scaleY };
     this.sprite = sprite;
@@ -410,15 +416,8 @@ export class Player {
 
     this.scene.time.delayedCall(melee.hitboxLifeMs, () => hitbox.destroy());
 
-    // 몸 앞쪽을 중심으로 호를 그린다. 발밑에서 그리면 베는 방향이 안 읽힌다.
-    slashArc(
-      this.scene,
-      sprite.x + this.facing * TUNING.body.width * 0.4,
-      sprite.y - 6,
-      this.facing,
-      reach + TUNING.body.width * 0.5,
-      this.comboStep,
-    );
+    // 호는 몸 중심에서 그린다. 앞으로 밀어 그리면 판정 범위 밖까지 뻗어 헛스윙처럼 보인다.
+    slashArc(this.scene, sprite.x, sprite.y - 6, this.facing, reach + TUNING.body.width / 2, this.comboStep);
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
   }

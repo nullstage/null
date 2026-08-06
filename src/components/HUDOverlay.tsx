@@ -183,12 +183,26 @@ export default function HUDOverlay() {
   const [needsFirstVisit, setNeedsFirstVisit] = useState(false);
   const [audio, setAudio] = useState<AudioSettings>(DEFAULT_AUDIO);
 
+  /**
+   * 개발 검증용 빠른 진입. `?fast=1`이면 로딩·시작 화면·프롤로그를 건너뛰고 곧장 전투로 간다.
+   *
+   * 전투 한 번 보려고 매번 인트로를 끝까지 앉아 있을 수는 없다.
+   * 배포본에는 남기지 않는다. 플레이어가 도입부를 건너뛰는 길이 되면 안 된다.
+   *
+   * 켜 두면 일시정지의 나가기가 시작 화면에서 멈추지 않는다.
+   * READY가 되는 즉시 다시 런을 시작하기 때문이다. 그 흐름은 fast 없이 확인해야 한다.
+   */
+  const [fastStart, setFastStart] = useState(false);
+
   useEffect(() => {
     // 정적 프리렌더에는 localStorage가 없다. 초기값으로 읽으면 하이드레이션이 어긋나므로
     // 마운트 뒤에 한 번 읽는다. (DEC-005 정적 내보내기)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNeedsFirstVisit(!hasVisitedBefore());
     setAudio(loadAudioSettings());
+    if (process.env.NODE_ENV !== "production") {
+      setFastStart(new URLSearchParams(window.location.search).has("fast"));
+    }
     // 씬이 만들어지기 전에 바인딩을 올려둬야 첫 방부터 바뀐 키가 먹는다.
     loadKeyBindings();
   }, []);
@@ -271,6 +285,19 @@ export default function HUDOverlay() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activePanel, phase, transition]);
 
+  /**
+   * READY가 되면 바로 넘긴다.
+   *
+   * 한 박자 미루는 이유가 있다. phase는 BootScene이 먼저 READY로 바꾸고,
+   * 그 입력을 받을 ReadyScene은 그다음 프레임에야 구독을 건다.
+   * 즉시 쏘면 아무도 듣지 않아 검은 화면에서 멈춘다.
+   */
+  useEffect(() => {
+    if (!fastStart || phase !== "READY") return;
+    const timer = window.setTimeout(() => emitGameEvent("ui:continue", {}), 300);
+    return () => window.clearTimeout(timer);
+  }, [fastStart, phase]);
+
   // ScreenFade는 마운트 시점의 콜백을 그대로 쓰므로 참조가 흔들리면 안 된다.
   const markAssetsReady = useCallback(() => setAssetsReady(true), []);
   const hideLoading = useCallback(() => setLoadingVisible(false), []);
@@ -337,11 +364,11 @@ export default function HUDOverlay() {
       {needsFirstVisit && <FirstVisitPrompt onConfirm={confirmFirstVisit} />}
 
       {/* 첫 방문 안내가 먼저다. 뒤에서 로딩이 돌면 안내 화면이 지저분해진다. */}
-      {loadingVisible && !needsFirstVisit && (
+      {loadingVisible && !needsFirstVisit && !fastStart && (
         <LoadingScreen ready={phase !== "BOOT"} onReveal={markAssetsReady} onDone={hideLoading} />
       )}
 
-      {assetsReady && phase === "READY" && (
+      {!fastStart && assetsReady && phase === "READY" && (
         <TitleScreen onStart={beginRun} audio={audio} onAudioChange={changeAudio} />
       )}
 

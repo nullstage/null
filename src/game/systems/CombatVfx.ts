@@ -22,13 +22,22 @@ const PIXEL = 4;
 
 const VFX = {
   slash: {
-    /** 도트를 몇 칸 찍어 호를 만들지. 늘리면 선이 촘촘해지고 무거워진다. */
-    steps: 16,
-    lifeMs: 150,
+    /**
+     * 도트를 몇 칸 찍어 호를 만들지.
+     * 점 간격보다 점이 크면 전부 겹쳐 호가 아니라 덩어리가 된다. 간격과 두께를 같이 봐야 한다.
+     */
+    steps: 22,
+    lifeMs: 170,
     /** 안쪽 밝은 심 + 바깥 붉은 몸통. 두 겹이어야 도트가 살아 있으면서도 진하다. */
-    core: 0xffe3e6,
+    core: 0xfff0f1,
     body: 0xd2313a,
+    /** 호 한가운데의 최대 두께. 양 끝으로 갈수록 여기서 줄어든다. */
     thickness: PIXEL * 2,
+    /**
+     * 사거리에 곱해 호의 반지름을 정한다.
+     * 1을 넘기면 그림이 판정 범위 밖까지 뻗어, 닿아 보이는데 안 맞는 일이 생긴다.
+     */
+    radiusScale: 0.9,
   },
   beam: {
     lifeMs: 110,
@@ -44,9 +53,10 @@ const VFX = {
    * 총알이 수평으로만 날아가므로 모양이 변하지 않는다. 한 번 그려두고 위치만 옮긴다.
    */
   tail: {
-    length: 60,
-    segments: 8,
-    headHeight: PIXEL * 3,
+    /** 가로로 길고 세로로 얇아야 지나간 자국으로 읽힌다. 세로가 길면 빗살처럼 보인다. */
+    length: 72,
+    segments: 6,
+    headHeight: PIXEL * 2,
     core: 0xfff6f6,
     glow: 0xff5560,
   },
@@ -175,7 +185,7 @@ export const slashArc = (
         ? { from: -96, to: 74, scale: 1.25 }
         : { from: -58, to: 70, scale: 1 };
 
-  const radius = reach * 0.95 * sweep.scale;
+  const radius = reach * slash.radiusScale * sweep.scale;
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
 
@@ -191,10 +201,15 @@ export const slashArc = (
     const px = Math.round((x + facing * Math.cos(angle) * radius) / PIXEL) * PIXEL;
     const py = Math.round((y + Math.sin(angle) * radius) / PIXEL) * PIXEL;
 
+    // 점 크기가 두께 그대로여야 이웃한 점과 겨우 이어져 선으로 읽힌다.
+    // 예전처럼 두께의 두 배로 찍으면 전부 겹쳐 호가 아니라 막대가 된다.
     graphics.fillStyle(slash.body, 1);
-    graphics.fillRect(px - thickness, py - thickness, thickness * 2, thickness * 2);
-    graphics.fillStyle(slash.core, 1);
-    graphics.fillRect(px - PIXEL / 2, py - PIXEL / 2, PIXEL, PIXEL);
+    graphics.fillRect(px - thickness / 2, py - thickness / 2, thickness, thickness);
+    // 심은 가운데 구간에만 넣는다. 끝까지 흰 점을 찍으면 붉은 기가 다 죽는다.
+    if (taper > 0.55) {
+      graphics.fillStyle(slash.core, 1);
+      graphics.fillRect(px - PIXEL / 2, py - PIXEL / 2, PIXEL, PIXEL);
+    }
   }
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
@@ -271,15 +286,18 @@ export const createBulletTrail = (
 
     const left = -facing * (t * tail.length) - (facing > 0 ? segmentWidth : 0);
 
-    graphics.fillStyle(tail.glow, 0.5 * (1 - t));
-    graphics.fillRect(left, -height, segmentWidth, height * 2);
-    graphics.fillStyle(tail.core, 0.85 * (1 - t));
+    // height가 이미 전체 두께다. 위아래로 한 번 더 늘리면 꼬리가 아니라 세로 빗살이 된다.
+    graphics.fillStyle(tail.glow, 0.55 * (1 - t));
     graphics.fillRect(left, -height / 2, segmentWidth, height);
+    if (height > PIXEL) {
+      graphics.fillStyle(tail.core, 0.9 * (1 - t));
+      graphics.fillRect(left, -PIXEL / 2, segmentWidth, PIXEL);
+    }
   }
 
   // 총알 머리. 가장 밝은 한 칸이 있어야 탄이 어디쯤인지 읽힌다.
   graphics.fillStyle(tail.core, 1);
-  graphics.fillRect(-PIXEL, -PIXEL, PIXEL * 2, PIXEL * 2);
+  graphics.fillRect(-PIXEL / 2, -PIXEL, PIXEL * 2, PIXEL * 2);
 
   return graphics;
 };

@@ -76,6 +76,14 @@ export const PLAYER_SPRITE = {
   frameWidth: 48,
   frameHeight: 48,
   columns: 6,
+  /**
+   * 프레임 안에서 발끝이 닿는 y. 프레임 아래에 빈 줄이 남아 있어 48이 아니다.
+   *
+   * 충돌 바디의 바닥을 여기에 맞춰야 캐릭터가 지면에 붙는다.
+   * 프레임 높이를 그대로 쓰면 남은 여백만큼(스케일 배수로) 공중에 뜬 것처럼 보인다.
+   * 시트를 다시 뽑으면 이 값도 함께 확인해야 한다.
+   */
+  footY: 43,
   states: {
     idle: { row: 0, frames: 4, fps: 4, loop: true },
     run: { row: 1, frames: 6, fps: 12, loop: true },
