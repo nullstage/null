@@ -9,7 +9,11 @@ import { assetPath } from "@/game/config/gameConfig";
 
 export const SFX = {
   select: assetPath("audio/ui-select.mp3"),
+  move: assetPath("audio/ui-move.mp3"),
 } as const;
+
+/** `restart` 재생에 쓰는 인스턴스. 소리마다 하나씩만 둔다. */
+const singletons = new Map<string, HTMLAudioElement>();
 
 /** 설정에서 계산한 실제 음량(마스터 × 효과음). 0이면 재생하지 않는다. */
 let volume = 0;
@@ -18,8 +22,24 @@ export const setSfxVolume = (next: number): void => {
   volume = Math.min(1, Math.max(0, next));
 };
 
-export const playSfx = (src: string): void => {
+/**
+ * `restart`를 켜면 같은 소리를 겹쳐 쌓지 않고 처음부터 다시 재생한다.
+ * 메뉴 이동처럼 빠르게 연달아 나는 소리에 쓴다. 겹쳐 울리면 지저분하다.
+ */
+export const playSfx = (src: string, options?: { restart?: boolean }): void => {
   if (volume <= 0) return;
+
+  if (options?.restart) {
+    let audio = singletons.get(src);
+    if (!audio) {
+      audio = new Audio(src);
+      singletons.set(src, audio);
+    }
+    audio.volume = volume;
+    audio.currentTime = 0;
+    void audio.play().catch(() => {});
+    return;
+  }
 
   const audio = new Audio(src);
   audio.volume = volume;

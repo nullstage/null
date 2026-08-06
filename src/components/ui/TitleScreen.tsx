@@ -183,6 +183,16 @@ export default function TitleScreen({
     [start],
   );
 
+  /** 선택을 옮기며 이동음을 낸다. 같은 자리면 아무 일도 하지 않는다. */
+  const moveTo = useCallback(
+    (next: number) => {
+      if (next === selected) return;
+      playSfx(SFX.move, { restart: true });
+      setSelected(next);
+    },
+    [selected],
+  );
+
   useEffect(() => {
     if (settingsOpen) return;
 
@@ -191,26 +201,23 @@ export default function TitleScreen({
 
       if (event.key === "ArrowDown" || event.key === "ArrowRight") {
         event.preventDefault();
-        setSelected((index) => (index + 1) % MENU_ITEMS.length);
+        moveTo((selected + 1) % MENU_ITEMS.length);
         return;
       }
       if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
         event.preventDefault();
-        setSelected((index) => (index - 1 + MENU_ITEMS.length) % MENU_ITEMS.length);
+        moveTo((selected - 1 + MENU_ITEMS.length) % MENU_ITEMS.length);
         return;
       }
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        setSelected((index) => {
-          run(index);
-          return index;
-        });
+        run(selected);
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [run, settingsOpen]);
+  }, [moveTo, run, selected, settingsOpen]);
 
   // 첫 페인트 전에 초기 상태를 잡아야 요소가 한 프레임 번쩍이지 않는다.
   useLayoutEffect(() => {
@@ -316,7 +323,7 @@ export default function TitleScreen({
               type="button"
               selected={index === selected}
               disabled={item.disabled}
-              onPointerEnter={() => setSelected(index)}
+              onPointerEnter={() => moveTo(index)}
               onPointerDown={() => run(index)}
             >
               {item.label}
