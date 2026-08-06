@@ -4,6 +4,7 @@ import styled from "@emotion/styled";
 import dynamic from "next/dynamic";
 
 import HUDOverlay from "./HUDOverlay";
+import CursorFollower from "./ui/CursorFollower";
 
 /**
  * 캔버스와 UI 오버레이를 겹쳐 놓는 껍데기.
@@ -25,6 +26,7 @@ export default function GameShell() {
     <Stage>
       <GameCanvas />
       <HUDOverlay />
+      <CursorFollower />
     </Stage>
   );
 }
