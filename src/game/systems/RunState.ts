@@ -1,0 +1,172 @@
+/**
+ * 런 하나의 단일 진실 원천. (CLAUDE.md 게임 상태 관리)
+ *
+ * Scene, UI, 적 객체가 각각 독립적으로 진행 상태를 바꾸지 않도록
+ * 방 번호·텔레메트리·강화·예측은 전부 여기를 거친다.
+ *
+ * MVP_PLAN §9의 "반드시 초기화할 값"은 `reset()` 하나로 전부 되돌아가야 한다.
+ */
+
+import { eventBus } from "../EventBus";
+import { PLAYER } from "../config/gameBalance";
+import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
+import type {
+  BossPattern,
+  BossPatternWeights,
+  CombatTelemetry,
+  DeceptionResult,
+  DirectorAnalysis,
+  GamePhase,
+  PlayStyle,
+  RoomId,
+  RoomRecord,
+  RunResult,
+  UpgradeId,
+} from "../types/game";
+
+const emptyPatternUsage = (): Record<BossPattern, number> => ({
+  slash: 0,
+  dash: 0,
+  projectile: 0,
+  slam: 0,
+});
+
+export class RunState {
+  phase: GamePhase = "BOOT";
+  roomIndex = 0;
+  currentRoomId: RoomId = "";
+
+  currentTelemetry: CombatTelemetry | null = null;
+  previousTelemetry: CombatTelemetry | null = null;
+
+  /** 방 3 입장 전에 Director가 확정한 예측. 역기만 판정의 기준이 된다. */
+  predictedStyle: PlayStyle | null = null;
+  counterRoomId: RoomId | null = null;
+  latestAnalysis: DirectorAnalysis | null = null;
+
+  selectedUpgrades: UpgradeId[] = [];
+  bossWeights: BossPatternWeights = { ...DEFAULT_BOSS_WEIGHTS };
+  bossPatternUsage: Record<BossPattern, number> = emptyPatternUsage();
+  deception: DeceptionResult | null = null;
+
+  hp: number = PLAYER.maxHp;
+  maxHp: number = PLAYER.maxHp;
+
+  private rooms: RoomRecord[] = [];
+  private runStartedAtMs = 0;
+  private runEndedAtMs = 0;
+
+  /** MVP_PLAN §9 — 재시작 시 이전 런 데이터가 남아 있으면 안 된다. */
+  reset(nowMs: number): void {
+    this.phase = "READY";
+    this.roomIndex = 0;
+    this.currentRoomId = "";
+    this.currentTelemetry = null;
+    this.previousTelemetry = null;
+    this.predictedStyle = null;
+    this.counterRoomId = null;
+    this.latestAnalysis = null;
+    this.selectedUpgrades = [];
+    this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
+    this.bossPatternUsage = emptyPatternUsage();
+    this.deception = null;
+    this.hp = PLAYER.maxHp;
+    this.maxHp = PLAYER.maxHp;
+    this.rooms = [];
+    this.runStartedAtMs = nowMs;
+    this.runEndedAtMs = 0;
+  }
+
+  setPhase(phase: GamePhase): void {
+    if (this.phase === phase) return;
+    this.phase = phase;
+    eventBus.emit("phase:change", { phase });
+  }
+
+  beginRoom(roomId: RoomId): void {
+    this.roomIndex += 1;
+    this.currentRoomId = roomId;
+    eventBus.emit("room:start", { roomIndex: this.roomIndex, roomId });
+  }
+
+  /** 방 클리어 기록. 같은 방에 두 번 호출되면 무시한다. (MVP_PLAN §12 중복 이벤트 대응) */
+  completeRoom(telemetry: CombatTelemetry): boolean {
+    if (this.rooms.some((room) => room.roomIndex === this.roomIndex)) return false;
+
+    this.rooms.push({
+      roomIndex: this.roomIndex,
+      roomId: this.currentRoomId,
+      telemetry,
+      analysis: null,
+    });
+    this.previousTelemetry = this.currentTelemetry;
+    this.currentTelemetry = telemetry;
+
+    eventBus.emit("room:clear", { roomIndex: this.roomIndex, telemetry });
+    return true;
+  }
+
+  attachAnalysis(analysis: DirectorAnalysis): void {
+    this.latestAnalysis = analysis;
+    this.predictedStyle = analysis.style;
+    this.counterRoomId = analysis.counterRoomId;
+
+    const record = this.rooms.find((room) => room.roomIndex === this.roomIndex);
+    if (record) record.analysis = analysis;
+
+    eventBus.emit("analysis:ready", { analysis });
+  }
+
+  addUpgrade(upgradeId: UpgradeId): void {
+    if (this.selectedUpgrades.includes(upgradeId)) return;
+    this.selectedUpgrades.push(upgradeId);
+  }
+
+  setBossWeights(weights: BossPatternWeights): void {
+    this.bossWeights = { ...weights };
+    eventBus.emit("boss:weights", { weights: this.bossWeights });
+  }
+
+  recordBossPattern(pattern: BossPattern): void {
+    this.bossPatternUsage[pattern] += 1;
+  }
+
+  setDeception(result: DeceptionResult): void {
+    this.deception = result;
+    if (result.succeeded) this.heal(result.healedAmount);
+    eventBus.emit("deception:result", { result });
+  }
+
+  damage(amount: number): void {
+    this.hp = Math.max(0, this.hp - amount);
+  }
+
+  heal(amount: number): void {
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+  }
+
+  get isDead(): boolean {
+    return this.hp <= 0;
+  }
+
+  get roomRecords(): readonly RoomRecord[] {
+    return this.rooms;
+  }
+
+  buildResult(nowMs: number, cleared: boolean): RunResult {
+    this.runEndedAtMs = nowMs;
+    return {
+      cleared,
+      totalTimeMs: Math.max(0, this.runEndedAtMs - this.runStartedAtMs),
+      rooms: this.rooms.map((room) => ({ ...room })),
+      finalStyle: this.latestAnalysis?.style ?? "MIXED",
+      deception: this.deception,
+      bossWeights: { ...this.bossWeights },
+      bossPatternUsage: { ...this.bossPatternUsage },
+      selectedUpgrades: [...this.selectedUpgrades],
+    };
+  }
+}
+
+/** 런타임 전역 인스턴스. 게임을 파괴하고 다시 만들 때도 같은 객체를 reset해서 쓴다. */
+export const runState = new RunState();
