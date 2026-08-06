@@ -187,7 +187,7 @@ export default function TitleScreen({
   const moveTo = useCallback(
     (next: number) => {
       if (next === selected) return;
-      playSfx(SFX.move, { restart: true });
+      playSfx(SFX.move, { retrigger: true });
       setSelected(next);
     },
     [selected],
