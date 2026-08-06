@@ -56,34 +56,34 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
 
   return (
-    <Panel title="「남은 기록」">
+    <Panel title="이번 런">
       <Verdict cleared={result.cleared}>
         {result.cleared ? "시험을 지났다" : "돌아오지 못했다"}
       </Verdict>
 
       <PanelRow>
-        <span>머문 시간</span>
+        <span>걸린 시간</span>
         <span>
           {minutes}분 {seconds}초
         </span>
       </PanelRow>
       <PanelRow>
-        <span>끝내 택한 방식</span>
+        <span>끝내 싸운 방식</span>
         <span>{STYLE_LABEL[result.finalStyle]}</span>
       </PanelRow>
       <PanelRow>
-        <span>기록의 판결</span>
+        <span>예측을 속였는가</span>
         <span>
           {result.deception
             ? result.deception.succeeded
-              ? "어긋났다"
-              : "들어맞았다"
-            : "판결 전"}
+              ? "속였다"
+              : "읽혔다"
+            : "보스 전에 끝남"}
         </span>
       </PanelRow>
 
       <Section>
-        <SectionTitle>방마다 적힌 것</SectionTitle>
+        <SectionTitle>방마다 어떻게 봤는가</SectionTitle>
         {result.rooms.map((room) => (
           <PanelRow key={room.roomIndex}>
             <span>
@@ -95,7 +95,7 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
       </Section>
 
       <Section>
-        <SectionTitle>심판자가 쓴 것</SectionTitle>
+        <SectionTitle>보스가 쓴 패턴</SectionTitle>
         {(Object.entries(result.bossPatternUsage) as [BossPattern, number][]).map(
           ([pattern, count]) => (
             <PanelRow key={pattern}>

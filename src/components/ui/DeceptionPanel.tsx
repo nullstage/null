@@ -39,23 +39,23 @@ export interface DeceptionPanelProps {
 
 export default function DeceptionPanel({ result, onContinue }: DeceptionPanelProps) {
   return (
-    <Panel title="「판결」">
+    <Panel title={result.succeeded ? "예측이 빗나갔다" : "예측대로였다"}>
       <Verdict succeeded={result.succeeded}>
-        {result.succeeded ? "기록이 어긋났다" : "기록대로였다"}
+        {result.succeeded ? "속이는 데 성공했다" : "읽힌 대로 싸웠다"}
       </Verdict>
 
       <PanelRow>
-        <span>적어 둔 방식</span>
+        <span>예측한 방식</span>
         <span>{STYLE_LABEL[result.predictedStyle]}</span>
       </PanelRow>
       <PanelRow>
-        <span>실제로 택한 방식</span>
+        <span>실제로 싸운 방식</span>
         <span>{STYLE_LABEL[result.actualStyle]}</span>
       </PanelRow>
       {result.succeeded && (
         <PanelRow>
-          <span>되돌려받은 것</span>
-          <span>생명 {result.healedAmount}</span>
+          <span>보상</span>
+          <span>체력 +{result.healedAmount}</span>
         </PanelRow>
       )}
 
@@ -65,7 +65,7 @@ export default function DeceptionPanel({ result, onContinue }: DeceptionPanelPro
 
       <PanelActions>
         <PanelButton type="button" onClick={onContinue} autoFocus>
-          심판대로
+          보스에게로
         </PanelButton>
       </PanelActions>
     </Panel>

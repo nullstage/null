@@ -73,13 +73,29 @@ const Caption = styled.p`
   color: #000;
 `;
 
+/**
+ * LOADING 아래 한 줄. 방 사이 로딩에서 직전 판정을 다시 못 박는 자리다.
+ * 로딩은 어차피 멍하니 보는 시간이라, 여기서 읽은 한 줄이 가장 오래 남는다.
+ */
+const Verdict = styled.p`
+  margin: -14px 0 0;
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 19px;
+  letter-spacing: 0.06em;
+  color: #000;
+`;
+
 export default function LoadingScreen({
   ready,
+  verdict,
   onReveal,
   onDone,
 }: {
   /** 게임 쪽 준비 여부. 에셋이 다 받아져도 이게 false면 계속 기다린다. */
   ready: boolean;
+  /** LOADING 아래에 덧붙일 한 줄. 없으면 표시하지 않는다. */
+  verdict?: string;
   /** 걷히기 시작하는 순간. 다음 화면을 여기서 미리 붙여야 흰 화면 밑이 비지 않는다. */
   onReveal: () => void;
   /** 다 걷힌 순간. 부모가 이 컴포넌트를 내리면 된다. */
@@ -181,6 +197,7 @@ export default function LoadingScreen({
 
       <Mark src={TITLE_ASSETS.ornament} alt="" draggable={false} />
       <Caption>LOADING</Caption>
+      {verdict && <Verdict>{verdict}</Verdict>}
     </Screen>
   );
 }

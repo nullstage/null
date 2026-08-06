@@ -22,26 +22,25 @@ const PIXEL = 4;
 
 const VFX = {
   slash: {
-    /**
-     * 도트를 몇 칸 찍어 호를 만들지.
-     * 점 간격보다 점이 크면 전부 겹쳐 호가 아니라 덩어리가 된다. 간격과 두께를 같이 봐야 한다.
-     */
-    steps: 22,
-    lifeMs: 170,
-    /** 안쪽 밝은 심 + 바깥 붉은 몸통. 두 겹이어야 도트가 살아 있으면서도 진하다. */
-    core: 0xfff0f1,
-    body: 0xd2313a,
-    /** 호 한가운데의 최대 두께. 양 끝으로 갈수록 여기서 줄어든다. */
-    thickness: PIXEL * 2,
+    /** 짧을수록 날카롭다. 길게 남으면 휘두른 것이 아니라 걸어둔 것처럼 보인다. */
+    lifeMs: 120,
+    /** 안쪽 밝은 심 + 바깥 옅은 획. 두 겹이되 심이 훨씬 얇아야 가늘게 보인다. */
+    core: 0xfff2f3,
+    body: 0xe0454e,
+    outerWidth: 5,
+    innerWidth: 2,
+    /** 호를 몇 점으로 찍을지. 점 크기보다 촘촘해야 선으로 이어진다. */
+    segments: 48,
     /**
      * 사거리에 곱해 호의 반지름을 정한다.
      * 1을 넘기면 그림이 판정 범위 밖까지 뻗어, 닿아 보이는데 안 맞는 일이 생긴다.
      */
-    radiusScale: 0.9,
+    radiusScale: 0.95,
   },
   beam: {
-    lifeMs: 110,
-    thickness: PIXEL,
+    lifeMs: 100,
+    /** 총알은 가늘어야 빠르게 보인다. 굵으면 광선이 되고 속도가 죽는다. */
+    thickness: 2,
     core: 0xfff3f4,
     glow: 0xff6b6b,
   },
@@ -54,9 +53,10 @@ const VFX = {
    */
   tail: {
     /** 가로로 길고 세로로 얇아야 지나간 자국으로 읽힌다. 세로가 길면 빗살처럼 보인다. */
-    length: 72,
+    length: 84,
     segments: 6,
-    headHeight: PIXEL * 2,
+    /** 총알 머리의 두께. 여기서 뒤로 갈수록 얇아진다. 굵으면 총알이 아니라 광선이 된다. */
+    headHeight: 5,
     core: 0xfff6f6,
     glow: 0xff5560,
   },
@@ -160,12 +160,29 @@ export const pulseHitFx = (scene: Phaser.Scene, strength = 0.55): void => {
 };
 
 /**
+ * 콤보 단계별 베는 각도.
+ *
+ * 0도가 정면, 음수가 위, 양수가 아래다. 위아래로 크게 휘두르면 우산처럼 보여 둔탁하다.
+ * 대각선으로 짧게 지나가야 날카롭게 읽힌다.
+ */
+const SLASH_SWEEPS = [
+  /** 1타 — 뒤 위에서 앞 아래로 내려긋는다. */
+  { from: -112, to: -14, scale: 1 },
+  /** 2타 — 앞 아래에서 뒤 위로 올려 벤다. 1타의 반대 방향이라 연타가 눈에 띈다. */
+  { from: 76, to: -12, scale: 1 },
+  /** 3타 — 같은 대각선을 더 길고 크게 가로지른다. */
+  { from: -126, to: 26, scale: 1.2 },
+] as const;
+
+/**
  * 검 궤적.
  *
- * 매끈한 곡선이 아니라 도트를 한 칸씩 찍어 계단으로 만든다.
- * 반원을 그대로 쓰면 우산처럼 보여서, 진행 방향으로 기울인 부채꼴을 쓴다.
+ * 한 획으로 지나간 곡선을 그린다. 도트를 한 칸씩 찍어 계단으로 만들면
+ * 획이 굵어지고 뭉쳐 보여, 베었다기보다 뭔가를 놓아둔 것처럼 둔탁해진다.
  *
- * @param step 콤보 단계(1~3). 단계마다 베는 방향과 크기가 달라야 연타가 읽힌다.
+ * 바깥의 옅고 조금 굵은 획과 안쪽의 밝고 아주 얇은 심, 두 겹만 쓴다.
+ *
+ * @param step 콤보 단계(1~3). 단계마다 베는 방향이 달라야 연타가 읽힌다.
  */
 export const slashArc = (
   scene: Phaser.Scene,
@@ -176,43 +193,43 @@ export const slashArc = (
   step: number,
 ): void => {
   const { slash } = VFX;
-
-  // 1타는 위에서 아래로, 2타는 아래에서 위로, 3타는 크게 내려친다.
-  const sweep =
-    step === 2
-      ? { from: 62, to: -74, scale: 1 }
-      : step >= 3
-        ? { from: -96, to: 74, scale: 1.25 }
-        : { from: -58, to: 70, scale: 1 };
-
+  const sweep = SLASH_SWEEPS[Math.min(Math.max(step, 1), SLASH_SWEEPS.length) - 1];
   const radius = reach * slash.radiusScale * sweep.scale;
+
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
 
-  for (let i = 0; i <= slash.steps; i += 1) {
-    const t = i / slash.steps;
-    const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(sweep.from, sweep.to, t));
-
-    // 양 끝이 가늘어야 휘두른 궤적으로 보인다. 가운데가 가장 두껍다.
-    const taper = Math.sin(t * Math.PI);
-    const thickness = Math.max(PIXEL, Math.round((slash.thickness * taper) / PIXEL) * PIXEL);
-
-    // 도트 격자에 맞춰 반올림한다. 격자를 벗어나면 계단이 흐트러진다.
-    const px = Math.round((x + facing * Math.cos(angle) * radius) / PIXEL) * PIXEL;
-    const py = Math.round((y + Math.sin(angle) * radius) / PIXEL) * PIXEL;
-
-    // 점 크기가 두께 그대로여야 이웃한 점과 겨우 이어져 선으로 읽힌다.
-    // 예전처럼 두께의 두 배로 찍으면 전부 겹쳐 호가 아니라 막대가 된다.
-    graphics.fillStyle(slash.body, 1);
-    graphics.fillRect(px - thickness / 2, py - thickness / 2, thickness, thickness);
-    // 심은 가운데 구간에만 넣는다. 끝까지 흰 점을 찍으면 붉은 기가 다 죽는다.
-    if (taper > 0.55) {
-      graphics.fillStyle(slash.core, 1);
-      graphics.fillRect(px - PIXEL / 2, py - PIXEL / 2, PIXEL, PIXEL);
+  /**
+   * 호를 아주 작은 점으로 촘촘히 찍는다.
+   *
+   * `lineStyle`+`strokePoints`가 더 자연스러워 보이지만 화면에 나오지 않았고,
+   * `fillRect`는 확실히 그려진다. 점을 두께보다 훨씬 촘촘히 찍으면 결국 같은 선이 된다.
+   *
+   * 점 크기가 곧 획의 굵기다. 크게 찍으면 예전처럼 뭉쳐서 둔탁해진다.
+   */
+  const stamp = (size: number, color: number, alpha: number) => {
+    graphics.fillStyle(color, alpha);
+    for (let i = 0; i <= slash.segments; i += 1) {
+      const angle = Phaser.Math.DegToRad(
+        Phaser.Math.Linear(sweep.from, sweep.to, i / slash.segments),
+      );
+      // 양 끝이 가늘어야 지나간 획으로 보인다. 가운데가 가장 굵다.
+      const taper = 0.35 + 0.65 * Math.sin((i / slash.segments) * Math.PI);
+      const width = size * taper;
+      graphics.fillRect(
+        x + facing * Math.cos(angle) * radius - width / 2,
+        y + Math.sin(angle) * radius - width / 2,
+        width,
+        width,
+      );
     }
-  }
+  };
+
+  stamp(slash.outerWidth, slash.body, 0.45);
+  stamp(slash.innerWidth, slash.core, 1);
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
+
   scene.tweens.add({
     targets: graphics,
     alpha: 0,
@@ -276,28 +293,23 @@ export const createBulletTrail = (
   graphics.setDepth(VFX.depth - 1);
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
-  const segmentWidth = Math.ceil(tail.length / tail.segments / PIXEL) * PIXEL;
+  const segmentWidth = tail.length / tail.segments;
 
   for (let i = 0; i < tail.segments; i += 1) {
     const t = i / tail.segments;
     // 뒤로 갈수록 얇아지고 옅어진다. 두 가지가 같이 줄어야 뾰족해 보인다.
-    const height = Math.round((tail.headHeight * (1 - t)) / PIXEL) * PIXEL;
-    if (height <= 0) break;
-
+    // 격자에 반올림하지 않는다. 반올림하면 계단이 생겨 가는 꼬리가 굵어 보인다.
+    const height = tail.headHeight * (1 - t);
     const left = -facing * (t * tail.length) - (facing > 0 ? segmentWidth : 0);
 
     // height가 이미 전체 두께다. 위아래로 한 번 더 늘리면 꼬리가 아니라 세로 빗살이 된다.
-    graphics.fillStyle(tail.glow, 0.55 * (1 - t));
+    graphics.fillStyle(tail.glow, 0.5 * (1 - t));
     graphics.fillRect(left, -height / 2, segmentWidth, height);
-    if (height > PIXEL) {
-      graphics.fillStyle(tail.core, 0.9 * (1 - t));
-      graphics.fillRect(left, -PIXEL / 2, segmentWidth, PIXEL);
-    }
   }
 
-  // 총알 머리. 가장 밝은 한 칸이 있어야 탄이 어디쯤인지 읽힌다.
+  // 총알 머리. 가장 밝은 한 점이 있어야 탄이 어디쯤인지 읽힌다.
   graphics.fillStyle(tail.core, 1);
-  graphics.fillRect(-PIXEL / 2, -PIXEL, PIXEL * 2, PIXEL * 2);
+  graphics.fillRect(-facing * 2, -tail.headHeight / 2, 6, tail.headHeight);
 
   return graphics;
 };

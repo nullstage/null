@@ -2,7 +2,12 @@
 
 import styled from "@emotion/styled";
 
-import { DIRECTOR_DIALOGUE, counterDialogueId } from "@/game/data/directorRules";
+import {
+  COUNTER_SUMMARY,
+  DIRECTOR_DIALOGUE,
+  STYLE_TITLE,
+  counterDialogueId,
+} from "@/game/data/directorRules";
 import { dashReliance } from "@/game/systems/DirectorPolicy";
 import type { DirectorAnalysis, PlayStyle } from "@/game/types/game";
 import { theme } from "@/styles/theme";
@@ -26,10 +31,43 @@ export const STYLE_LABEL: Record<PlayStyle, string> = {
   MIXED: "혼합",
 };
 
-const Dialogue = styled.p`
+/**
+ * 이 패널에서 가장 먼저 읽혀야 하는 한 줄.
+ * 숫자를 먼저 보여주면 무엇을 봤다는 건지 전달되지 않는다.
+ */
+const Title = styled.p`
+  margin: 0 0 ${theme.space(2)};
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 27px;
+  letter-spacing: 0.04em;
+  color: #fff;
+`;
+
+const TitleNote = styled.p`
+  margin: 0 0 ${theme.space(6)};
+  padding-bottom: ${theme.space(5)};
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 14px;
+  color: ${theme.color.textMuted};
+`;
+
+/** 다음 방이 어떻게 바뀌는지. 이게 없으면 분석만 하고 아무 일도 안 하는 것으로 보인다. */
+const Counter = styled.p`
   margin: ${theme.space(6)} 0 0;
-  padding-top: ${theme.space(5)};
-  border-top: 1px solid ${theme.color.border};
+  padding: ${theme.space(4)} ${theme.space(5)};
+  border-left: 2px solid #e05055;
+  background: linear-gradient(90deg, rgba(112, 34, 35, 0.5) 0%, rgba(112, 34, 35, 0) 100%);
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 16px;
+  color: #fff;
+`;
+
+const Dialogue = styled.p`
+  margin: ${theme.space(5)} 0 0;
   color: ${theme.color.warning};
   font-size: 15px;
   line-height: 1.7;
@@ -45,11 +83,12 @@ export default function AnalysisPanel({ analysis, dashCount, onContinue }: Analy
   const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
 
   return (
-    <Panel title="「기록」">
-      <PanelRow>
-        <span>택한 방식</span>
-        <span>{STYLE_LABEL[analysis.style]}</span>
-      </PanelRow>
+    <Panel title="너는 이렇게 싸웠다">
+      <Title>{STYLE_TITLE[analysis.style]}</Title>
+      <TitleNote>
+        {STYLE_LABEL[analysis.style]} 위주로 싸웠다고 {Math.round(analysis.confidence)}% 확신한다
+      </TitleNote>
+
       <PanelRow>
         <span>가까이서 맞힌 비율</span>
         <span>{percent(analysis.meleeRatio)}</span>
@@ -62,10 +101,9 @@ export default function AnalysisPanel({ analysis, dashCount, onContinue }: Analy
         <span>물러선 정도</span>
         <span>{dashReliance(dashCount)}</span>
       </PanelRow>
-      <PanelRow>
-        <span>기록의 확신</span>
-        <span>{Math.round(analysis.confidence)}%</span>
-      </PanelRow>
+
+      {/* 분석보다 이 줄이 중요하다. 다음 방이 왜 달라지는지가 여기서만 전해진다. */}
+      <Counter>다음 방 — {COUNTER_SUMMARY[analysis.style]}</Counter>
 
       <Dialogue>
         “{DIRECTOR_DIALOGUE[analysis.dialogueId]}”

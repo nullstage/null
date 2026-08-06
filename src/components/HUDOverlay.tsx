@@ -4,7 +4,7 @@ import styled from "@emotion/styled";
 import { useCallback, useEffect, useState } from "react";
 
 import { loadKeyBindings } from "@/game/config/inputConfig";
-import { DEFAULT_BOSS_WEIGHTS } from "@/game/data/directorRules";
+import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
 import type {
   BossPatternWeights,
@@ -166,6 +166,13 @@ export default function HUDOverlay() {
   /** Esc로 연 일시정지 메뉴. 열려 있는 동안 전투 씬은 멈춰 있다. */
   const [paused, setPaused] = useState(false);
 
+  /**
+   * 방 사이 로딩. 강화를 고른 순간 켜고, 다음 방이 시작되면(`roomReady`) 걷는다.
+   * 두 값을 나눈 이유는 로딩 화면이 "떠 있는가"와 "걷혀도 되는가"가 다른 시점이기 때문이다.
+   */
+  const [roomLoading, setRoomLoading] = useState(false);
+  const [roomReady, setRoomReady] = useState(false);
+
   /** 시작 화면 에셋 프리로드 완료 여부. 로딩 화면이 걷히기 시작할 때 켠다. */
   const [assetsReady, setAssetsReady] = useState(false);
   /** 로딩 화면 자체의 존재 여부. 다 걷힌 뒤에 내린다. */
@@ -225,6 +232,8 @@ export default function HUDOverlay() {
   useGameEvent("room:start", ({ roomId: next }) => {
     setRoomId(next);
     setActivePanel("none");
+    // 다음 방이 실제로 시작됐다. 이제 로딩을 걷어도 아래가 비지 않는다.
+    setRoomReady(true);
   });
 
   useGameEvent("room:clear", ({ telemetry: next }) => setTelemetry(next));
@@ -271,7 +280,7 @@ export default function HUDOverlay() {
    */
   useEffect(() => {
     const pausable = phase === "COMBAT" || phase === "BOSS";
-    if (!pausable || activePanel !== "none" || transition !== "none") return;
+    if (!pausable || activePanel !== "none" || transition !== "none" || roomLoading) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -283,7 +292,7 @@ export default function HUDOverlay() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePanel, phase, transition]);
+  }, [activePanel, phase, roomLoading, transition]);
 
   /**
    * READY가 되면 바로 넘긴다.
@@ -304,6 +313,7 @@ export default function HUDOverlay() {
   const beginRun = useCallback(() => setTransition("cover"), []);
   const startPrologue = useCallback(() => setTransition("prologue"), []);
   const endTransition = useCallback(() => setTransition("none"), []);
+  const hideRoomLoading = useCallback(() => setRoomLoading(false), []);
   const noop = useCallback(() => {}, []);
 
   // 완전히 검어진 시점. 전투로 넘기고, 그 위에 로딩 화면을 띄운다.
@@ -327,6 +337,9 @@ export default function HUDOverlay() {
     setDeception(null);
     setResult(null);
     setBossWeights(DEFAULT_BOSS_WEIGHTS);
+    // 방 전환 도중에 죽거나 나가면 흰 로딩이 그대로 남는다.
+    setRoomLoading(false);
+    setRoomReady(false);
   }, []);
 
   const restartRun = useCallback(() => {
@@ -385,6 +398,21 @@ export default function HUDOverlay() {
       )}
 
       {transition === "prologue" && <PrologueText onDone={endTransition} />}
+
+      {/*
+        방 사이 로딩. 강화를 고른 순간부터 다음 방이 시작될 때까지 덮는다.
+        직전 판정을 한 줄로 다시 보여 주는 자리이기도 하다.
+        씬 재시작이 한 프레임에 끝나 화면이 툭 바뀌던 것을 이걸로 이어 준다.
+      */}
+      {roomLoading && (
+        <LoadingScreen
+          key="room"
+          ready={roomReady}
+          verdict={analysis ? STYLE_TITLE[analysis.style] : undefined}
+          onReveal={noop}
+          onDone={hideRoomLoading}
+        />
+      )}
 
       {showCombatHud && (
         <CombatHud>
@@ -445,6 +473,9 @@ export default function HUDOverlay() {
           choices={choices}
           onSelect={(upgradeId) => {
             setActivePanel("none");
+            // 로딩을 먼저 덮고 나서 방을 바꾼다. 순서가 반대면 바뀌는 장면이 그대로 보인다.
+            setRoomReady(false);
+            setRoomLoading(true);
             emitGameEvent("upgrade:select", { upgradeId });
           }}
         />

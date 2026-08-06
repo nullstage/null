@@ -80,6 +80,29 @@ export const DIRECTOR_DIALOGUE: Record<string, string> = {
   deception_failed: "적어 둔 그대로였다.",
 };
 
+/**
+ * 플레이 스타일에 붙는 칭호.
+ *
+ * 「기록」이나 「분석」 같은 말로는 무엇을 봤다는 건지 전해지지 않는다.
+ * "너는 이런 자였다"를 한 줄로 못 박아야 다음 방이 왜 바뀌는지도 같이 납득된다.
+ *
+ * 대사(`analysis_*`)와 같은 관찰을 짧게 줄인 것이라 어조를 맞춘다.
+ */
+export const STYLE_TITLE: Record<PlayStyle, string> = {
+  MELEE: "주먹을 믿는 자",
+  RANGED: "거리를 두는 자",
+  MOBILE: "붙잡히지 않는 자",
+  MIXED: "아직 이름 없는 자",
+};
+
+/** 다음 방이 어떻게 달라지는지 한 줄로 알려 준다. 카운터가 안 보이면 시스템이 없는 것과 같다. */
+export const COUNTER_SUMMARY: Record<PlayStyle, string> = {
+  MELEE: "다가서기 어려운 자들이 기다린다",
+  RANGED: "거리를 지우는 자들이 기다린다",
+  MOBILE: "지나갈 자리를 막는 자들이 기다린다",
+  MIXED: "아직 정해지지 않았다",
+};
+
 export const analysisDialogueId = (style: PlayStyle): string =>
   `analysis_${style.toLowerCase()}`;
 

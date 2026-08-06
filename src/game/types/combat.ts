@@ -71,11 +71,11 @@ export const TEXTURE = {
  */
 export const PLAYER_SPRITE = {
   key: "player_sheet",
-  /** 288x192, 6열 4행 */
+  /** 512x448, 8열 7행. 오른손 총·왼손 검을 함께 든 양손 무기 시트다. */
   path: "sprites/player/player.png",
-  frameWidth: 48,
-  frameHeight: 48,
-  columns: 6,
+  frameWidth: 64,
+  frameHeight: 64,
+  columns: 8,
   /**
    * 프레임 안에서 발끝이 닿는 y. 프레임 아래에 빈 줄이 남아 있어 48이 아니다.
    *
@@ -83,12 +83,17 @@ export const PLAYER_SPRITE = {
    * 프레임 높이를 그대로 쓰면 남은 여백만큼(스케일 배수로) 공중에 뜬 것처럼 보인다.
    * 시트를 다시 뽑으면 이 값도 함께 확인해야 한다.
    */
-  footY: 43,
+  footY: 57,
   states: {
-    idle: { row: 0, frames: 4, fps: 4, loop: true },
-    run: { row: 1, frames: 6, fps: 12, loop: true },
-    attack: { row: 2, frames: 6, fps: 14, loop: false },
-    jump: { row: 3, frames: 4, fps: 8, loop: false },
+    idle: { row: 0, frames: 6, fps: 6, loop: true },
+    run: { row: 1, frames: 8, fps: 12, loop: true },
+    jump: { row: 2, frames: 6, fps: 9, loop: false },
+    dash: { row: 3, frames: 6, fps: 16, loop: false },
+    /** 왼손 검. 키 한 번에 한 번만 벤다. */
+    attack: { row: 4, frames: 8, fps: 14, loop: false },
+    /** 오른손 총. 근거리와 그림이 갈려야 지금 무엇을 쓰는지 보인다. */
+    shoot: { row: 5, frames: 6, fps: 14, loop: false },
+    switch: { row: 6, frames: 4, fps: 14, loop: false },
   },
 } as const;
 

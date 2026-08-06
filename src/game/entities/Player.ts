@@ -40,8 +40,13 @@ import {
 } from "../types/combat";
 import type { AttackMode, UpgradeId } from "../types/game";
 
-/** 도트 확대 배율. 48px 셀을 화면에서 이 배수로 키운다. */
-const SPRITE_SCALE = 1.6;
+/**
+ * 도트 확대 배율. 64px 셀을 화면에서 이 배수로 키운다.
+ *
+ * 셀 안 캐릭터 키가 52px이라, 1.2배면 화면에서 62px가 된다.
+ * 이전 시트(48px 셀·캐릭터 40px·1.6배)와 같은 크기라 방 배치를 다시 잡지 않아도 된다.
+ */
+const SPRITE_SCALE = 1.2;
 
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
 const RANGED_MODE_TINT = 0xffc9d4;
@@ -348,6 +353,7 @@ export class Player {
       // 공중 대시는 중력을 조금 남겨 호를 그린다. 완전히 끄면 일자로 날아 딱딱하다.
       body.setGravityY(-this.scene.physics.world.gravity.y * (1 - TUNING.dash.airGravityScale));
     }
+    this.lockAnim("dash");
     this.lastAfterimageAtMs = 0;
     this.trailAfterimage(now);
   }
@@ -364,13 +370,23 @@ export class Player {
 
   /** 모드에 맞는 공격으로 넘긴다. 쿨타임 판정은 각 공격 안에 있다. */
   private attack(): void {
-    // 공격 그림이 끝까지 나오도록 이동·점프 상태가 끼어들지 못하게 잠근다.
-    const spec = PLAYER_SPRITE.states.attack;
-    this.attackAnimUntilMs = this.scene.time.now + (spec.frames / spec.fps) * 1000;
-    this.playAnim("attack", true);
+    // 검과 총은 그림이 갈려야 한다. 같은 모션이면 지금 무엇을 쓰는지 화면에서 안 보인다.
+    const state: PlayerAnimState = this.mode === "MELEE" ? "attack" : "shoot";
+    this.lockAnim(state);
 
     if (this.mode === "MELEE") this.attackMelee();
     else this.attackRanged();
+  }
+
+  /**
+   * 한 번 재생되는 그림을 끝까지 보여 준다.
+   *
+   * 잠그는 것은 그림뿐이고 입력은 계속 받는다. 조작이 막히면 전환이 무기처럼 느껴지지 않는다.
+   */
+  private lockAnim(state: PlayerAnimState): void {
+    const spec = PLAYER_SPRITE.states[state];
+    this.attackAnimUntilMs = this.scene.time.now + (spec.frames / spec.fps) * 1000;
+    this.playAnim(state, true);
   }
 
   /** 근거리 공격 입력. 3연속 베기. */
@@ -510,6 +526,8 @@ export class Player {
     this.mode = this.mode === "MELEE" ? "RANGED" : "MELEE";
     this.comboStep = 0;
     this.applyModeTint();
+    // 손을 바꾸는 그림만 짧게 보여 준다. 전환 자체는 즉시라 입력을 막지 않는다.
+    this.lockAnim("switch");
     this.punch(1.2, 1.2);
     this.emitHud();
   }
