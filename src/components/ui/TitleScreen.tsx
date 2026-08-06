@@ -159,7 +159,11 @@ export default function TitleScreen({
   const subtitleRef = useRef<HTMLImageElement>(null);
   const menuRef = useRef<HTMLElement>(null);
 
-  const [selected, setSelected] = useState(0);
+  /**
+   * -1은 "아직 아무것도 고르지 않음"이다.
+   * 0으로 시작하면 화면이 뜨자마자 처음부터가 선택돼 보이고, Enter를 잘못 눌러 런이 시작된다.
+   */
+  const [selected, setSelected] = useState(-1);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // 키와 클릭이 같은 프레임에 겹쳐도 런이 두 번 시작되지 않게 한다.
@@ -199,19 +203,21 @@ export default function TitleScreen({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      const isDown = event.key === "ArrowDown" || event.key === "ArrowRight";
+      const isUp = event.key === "ArrowUp" || event.key === "ArrowLeft";
+
+      if (isDown || isUp) {
         event.preventDefault();
-        moveTo((selected + 1) % MENU_ITEMS.length);
-        return;
-      }
-      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-        event.preventDefault();
-        moveTo((selected - 1 + MENU_ITEMS.length) % MENU_ITEMS.length);
+        // 아무것도 안 골라둔 상태에서 처음 누르면 위아래 무엇이든 첫 항목으로 들어온다.
+        if (selected < 0) moveTo(0);
+        else if (isDown) moveTo((selected + 1) % MENU_ITEMS.length);
+        else moveTo((selected - 1 + MENU_ITEMS.length) % MENU_ITEMS.length);
         return;
       }
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        run(selected);
+        // 고른 것이 없으면 실행하지 않는다. 여기서 0을 넣으면 프리셀렉트를 없앤 의미가 사라진다.
+        if (selected >= 0) run(selected);
       }
     };
 
