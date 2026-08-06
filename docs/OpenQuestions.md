@@ -25,7 +25,7 @@
 | OQ-002 | GitHub Pages 저장소명과 배포 base 경로 | `nullstage/null` / 다른 저장소 | `nullstage/null` 사용, `basePath = /null` | 최초 배포 전 | RESOLVED | DEC-005 |
 | OQ-025 | `nullstage/null` 저장소가 public이며 GitHub Pages를 사용할 수 있는가 | public 전환 / private 유지 후 다른 저장소 사용 | 저장소 설정 완료. `https://nullstage.github.io/null/` 배포 확인 | 최초 배포 전 | RESOLVED | DEC-005 |
 | OQ-003 | 기본 해상도와 화면 비율 | 1280×720 / 960×540 / 반응형 | 내부 1280×720 고정 + Scale.FIT. **코드 임시값 적용 중** | UI 구현 전 | OPEN | - |
-| OQ-004 | 키 바인딩 | WASD+마우스 / 방향키+ZXC / 혼합 | 키보드 단독. **코드 임시값 적용 중** | 전투 구현 전 | OPEN | - |
+| OQ-004 | 키 바인딩 | WASD+마우스 / 방향키+ZXC / 혼합 | 키보드 단독. 설정에서 변경 가능해져 기본값 결정 부담이 줄었다 | 전투 구현 전 | OPEN | - |
 | OQ-023 | 테스트 프레임워크를 도입할 것인가 | Vitest 도입 / 도입 안 함 | DirectorPolicy가 순수 함수라 검증 가치가 크다. Vitest + 분류 규칙 테스트만 권장 | Day 2 시작 전 | OPEN | - |
 | OQ-022 | F1 디버그 UI를 배포 빌드에 포함할 것인가 | 포함(기본 off) / 개발 빌드 전용 | 포함. 시연 증거 장면 촬영에 사용 | Day 4 | OPEN | - |
 | OQ-028 | 시작 화면 "이어하기"를 실제로 구현할 것인가 | 저장 구현 / 메뉴에서 제거 / 비활성 유지 | 세이브·로드는 MVP 범위 밖(CLAUDE.md 규칙 3)이라 지금은 비활성 상태로 표시만 한다. 4일 안에 넣을 값어치가 있는지 판단 필요 | Day 3 | OPEN | - |
