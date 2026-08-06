@@ -72,7 +72,13 @@ const TUNING = {
   dash: {
     durationMs: 150,
     /** 공중 대시가 받는 중력 비율. 0이면 일자로 날아 딱딱하다. */
-    airGravityScale: 0.35,
+    airGravityScale: 0.6,
+    /**
+     * 공중 대시 시작에 실어 주는 상승 속도.
+     * 중력만으로는 150ms 동안 5px밖에 안 휘어 직선으로 보인다.
+     * 살짝 띄웠다 떨어뜨려야 호가 눈에 들어온다.
+     */
+    airLiftVelocity: 230,
     /** 충전 하나가 다시 차는 데 걸리는 시간 */
     rechargeMs: 900,
   },
@@ -296,7 +302,7 @@ export class Player {
 
     // 거리와 시간으로 속도를 역산한다. dashDistance가 바뀌어도 체감 거리가 유지된다.
     const speed = PLAYER.dashDistance / (TUNING.dash.durationMs / 1000);
-    body.setVelocity(this.facing * speed, 0);
+    body.setVelocity(this.facing * speed, this.isGrounded ? 0 : -TUNING.dash.airLiftVelocity);
     // 대시 중에는 중력을 끊는다. 공중 대시가 아래로 처지면 회피기로 못 쓴다.
     if (this.isGrounded) {
       // 지상 대시는 회피기다. 직선이어야 판단하기 쉽다.
