@@ -58,7 +58,6 @@ export class RunState {
 
   /** MVP_PLAN §9 — 재시작 시 이전 런 데이터가 남아 있으면 안 된다. */
   reset(nowMs: number): void {
-    this.phase = "READY";
     this.roomIndex = 0;
     this.currentRoomId = "";
     this.currentTelemetry = null;
@@ -75,6 +74,10 @@ export class RunState {
     this.rooms = [];
     this.runStartedAtMs = nowMs;
     this.runEndedAtMs = 0;
+
+    // 필드를 모두 비운 뒤에 알린다. 직접 대입하면 setPhase의 중복 가드에 걸려
+    // `phase:change`가 발행되지 않고, React 레이어가 READY 화면을 띄우지 못한다.
+    this.setPhase("READY");
   }
 
   setPhase(phase: GamePhase): void {
