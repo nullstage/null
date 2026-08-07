@@ -257,8 +257,17 @@ export class Player {
   private invulnerableUntilMs = 0;
   private blinkTween: Phaser.Tweens.Tween | null = null;
 
-  /** 화면 밖 정리와 관통 판정을 위해 내가 쏜 투사체만 따로 들고 있는다. */
-  private projectiles: Phaser.Physics.Arcade.Image[] = [];
+  /**
+   * 내가 쏜 투사체와 그 꼬리. 화면 밖 정리와 관통 판정에 쓴다.
+   *
+   * 꼬리를 투사체의 `setData`에 얹으면 안 된다.
+   * 씬이 적중한 탄을 `destroy()`할 때 Phaser가 그 오브젝트의 data까지 함께 지워,
+   * 다음 프레임에 꼬리를 찾지 못하고 화면에 영원히 남는다.
+   */
+  private projectiles: {
+    body: Phaser.Physics.Arcade.Image;
+    trail: Phaser.GameObjects.Graphics;
+  }[] = [];
 
   /** 씬이 넘겨준 마지막 HUD 값. 내부 갱신에서 0으로 덮어쓰지 않기 위한 것이다. */
   private lastEnemiesRemaining = 0;
@@ -361,9 +370,9 @@ export class Player {
   destroy(): void {
     this.blinkTween?.remove();
     this.blinkTween = null;
-    for (const projectile of this.projectiles) {
-      (projectile.getData("trail") as Phaser.GameObjects.Graphics | undefined)?.destroy();
-      projectile.destroy();
+    for (const { body, trail } of this.projectiles) {
+      trail.destroy();
+      body.destroy();
     }
     this.projectiles = [];
     this.sprite?.destroy();
@@ -577,7 +586,6 @@ export class Player {
     // 꼬리는 총알에 자식으로 붙이지 않는다. 붙이면 물리 바디까지 함께 커진다.
     const trail = createBulletTrail(this.scene, this.facing);
     trail.setPosition(projectile.x, projectile.y);
-    projectile.setData("trail", trail);
 
     const body = projectile.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
@@ -589,7 +597,7 @@ export class Player {
     projectile.setData("consumeOnHit", maxHits <= 1);
     projectile.setData("maxHits", maxHits);
     projectile.setData("expiresAtMs", now + ranged.lifeMs);
-    this.projectiles.push(projectile);
+    this.projectiles.push({ body: projectile, trail });
 
     // 총구에서 뻗는 얇은 직선. 투사체보다 먼저 눈에 들어와 조준선 역할을 한다.
     beamLine(this.scene, projectile.x, projectile.y, this.facing, ranged.trailLength);
@@ -875,30 +883,29 @@ export class Player {
     if (this.projectiles.length === 0) return;
     const { width } = this.deps.arena.bounds;
 
-    this.projectiles = this.projectiles.filter((projectile) => {
-      const trail = projectile.getData("trail") as Phaser.GameObjects.Graphics | undefined;
-
-      if (!projectile.active) {
-        // 씬이 관통 없는 탄을 적중 즉시 없앤다. 꼬리만 남으면 허공에 선이 떠 있게 된다.
-        trail?.destroy();
+    this.projectiles = this.projectiles.filter(({ body, trail }) => {
+      // 씬이 관통 없는 탄을 적중 즉시 없앤다.
+      // 그때 탄의 data도 함께 사라지므로, 꼬리는 여기 배열에 들고 있는 참조로만 정리할 수 있다.
+      if (!body.active) {
+        trail.destroy();
         return false;
       }
 
       // 씬이 적중한 적을 이 Set에 모아둔다. 관통 수를 세는 유일한 근거다.
-      const hitCount = (projectile.getData("hitEnemies") as Set<unknown> | undefined)?.size ?? 0;
+      const hitCount = (body.getData("hitEnemies") as Set<unknown> | undefined)?.size ?? 0;
       const expired =
-        hitCount >= (projectile.getData("maxHits") as number) ||
-        nowMs > (projectile.getData("expiresAtMs") as number) ||
-        projectile.x < 0 ||
-        projectile.x > width;
+        hitCount >= (body.getData("maxHits") as number) ||
+        nowMs > (body.getData("expiresAtMs") as number) ||
+        body.x < 0 ||
+        body.x > width;
 
       if (expired) {
-        trail?.destroy();
-        projectile.destroy();
+        trail.destroy();
+        body.destroy();
         return false;
       }
 
-      trail?.setPosition(projectile.x, projectile.y);
+      trail.setPosition(body.x, body.y);
       return true;
     });
   }
