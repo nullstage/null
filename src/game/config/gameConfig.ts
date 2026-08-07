@@ -7,6 +7,12 @@ export const VIEWPORT = {
 } as const;
 
 /**
+ * 튜토리얼 방(방 1)만 카메라 스크롤을 테스트하려고 화면보다 넓게 잡은 임시값. (OQ-029)
+ * 다른 방은 여전히 `VIEWPORT.width`와 같아 카메라가 움직이지 않는다.
+ */
+export const TUTORIAL_ROOM_WIDTH = VIEWPORT.width * 2;
+
+/**
  * GitHub Pages 하위 경로 대응. (DEC-005)
  * Phaser 로더는 Next.js의 basePath를 모르므로 에셋 경로에 직접 붙여야 한다.
  */

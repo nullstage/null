@@ -14,21 +14,22 @@
 import Phaser from "phaser";
 
 import { eventBus, type GameEventMap } from "../EventBus";
-import { VIEWPORT } from "../config/gameConfig";
+import { TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
+import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
 import { Player } from "../entities/Player";
 import { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
 import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
 import { RangedEnemy } from "../entities/enemies/RangedEnemy";
-import { attachHitFx } from "../systems/CombatVfx";
+import { attachAmbientLight, attachHitFx, updateAmbientLightCenter } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems/DirectorPolicy";
 import { RoomController } from "../systems/RoomController";
 import { rollUpgradeChoices } from "../systems/UpgradeSystem";
 import { runState } from "../systems/RunState";
-import { createArena, type CombatArena } from "../types/combat";
+import { addDecor, createArena, TEXTURE, type CombatArena } from "../types/combat";
 import type {
   AttackMode,
   CombatTelemetry,
@@ -54,6 +55,13 @@ export class CombatScene extends Phaser.Scene {
   private room!: RoomController;
   private enemies: BaseEnemy[] = [];
   private subscriptions: (() => void)[] = [];
+  /** 방 1(튜토리얼) 전용 — 전투 대신 이걸 앞에서 INTERACT를 눌러야 다음 방으로 넘어간다. */
+  private portal: Phaser.Physics.Arcade.Sprite | null = null;
+  /** 게이트 근처일 때만 보이는 안내 문구. */
+  private portalPrompt: Phaser.GameObjects.Text | null = null;
+  /** 게이트를 상호작용하면 실행할 다음 단계. `awaitPortal`이 채우고 상호작용 시 비운다. */
+  private portalCallback: (() => void) | null = null;
+  private interactKey?: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super("Combat");
@@ -91,9 +99,14 @@ export class CombatScene extends Phaser.Scene {
       onRoomClear: (telemetry) => this.handleRoomClear(telemetry),
     });
 
-    this.player.spawn(VIEWPORT.width * 0.15, this.arena.bounds.floorY - 80);
+    this.player.spawn(this.arena.bounds.width * 0.15, this.arena.bounds.floorY - 80);
     // 충돌 연결은 플레이어 스프라이트가 생긴 뒤에 건다.
     this.wireCollisions();
+
+    // 방이 화면보다 넓을 때 카메라가 플레이어를 따라간다. lerp가 낮아 스냅되지 않고 조금씩 붙는다.
+    if (this.player.sprite) {
+      this.cameras.main.startFollow(this.player.sprite, true, 0.08, 0.08);
+    }
 
     runState.beginRoom(this.roomId);
     this.room.start(this.roomId);
@@ -124,6 +137,36 @@ export class CombatScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       if (!enemy.isDefeated) enemy.update(time, deltaMs);
     }
+    if (this.portal) this.updatePortalPrompt();
+
+    const sprite = this.player.sprite;
+    if (sprite?.body) {
+      // 스프라이트 원점(프레임 중앙)이 아니라 충돌 박스 중심을 쓴다 — 프레임 위쪽에
+      // 여백이 있어서 원점 기준으로 잡으면 빛이 캐릭터보다 위에 뜬다.
+      const body = sprite.body as Phaser.Physics.Arcade.Body;
+      updateAmbientLightCenter(this, body.center.x, body.center.y);
+    }
+  }
+
+  /**
+   * 게이트 근처 여부를 매 프레임 확인한다.
+   * 가까울 때만 머리 위 안내를 보여 주고, 그 상태에서 INTERACT를 막 눌렀을 때만 반응한다.
+   */
+  private updatePortalPrompt(): void {
+    const sprite = this.player.sprite;
+    if (!sprite || !this.portal || !this.portalPrompt) return;
+
+    // 클리어 전(콜백이 아직 안 채워짐)에는 가까이 가도 안내를 띄우지 않는다 —
+    // 눌러도 반응 없는 버튼처럼 보이면 안 된다.
+    const near = this.portalCallback !== null && Math.abs(sprite.x - this.portal.x) < 90;
+    this.portalPrompt.setVisible(near);
+    if (near) this.portalPrompt.setPosition(sprite.x, sprite.y - 70);
+
+    if (near && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.portalPrompt.setVisible(false);
+      this.portalCallback?.();
+      this.portalCallback = null;
+    }
   }
 
   // ────────────────────────────── 방 구성 ──────────────────────────────
@@ -138,7 +181,71 @@ export class CombatScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor("#0a0709");
     // 피격 셰이더는 카메라에 한 번 붙여두고, 세기만 0에서 올렸다 내린다.
     attachHitFx(this);
-    this.arena = createArena(this, VIEWPORT);
+    // (실험) 상시 조명 셰이더 — 캐릭터 주변만 밝고 나머지는 붉은 그림자로 가라앉는다.
+    // 중심 좌표는 `update()`에서 매 프레임 캐릭터 화면 위치로 갱신한다.
+    attachAmbientLight(this);
+
+    // 방 1·2는 화면보다 넓게 잡는다. 전투가 있어도 없어도 끝까지 걸어가 게이트를 찾는 구성이라
+    // 화면 하나보다는 길어야 진행하는 느낌이 산다. 무한 스크롤은 아니다 — 폭이 고정값이라 끝이 있다.
+    // 방 3은 Director가 고른 카운터 방이라 구성이 매번 달라 넓히지 않는다.
+    const isTutorialRoom = this.roomId === FIXED_ROOM_SEQUENCE[0];
+    const isWideRoom = isTutorialRoom || this.roomId === FIXED_ROOM_SEQUENCE[1];
+    const roomWidth = isWideRoom ? TUTORIAL_ROOM_WIDTH : VIEWPORT.width;
+    // 바닥 타일은 이제 모든 방이 돌바닥 띠로 통일한다(우즈 타일은 더 안 쓴다).
+    // 배경 그림 자체는 방 1만 전용(블러드문), 방 2·3은 기존 폐허 스카이라인을 그대로 쓴다.
+    this.arena = createArena(
+      this,
+      { width: roomWidth, height: VIEWPORT.height },
+      TEXTURE.floorTileStone,
+      isTutorialRoom ? TEXTURE.backgroundTutorial : TEXTURE.background,
+      87,
+    );
+
+    // 물리 월드 경계도 넓혀야 한다. 안 넓히면 카메라는 늘어나도 플레이어가 옛 경계(1280px)에 막힌다.
+    this.physics.world.setBounds(0, 0, roomWidth, VIEWPORT.height);
+    // 방이 화면보다 넓을 때만 실제로 스크롤한다 — 좁으면 경계가 뷰포트와 같아 움직일 곳이 없다.
+    this.cameras.main.setBounds(0, 0, roomWidth, VIEWPORT.height);
+
+    if (isTutorialRoom) {
+      for (const decor of ROOM_ONE_DECOR) {
+        addDecor(this, decor.key, decor.x, this.arena.bounds.floorY, decor.scale);
+      }
+    }
+
+    // 전송 게이트. 모든 일반 전투방(1~3) 끝에 세운다. 방 2·3은 적을 다 처치해야
+    // (`handleRoomClear`가 콜백을 채워야) 실제로 반응한다 — `updatePortalPrompt`가 안내를
+    // 콜백이 있을 때만 보여준다. 가까이 가서 INTERACT를 눌러야 넘어간다.
+    // 원본이 커서(426×542) 캐릭터 대비 지나치게 크지 않도록 축소한다.
+    const gateX = roomWidth - (isWideRoom ? 260 : 120);
+    const portal = this.physics.add.staticSprite(gateX, this.arena.bounds.floorY, TEXTURE.gate);
+    portal.setOrigin(0.5, 1);
+    portal.setScale(0.6);
+    portal.setDepth(2);
+    portal.refreshBody();
+    // 은은하게 숨쉬듯 — 완전히 정적인 장식과 구분되어 상호작용 가능한 지점임을 알린다.
+    this.tweens.add({
+      targets: portal,
+      alpha: 0.75,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+    });
+    this.portal = portal;
+
+    // 게이트 근처 + 실제로 반응할 준비가 됐을 때만 캐릭터 머리 위에 뜨는 안내. 기본은 숨김.
+    this.portalPrompt = this.add.text(gateX, 0, `[${KEY_BINDINGS.INTERACT}] 진입`, {
+      fontFamily: "monospace",
+      fontSize: "16px",
+      color: "#f5ece0",
+      backgroundColor: "#241a1fcc",
+      padding: { x: 6, y: 3 },
+    });
+    this.portalPrompt.setOrigin(0.5, 1);
+    this.portalPrompt.setDepth(11);
+    this.portalPrompt.setVisible(false);
+
+    this.interactKey = this.input.keyboard?.addKey(KEY_BINDINGS.INTERACT);
   }
 
   /** 충돌 판정은 이 한 곳에서만 건다. 엔티티가 서로를 알 필요가 없다. */
@@ -189,11 +296,14 @@ export class CombatScene extends Phaser.Scene {
       if (!enemy || enemy.isDefeated) return;
       this.player.takeDamage(enemy.definition.contactDamage);
     });
+
+    // 게이트는 충돌·오버랩이 아니라 `update()`의 거리 판정 + INTERACT 키로 반응한다
+    // (`updatePortalPrompt` 참조) — 부딪히기만 해도 넘어가면 실수로 지나칠 수 있다는 피드백 반영.
   }
 
   private spawnEnemy(spawn: EnemySpawn, _preset: RoomPreset): void {
     const enemy = this.createEnemy(spawn.type);
-    enemy.spawn(VIEWPORT.width * spawn.xRatio, this.arena.bounds.floorY - 60);
+    enemy.spawn(this.arena.bounds.width * spawn.xRatio, this.arena.bounds.floorY - 60);
     this.enemies.push(enemy);
     this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
   }
@@ -235,16 +345,31 @@ export class CombatScene extends Phaser.Scene {
 
     runState.hp = this.player.hp;
 
-    if (runState.roomIndex >= LAST_COMBAT_ROOM_INDEX) {
-      this.resolveDeception(telemetry);
-      return;
-    }
+    // 모든 일반 전투방(1~3)은 게이트를 밟아야 다음 단계로 넘어간다.
+    // 방 1(적 없음)은 `RoomController`가 방 시작과 동시에 이미 클리어를 끝내 두므로
+    // 콜백만 미리 채워 두는 셈이고, 방 2·3은 마지막 적을 잡는 순간 채워진다.
+    this.awaitPortal(() => {
+      if (runState.roomIndex >= LAST_COMBAT_ROOM_INDEX) {
+        this.resolveDeception(telemetry);
+        return;
+      }
 
-    runState.setPhase("ANALYSIS");
-    runState.attachAnalysis(analyze(telemetry, runState.previousTelemetry));
+      if (this.roomId === FIXED_ROOM_SEQUENCE[0]) {
+        // 튜토리얼은 전투 데이터가 없어 분석이 의미 없다(전부 0). 곧장 강화로 넘어간다.
+        this.offerUpgrade();
+        return;
+      }
 
-    // 분석 팝업을 닫으면 강화 선택으로 넘어간다.
-    this.once("ui:continue", () => this.offerUpgrade());
+      runState.setPhase("ANALYSIS");
+      runState.attachAnalysis(analyze(telemetry, runState.previousTelemetry));
+      // 분석 팝업을 닫으면 강화 선택으로 넘어간다.
+      this.once("ui:continue", () => this.offerUpgrade());
+    });
+  }
+
+  /** 방 1 전용. 게이트에 닿으면 `onReached`를 한 번 실행한다. */
+  private awaitPortal(onReached: () => void): void {
+    this.portalCallback = onReached;
   }
 
   /** OQ-016 미결정 — 지금은 방 1·방 2 클리어 후 두 번만 지급한다. */

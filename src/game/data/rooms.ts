@@ -11,15 +11,15 @@
 import type { RoomId, RoomPreset } from "../types/game";
 
 const ROOM_PRESET_LIST: RoomPreset[] = [
-  /** 방 1 — 조작과 전투 학습용 중립 방 (OQ-009 미결정, 임시 구성) */
+  /**
+   * 방 1 — 조작 학습용 무전투 방.
+   * 적을 두지 않는다. 진행은 전투가 아니라 방 끝 전송 게이트로 한다(`CombatScene` 참조).
+   */
   {
     id: "room_1",
     template: "HORIZONTAL",
     hazardsEnabled: false,
-    spawns: [
-      { type: "CHASER", xRatio: 0.75, delayMs: 0 },
-      { type: "CHASER", xRatio: 0.9, delayMs: 2500 },
-    ],
+    spawns: [],
   },
 
   /** 방 2 — 성향 분석용 혼합 방 (OQ-009, OQ-010 미결정, 임시 구성) */

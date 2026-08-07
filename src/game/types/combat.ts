@@ -61,6 +61,14 @@ export const TEXTURE = {
   telegraph: "px_telegraph",
   playerAttack: "px_player_attack",
   enemyAttack: "px_enemy_attack",
+  /** (실험) 방 2·3 배경 — 폐허 스카이라인 한 장. 아직 레이어 분리 없이 한 장만 깐다. (OQ-029) */
+  background: "tex_bg_ruins",
+  /** (실험) 방 1(튜토리얼) 전용 배경. */
+  backgroundTutorial: "tex_bg_bloodmoon",
+  /** (실험) 바닥 타일 — 벽/아치 시트에서 잘라낸 돌바닥 띠. 방 1~3 전부 이걸로 통일했다. */
+  floorTileStone: "tex_floor_stone",
+  /** (실험) 전송 게이트 — 방 1을 클리어하는 지점. */
+  gate: "tex_decor_gate",
 } as const;
 
 /**
@@ -111,14 +119,26 @@ export const PLAYER_SPRITE = {
      * 오른손 총 3연사. 근거리와 그림이 갈려야 지금 무엇을 쓰는지 보인다.
      * 1발 뽑아 들며 사격 → 2발 겨눈 채 후속 → 3발 버티며 강한 반동.
      */
-    shoot1: { row: 7, frames: 5, fps: 26, loop: false, frameDurations: [45, 25, 0, 35, 70] },
-    shoot2: { row: 8, frames: 5, fps: 26, loop: false, frameDurations: [20, 0, 25, 40, 65] },
+    shoot1: {
+      row: 7,
+      frames: 8,
+      fps: 28,
+      loop: false,
+      frameDurations: [45, 35, 25, 0, 30, 30, 35, 60],
+    },
+    shoot2: {
+      row: 8,
+      frames: 8,
+      fps: 28,
+      loop: false,
+      frameDurations: [30, 25, 0, 25, 25, 30, 30, 55],
+    },
     shoot3: {
       row: 9,
-      frames: 6,
-      fps: 24,
+      frames: 8,
+      fps: 26,
       loop: false,
-      frameDurations: [50, 30, 0, 45, 70, 100],
+      frameDurations: [45, 35, 25, 0, 35, 35, 40, 70],
     },
     switch: { row: 10, frames: 4, fps: 14, loop: false },
   },
@@ -147,6 +167,9 @@ export const playerAnimKey = (state: PlayerAnimState): string => `player-${state
 /** 바닥 두께. 스폰 높이 계산의 기준이 된다. */
 export const FLOOR_HEIGHT = 48;
 
+/** `background` 텍스처(`ruins-dusk.png`)의 원본 픽셀 크기. 비율 계산에 쓴다. */
+const BACKGROUND_SOURCE = { width: 1774, height: 887 };
+
 /**
  * 바닥과 충돌 그룹을 만든다. 전투방과 보스방이 같은 구조를 쓴다.
  * 발판이 필요한 방 템플릿은 여기 만든 `solids`에 덧붙이면 된다. (MVP_PLAN §2-3)
@@ -154,9 +177,48 @@ export const FLOOR_HEIGHT = 48;
 export const createArena = (
   scene: Phaser.Scene,
   viewport: { width: number; height: number },
+  /** (실험) 넘기면 바닥 위에 이 텍스처를 가로로 반복해 깐다. 안 넘기면 기존 단색 그대로다. */
+  floorTileKey?: string,
+  /** (실험) 넘기면 방 전체 크기로 늘려 맨 뒤에 깐다. 레이어 분리 없는 배경 한 장이다. */
+  backgroundKey?: string,
+  /** 바닥 타일 원본 높이(px). 타일마다 실제 그림 높이가 달라 고정값 32를 쓸 수 없다. */
+  floorTileHeight = 32,
 ): CombatArena => {
   const { width, height } = viewport;
   const floorY = height - FLOOR_HEIGHT;
+
+  if (backgroundKey) {
+    // 모든 것보다 뒤에 있어야 한다. 다른 오브젝트는 깊이 0 이상을 쓰므로 음수로 확실히 뺀다.
+    const scale = height / BACKGROUND_SOURCE.height;
+    const scaledWidth = BACKGROUND_SOURCE.width * scale;
+
+    // TileSprite를 쓴다 — 이미지는 정적이지만, tilePositionX를 아주 천천히 흘려서
+    // 그림 속 구름이 떠다니는 것처럼 보이게 한다(사용자 요청). 방이 넓어 반복 이음매가
+    // 보일 수 있는 지점까지 흐르려면 수십 분이 걸려 실제 플레이에서는 티가 안 난다.
+    let background: Phaser.GameObjects.TileSprite;
+    if (scaledWidth >= width) {
+      // 방이 배경보다 좁다 — 세로 기준으로만 맞추고, 가운데만 보여주고 양옆은 잘린다.
+      // 가로까지 방 폭에 맞춰 늘리면 배경 속 성이 옆으로 눌려 찌그러진다.
+      background = scene.add.tileSprite(width / 2, height, scaledWidth, height, backgroundKey);
+      background.setOrigin(0.5, 1);
+      background.setTileScale(scale, scale);
+    } else {
+      // 방이 배경보다 넓다(튜토리얼 방) — 그림 한 장을 방 크기에 맞춰 그대로 키운다.
+      // 반복 타일링(가로로 여러 장)은 이음매가 보여서 안 쓴다 — 사용자가 "무한스크롤 하지
+      // 말고, 사진을 키워서 맵을 길게" 해달라고 명시했다. 가로가 많이 늘어나 다소 눌려 보일 수 있다.
+      background = scene.add.tileSprite(0, 0, width, height, backgroundKey);
+      background.setOrigin(0, 0);
+      background.setTileScale(width / BACKGROUND_SOURCE.width, height / BACKGROUND_SOURCE.height);
+    }
+    background.setDepth(-10);
+    scene.tweens.add({
+      targets: background,
+      tilePositionX: "+=40",
+      duration: 40000,
+      repeat: -1,
+      ease: "linear",
+    });
+  }
 
   const solids = scene.physics.add.staticGroup();
   const floor = solids.create(
@@ -166,6 +228,13 @@ export const createArena = (
   ) as Phaser.Physics.Arcade.Sprite;
   floor.setDisplaySize(width, FLOOR_HEIGHT).refreshBody();
 
+  if (floorTileKey) {
+    // 충돌은 위 단색 바닥이 그대로 맡는다. 이건 그 위에 얹는 장식(타일 반복)일 뿐이다.
+    const cap = scene.add.tileSprite(0, floorY, width, floorTileHeight, floorTileKey);
+    cap.setOrigin(0, 0);
+    cap.setDepth(1);
+  }
+
   return {
     solids,
     enemyBodies: scene.physics.add.group(),
@@ -174,4 +243,50 @@ export const createArena = (
     enemyAttacks: scene.physics.add.group({ allowGravity: false }),
     bounds: { width, height, floorY },
   };
+};
+
+/**
+ * (실험) 계단식 경사 발판.
+ *
+ * Phaser Arcade Physics는 진짜 비스듬한 경사 충돌을 지원하지 않는다(사각형 AABB만 다룬다).
+ * 계단을 층층이 쌓아 오르는 느낌만 낸다 — 발판 하나하나는 평평한 사각형이라, 걸을 때
+ * 아주 미세하게 턱턱 걸리는 감각은 남는다. 진짜 경사가 필요해지면 별도 검토가 필요하다.
+ *
+ * 각 칸이 바닥(`floorY`)에서부터 한 칸씩 더 높이 솟아, 옆에서 보면 계단 실루엣이 된다.
+ */
+export const addStaircase = (
+  solids: Phaser.Physics.Arcade.StaticGroup,
+  originX: number,
+  floorY: number,
+  steps = 6,
+  stepWidth = 64,
+  stepHeight = 24,
+): void => {
+  for (let i = 0; i < steps; i += 1) {
+    const blockHeight = (i + 1) * stepHeight;
+    const cx = originX + i * stepWidth + stepWidth / 2;
+    const cy = floorY - blockHeight / 2;
+    const step = solids.create(cx, cy, TEXTURE.solid) as Phaser.Physics.Arcade.Sprite;
+    step.setDisplaySize(stepWidth, blockHeight).refreshBody();
+  }
+};
+
+/**
+ * (실험) 배경 장식 하나를 바닥에 붙여 놓는다.
+ *
+ * 충돌이 없는 순수 장식이다. 이미지마다 높이가 제각각이라, 바닥 중앙 하단(origin 0.5, 1)에
+ * 맞추면 어떤 크기든 발이 바닥에 붙은 것처럼 보인다.
+ */
+export const addDecor = (
+  scene: Phaser.Scene,
+  key: string,
+  x: number,
+  floorY: number,
+  scale = 1,
+): void => {
+  const image = scene.add.image(x, floorY, key);
+  image.setOrigin(0.5, 1);
+  image.setScale(scale);
+  // 플레이어(depth 10)보다는 뒤, 바닥 타일(depth 1)보다는 앞 — 바닥 위에 서 있는 것처럼 보인다.
+  image.setDepth(2);
 };

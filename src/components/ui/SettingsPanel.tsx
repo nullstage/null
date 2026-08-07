@@ -32,6 +32,7 @@ const ACTION_LABELS: Record<GameAction, string> = {
   DASH: "대시",
   ATTACK: "공격",
   SWITCH_MODE: "모드 전환",
+  INTERACT: "상호작용",
   CONFIRM: "확인",
   TOGGLE_DEBUG: "디버그 패널",
   DEBUG_SKIP_ROOM: "방 건너뛰기",
