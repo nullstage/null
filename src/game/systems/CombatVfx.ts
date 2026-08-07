@@ -37,6 +37,20 @@ const VFX = {
      * 1을 넘기면 그림이 판정 범위 밖까지 뻗어, 닿아 보이는데 안 맞는 일이 생긴다.
      */
     radiusScale: 0.95,
+    /**
+     * 세로를 이 비율로 눌러 타원으로 만든다.
+     *
+     * 정원으로 그리면 화면과 평행한 고리라 평면으로 보인다.
+     * 납작하게 눌러야 비스듬히 누운 원처럼 읽혀 깊이가 생긴다.
+     */
+    flatten: 0.52,
+    /**
+     * 눌린 타원을 이만큼 기울인다(도). 화면 y는 아래로 증가한다.
+     *
+     * 양수면 1타 궤적이 왼쪽 위(-21, -45)에서 오른쪽 아래(45, 42)로 내려간다.
+     * 부호를 뒤집으면 올려 베는 모양이 되므로 그대로 두어야 한다.
+     */
+    tiltDeg: 34,
   },
   beam: {
     lifeMs: 100,
@@ -220,21 +234,30 @@ export const slashArc = (
    *
    * 점 크기가 곧 획의 굵기다. 크게 찍으면 예전처럼 뭉쳐서 둔탁해진다.
    */
+  // 눌러서 기울인 타원. 정원은 화면과 평행한 고리라 깊이가 없고 일자로 보인다.
+  const tilt = Phaser.Math.DegToRad(slash.tiltDeg);
+  const tiltCos = Math.cos(tilt);
+  const tiltSin = Math.sin(tilt);
+
   const stamp = (size: number, color: number, alpha: number) => {
     graphics.fillStyle(color, alpha);
     for (let i = 0; i <= slash.segments; i += 1) {
       const angle = Phaser.Math.DegToRad(
         Phaser.Math.Linear(sweep.from, sweep.to, i / slash.segments),
       );
+
+      // 세로만 눌러 타원으로 만든 뒤 통째로 기울인다.
+      const ex = Math.cos(angle) * radius;
+      const ey = Math.sin(angle) * radius * slash.flatten;
+
+      // 기울기는 바라보는 쪽을 따라 뒤집힌다. 그래야 어느 방향이든 위에서 아래로 내려 벤다.
+      const ox = (ex * tiltCos - ey * tiltSin) * facing;
+      const oy = ex * tiltSin * facing + ey * tiltCos;
+
       // 양 끝이 가늘어야 지나간 획으로 보인다. 가운데가 가장 굵다.
       const taper = 0.35 + 0.65 * Math.sin((i / slash.segments) * Math.PI);
       const width = size * taper;
-      graphics.fillRect(
-        x + facing * Math.cos(angle) * radius - width / 2,
-        y + Math.sin(angle) * radius - width / 2,
-        width,
-        width,
-      );
+      graphics.fillRect(x + ox - width / 2, y + oy - width / 2, width, width);
     }
   };
 
