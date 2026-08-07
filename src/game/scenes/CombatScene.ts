@@ -220,6 +220,8 @@ export class CombatScene extends Phaser.Scene {
       TEXTURE.floorTileStone,
       isTutorialRoom ? TEXTURE.backgroundTutorial : TEXTURE.background,
       87,
+      // 바닥 틴트 — 튜토리얼(마을)은 어두운 자주, 전투방은 사용자 지정 색.
+      isTutorialRoom ? 0x27141d : 0x472b38,
     );
 
     // 물리 월드 경계도 넓혀야 한다. 안 넓히면 카메라는 늘어나도 플레이어가 옛 경계(1280px)에 막힌다.

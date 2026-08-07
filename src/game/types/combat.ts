@@ -236,6 +236,8 @@ export const createArena = (
   backgroundKey?: string,
   /** 바닥 타일 원본 높이(px). 타일마다 실제 그림 높이가 달라 고정값 32를 쓸 수 없다. */
   floorTileHeight = 32,
+  /** 바닥 타일 틴트. 방 분위기에 따라 달리 칠한다(튜토리얼 vs 전투방). */
+  floorTint = 0x27141d,
 ): CombatArena => {
   const { width, height } = viewport;
   const floorY = height - FLOOR_HEIGHT;
@@ -297,7 +299,7 @@ export const createArena = (
     cap.setOrigin(0, 0);
     cap.setDepth(1);
     // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색으로 틴트.
-    cap.setTint(0x27141d);
+    cap.setTint(floorTint);
   }
 
   return {
