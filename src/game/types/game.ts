@@ -36,8 +36,12 @@ export type RoomId = string;
 export type UpgradeId =
   | "MELEE_DAMAGE_UP"
   | "MELEE_FINISHER_RANGE_UP"
+  /** 검 자체를 벼린다. 수치와 함께 궤적 색이 바뀌어 눈으로 확인된다. */
+  | "BLADE_REFORGED"
   | "RANGED_COOLDOWN_DOWN"
   | "RANGED_PIERCE"
+  /** 총 자체를 개조한다. 탄속과 피해가 오르고 탄 궤적이 길고 밝아진다. */
+  | "BARREL_REFORGED"
   | "DASH_CHARGE_UP"
   | "DASH_FOLLOWUP_DAMAGE_UP";
 

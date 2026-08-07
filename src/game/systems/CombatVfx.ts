@@ -51,6 +51,13 @@ const VFX = {
      * 부호를 뒤집으면 올려 베는 모양이 되므로 그대로 두어야 한다.
      */
     tiltDeg: 34,
+    /**
+     * 검을 벼린 뒤의 궤적.
+     *
+     * 수치만 오르면 무엇이 좋아졌는지 화면에서 알 수 없다.
+     * 붉은 기를 걷고 흰빛으로 바꿔 손에 든 것이 달라졌음을 한눈에 보이게 한다.
+     */
+    reforged: { core: 0xffffff, body: 0xffd8dc, outerWidth: 11, innerWidth: 4 },
   },
   beam: {
     lifeMs: 100,
@@ -74,6 +81,8 @@ const VFX = {
     headHeight: 5,
     core: 0xfff6f6,
     glow: 0xff5560,
+    /** 총열을 개조한 뒤. 꼬리가 길고 두꺼워져 탄이 무거워진 것이 보인다. */
+    reforged: { length: 124, headHeight: 8, core: 0xffffff, glow: 0xffb9c2 },
   },
   burst: {
     count: 7,
@@ -218,8 +227,11 @@ export const slashArc = (
   facing: 1 | -1,
   reach: number,
   step: number,
+  /** 검을 벼렸는가. 색과 굵기가 바뀌어 강화가 화면에 드러난다. */
+  reforged = false,
 ): void => {
   const { slash } = VFX;
+  const look = reforged ? slash.reforged : slash;
   const sweep = SLASH_SWEEPS[Math.min(Math.max(step, 1), SLASH_SWEEPS.length) - 1];
   const radius = reach * slash.radiusScale * sweep.scale;
 
@@ -261,8 +273,8 @@ export const slashArc = (
     }
   };
 
-  stamp(slash.outerWidth, slash.body, 0.45);
-  stamp(slash.innerWidth, slash.core, 1);
+  stamp(look.outerWidth, look.body, 0.45);
+  stamp(look.innerWidth, look.core, 1);
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
@@ -323,29 +335,33 @@ export const beamLine = (
 export const createBulletTrail = (
   scene: Phaser.Scene,
   facing: 1 | -1,
+  /** 총열을 개조했는가. 꼬리가 길고 두꺼워져 강화가 화면에 드러난다. */
+  reforged = false,
 ): Phaser.GameObjects.Graphics => {
   const { tail } = VFX;
+  const look = reforged ? { ...tail, ...tail.reforged } : tail;
+
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth - 1);
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
-  const segmentWidth = tail.length / tail.segments;
+  const segmentWidth = look.length / look.segments;
 
-  for (let i = 0; i < tail.segments; i += 1) {
-    const t = i / tail.segments;
+  for (let i = 0; i < look.segments; i += 1) {
+    const t = i / look.segments;
     // 뒤로 갈수록 얇아지고 옅어진다. 두 가지가 같이 줄어야 뾰족해 보인다.
     // 격자에 반올림하지 않는다. 반올림하면 계단이 생겨 가는 꼬리가 굵어 보인다.
-    const height = tail.headHeight * (1 - t);
-    const left = -facing * (t * tail.length) - (facing > 0 ? segmentWidth : 0);
+    const height = look.headHeight * (1 - t);
+    const left = -facing * (t * look.length) - (facing > 0 ? segmentWidth : 0);
 
     // height가 이미 전체 두께다. 위아래로 한 번 더 늘리면 꼬리가 아니라 세로 빗살이 된다.
-    graphics.fillStyle(tail.glow, 0.5 * (1 - t));
+    graphics.fillStyle(look.glow, 0.5 * (1 - t));
     graphics.fillRect(left, -height / 2, segmentWidth, height);
   }
 
   // 총알 머리. 가장 밝은 한 점이 있어야 탄이 어디쯤인지 읽힌다.
-  graphics.fillStyle(tail.core, 1);
-  graphics.fillRect(-facing * 2, -tail.headHeight / 2, 6, tail.headHeight);
+  graphics.fillStyle(look.core, 1);
+  graphics.fillRect(-facing * 2, -look.headHeight / 2, 6, look.headHeight);
 
   return graphics;
 };

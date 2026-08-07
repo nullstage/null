@@ -137,6 +137,12 @@ const TUNING = {
   },
 
   upgrade: {
+    /** 무기 자체를 바꾸는 강화. 다른 강화보다 폭이 크고, 궤적 모양까지 함께 바뀐다. */
+    bladeDamageMultiplier: 1.35,
+    bladeReachBonus: 14,
+    barrelDamageMultiplier: 1.4,
+    barrelSpeedMultiplier: 1.25,
+
     meleeDamageMultiplier: 1.2,
     rangedCooldownMultiplier: 0.8,
     dashFollowupMultiplier: 1.5,
@@ -498,12 +504,16 @@ export class Player {
 
     const isFinisher = this.comboStep === 3;
     const { melee } = TUNING;
+    // 벼린 검은 더 길다. 그림과 판정이 함께 늘어야 닿아 보이는데 안 맞는 일이 없다.
+    const reforgedBlade = this.hasUpgrade("BLADE_REFORGED");
     const reach =
       (isFinisher ? melee.finisherReach : melee.reach) +
-      (isFinisher && this.hasUpgrade("MELEE_FINISHER_RANGE_UP") ? melee.finisherRangeBonus : 0);
+      (isFinisher && this.hasUpgrade("MELEE_FINISHER_RANGE_UP") ? melee.finisherRangeBonus : 0) +
+      (reforgedBlade ? TUNING.upgrade.bladeReachBonus : 0);
 
     let damage: number = melee.damage;
     if (this.hasUpgrade("MELEE_DAMAGE_UP")) damage *= TUNING.upgrade.meleeDamageMultiplier;
+    if (reforgedBlade) damage *= TUNING.upgrade.bladeDamageMultiplier;
     if (isFinisher) damage *= melee.finisherDamageMultiplier;
     damage = this.applyDashFollowup(damage);
 
@@ -526,7 +536,15 @@ export class Player {
     this.scene.time.delayedCall(melee.hitboxLifeMs, () => hitbox.destroy());
 
     // 호는 몸 중심에서 그린다. 앞으로 밀어 그리면 판정 범위 밖까지 뻗어 헛스윙처럼 보인다.
-    slashArc(this.scene, sprite.x, sprite.y - 6, this.facing, reach + TUNING.body.width / 2, this.comboStep);
+    slashArc(
+      this.scene,
+      sprite.x,
+      sprite.y - 6,
+      this.facing,
+      reach + TUNING.body.width / 2,
+      this.comboStep,
+      reforgedBlade,
+    );
 
     const playerBody = sprite.body as Phaser.Physics.Arcade.Body;
     if (this.isGrounded) {
@@ -569,6 +587,7 @@ export class Player {
     if (!this.isGrounded) this.telemetry.recordAirAttack();
 
     const { ranged } = TUNING;
+    const reforgedBarrel = this.hasUpgrade("BARREL_REFORGED");
     const maxHits =
       ranged.baseMaxHits + (this.hasUpgrade("RANGED_PIERCE") ? ranged.pierceBonusHits : 0);
 
@@ -584,14 +603,20 @@ export class Player {
     this.deps.arena.playerAttacks.add(projectile);
 
     // 꼬리는 총알에 자식으로 붙이지 않는다. 붙이면 물리 바디까지 함께 커진다.
-    const trail = createBulletTrail(this.scene, this.facing);
+    const trail = createBulletTrail(this.scene, this.facing, reforgedBarrel);
     trail.setPosition(projectile.x, projectile.y);
 
     const body = projectile.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
-    body.setVelocityX(this.facing * ranged.speed);
+    body.setVelocityX(
+      this.facing *
+        ranged.speed *
+        (reforgedBarrel ? TUNING.upgrade.barrelSpeedMultiplier : 1),
+    );
 
-    projectile.setData("damage", Math.round(this.applyDashFollowup(ranged.damage)));
+    const rangedDamage =
+      ranged.damage * (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1);
+    projectile.setData("damage", Math.round(this.applyDashFollowup(rangedDamage)));
     projectile.setData("mode", "RANGED" satisfies AttackMode);
     // 관통이 없으면 씬이 첫 적중에서 없애준다. 관통이 있으면 여기서 횟수를 센다.
     projectile.setData("consumeOnHit", maxHits <= 1);
