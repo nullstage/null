@@ -25,6 +25,7 @@ import {
   BEAM_WINDUP_MS,
   beamLine,
   createBulletTrail,
+  deathBurst,
   groundDust,
   hitBurst,
   hitStop,
@@ -875,8 +876,9 @@ export class Player {
       this.blinkTween?.remove();
       this.blinkTween = null;
       (sprite.body as Phaser.Physics.Arcade.Body | null)?.setEnable(false);
-      sprite.setTintFill(SILHOUETTE.enemyAttack);
-      // 파티클 대신 빠른 축소와 페이드로 소멸을 표현한다. (에셋 없음)
+      sprite.setTintFill(0xff2a3a);
+      // 산화하듯 붉은 파편이 흩어지며 사라진다. 파편 터짐 + 축소/회전/페이드가 같이 간다.
+      deathBurst(this.scene, sprite.x, sprite.y, 0xff2a3a);
       this.scene.tweens.add({
         targets: sprite,
         scaleX: 0,
@@ -885,10 +887,13 @@ export class Player {
         angle: 180,
         duration: TUNING.feedback.deathMs,
         ease: "Cubic.easeIn",
+        // 이펙트가 다 보이기 전에 씬이 전환되면(부활 흐름) 산화 연출이 잘려 보인다 —
+        // 여기서 끝난 뒤에 onDeath를 불러 다음 단계(재배치)로 넘어가게 한다.
+        onComplete: () => this.deps.onDeath(),
       });
+    } else {
+      this.deps.onDeath();
     }
-
-    this.deps.onDeath();
   }
 
   // ────────────────────────────── 연출 ──────────────────────────────

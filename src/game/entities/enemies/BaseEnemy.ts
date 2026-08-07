@@ -14,7 +14,7 @@ import type Phaser from "phaser";
 
 import { ENEMIES, type EnemyDefinition } from "../../data/enemies";
 import { deathBurst } from "../../systems/CombatVfx";
-import { SILHOUETTE, type CombatArena } from "../../types/combat";
+import type { CombatArena } from "../../types/combat";
 import type { EnemyType } from "../../types/game";
 
 /** 스폰 팝인 시간(ms). 적이 한 프레임 만에 나타나면 어디서 나왔는지 인지하지 못한다. */
@@ -24,15 +24,8 @@ const SPAWN_POP_SCALE = 0.6;
 /** 피격 흰색 플래시 유지 시간(ms). 짧아야 타격이 "찍히듯" 보인다. */
 const HIT_FLASH_MS = 90;
 
-/**
- * 죽을 때 터지는 파편의 색. 역할별 실루엣 색을 그대로 쓴다.
- * 누가 죽었는지 색으로 구분돼야 여러 마리가 겹친 순간에도 읽힌다.
- */
-const DEATH_COLOR: Record<EnemyType, number> = {
-  CHASER: SILHOUETTE.chaser,
-  RANGED: SILHOUETTE.ranged,
-  MOBILITY_COUNTER: SILHOUETTE.mobility,
-};
+/** 죽을 때 터지는 파편의 색. 역할과 무관하게 검게 산화하는 것으로 통일한다. */
+const DEATH_COLOR = 0x0a0a0a;
 /** 피격 스케일 펀치. 도형뿐이라 크기 변화가 유일한 타격감이다. */
 const HIT_PUNCH_MS = 90;
 const HIT_PUNCH_SCALE = 1.22;
@@ -210,7 +203,7 @@ export abstract class BaseEnemy {
 
     // 줄어들며 사라지기만 하면 "죽었다"가 아니라 "없어졌다"로 보인다.
     // 파편과 링이 그 자리에 터져야 마지막 한 대가 언제 들어갔는지 읽힌다.
-    deathBurst(this.scene, body.x, body.y, DEATH_COLOR[this.definition.type]);
+    deathBurst(this.scene, body.x, body.y, DEATH_COLOR);
 
     // `destroy()`가 이 스프라이트를 즉시 지우지 않도록 참조를 먼저 끊는다.
     this.sprite = null;

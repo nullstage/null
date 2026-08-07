@@ -13,10 +13,11 @@ import Phaser from "phaser";
 import { eventBus, type GameEventMap } from "../EventBus";
 import { VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
+import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Boss } from "../entities/Boss";
 import { Player } from "../entities/Player";
 import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
-import { attachHitFx } from "../systems/CombatVfx";
+import { attachHitFx, portalWipeOut } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { AUDIO, createArena, type CombatArena } from "../types/combat";
@@ -135,8 +136,16 @@ export class BossScene extends Phaser.Scene {
 
     this.telemetry.end(this.time.now, this.player.hp);
     runState.hp = this.player.hp;
-    runState.setPhase(cleared ? "RESULT" : "GAME_OVER");
 
+    if (!cleared) {
+      // 보스전 사망도 런을 끝내지 않는다 — 튜토리얼 방으로 돌려보낸다. (사용자 확정)
+      runState.respawnAtTutorial();
+      playSfx(this, AUDIO.portal);
+      portalWipeOut(this, () => this.scene.start("Combat", { roomId: FIXED_ROOM_SEQUENCE[0] }));
+      return;
+    }
+
+    runState.setPhase("RESULT");
     eventBus.emit("run:result", { result: runState.buildResult(this.time.now, cleared) });
 
     this.once("run:restart", () => {

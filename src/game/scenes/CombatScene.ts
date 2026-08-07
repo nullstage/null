@@ -30,7 +30,7 @@ import {
   startAmbientParticles,
   updateAmbientLightCenter,
 } from "../systems/CombatVfx";
-import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
+import { playSfx, startRoomBgm } from "../systems/audio";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems/DirectorPolicy";
 import { RoomController } from "../systems/RoomController";
@@ -443,16 +443,11 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
+  /** 사망해도 런이 끝나지 않는다 — 체력을 채워 튜토리얼 방으로 돌려보낸다. (사용자 확정) */
   private handlePlayerDeath(): void {
-    runState.hp = 0;
-    runState.setPhase("GAME_OVER");
-    eventBus.emit("run:result", { result: runState.buildResult(this.time.now, false) });
-
-    this.once("run:restart", () => {
-      runState.reset(this.time.now);
-      stopRoomBgm(this);
-      this.scene.start("Ready");
-    });
+    runState.respawnAtTutorial();
+    playSfx(this, AUDIO.portal);
+    portalWipeOut(this, () => this.scene.restart({ roomId: FIXED_ROOM_SEQUENCE[0] }));
   }
 
   // ────────────────────────────── 유틸 ──────────────────────────────

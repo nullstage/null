@@ -80,6 +80,27 @@ export class RunState {
     this.setPhase("READY");
   }
 
+  /**
+   * 사망 시 런을 끝내지 않고 튜토리얼 방으로 되돌린다. (게임 루프 변경 — 사용자 확정)
+   * 강화(`selectedUpgrades`)와 `maxHp`는 그대로 둔다 — 그게 "런을 유지한다"는 뜻이다.
+   * 그 외 방 진행·텔레메트리·분석·보스 가중치는 `reset()`과 동일하게 되돌려야
+   * 방 1부터 다시 겪을 때 이전 시도의 기록과 섞이지 않는다.
+   */
+  respawnAtTutorial(): void {
+    this.roomIndex = 0;
+    this.currentRoomId = "";
+    this.currentTelemetry = null;
+    this.previousTelemetry = null;
+    this.predictedStyle = null;
+    this.counterRoomId = null;
+    this.latestAnalysis = null;
+    this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
+    this.bossPatternUsage = emptyPatternUsage();
+    this.deception = null;
+    this.rooms = [];
+    this.hp = this.maxHp;
+  }
+
   setPhase(phase: GamePhase): void {
     if (this.phase === phase) return;
     this.phase = phase;
