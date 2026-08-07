@@ -33,8 +33,8 @@ const KEEP_DISTANCE_MAX = 440;
 const FIRE_INTERVAL_MS = 1400;
 /** 이 거리보다 멀면 쏘지 않는다. 화면 밖에서 날아오는 탄을 만들지 않기 위한 것이다. */
 const FIRE_MAX_RANGE = 620;
-/** 투사체 속도. 대시로 피할 수 있어야 하므로 빠르게 하지 않는다. (DEC-004) */
-const PROJECTILE_SPEED = 300;
+/** 투사체 속도. 대시로 피할 수 있는 상한 안에서 긴장감을 위해 올렸다(300→450, 사용자 요청). */
+const PROJECTILE_SPEED = 450;
 const PROJECTILE_SIZE = 14;
 /** 투사체 수명(ms). 화면을 가로지르면 사라진다. */
 const PROJECTILE_LIFE_MS = 2400;
@@ -42,10 +42,10 @@ const PROJECTILE_LIFE_MS = 2400;
 const CORNER_MARGIN = 90;
 /** 몰렸을 때의 투명도. 무방비 상태라는 표시다. */
 const CORNERED_ALPHA = 0.6;
-/** 조준선 두께. */
-const AIM_LINE_HEIGHT = 4;
-const AIM_ALPHA_FROM = 0.2;
-const AIM_ALPHA_TO = 0.7;
+/** 조준선 두께. 얇게 긋고 가산 블렌드로 빛나게 한다 — 굵은 띠보다 레이저처럼 읽힌다. */
+const AIM_LINE_HEIGHT = 1.5;
+const AIM_ALPHA_FROM = 0.3;
+const AIM_ALPHA_TO = 1;
 
 export class RangedEnemy extends BaseEnemy {
   private aiming = false;
@@ -131,6 +131,8 @@ export class RangedEnemy extends BaseEnemy {
     line.setDisplaySize(distance, AIM_LINE_HEIGHT);
     line.setRotation(Phaser.Math.Angle.Between(body.x, body.y, player.x, player.y));
     line.setAlpha(AIM_ALPHA_FROM);
+    // 가산 블렌드로 어두운 배경 위에서 빛나는 실선이 된다.
+    line.setBlendMode(Phaser.BlendModes.ADD);
     this.aimLine = line;
 
     this.scene.tweens.add({

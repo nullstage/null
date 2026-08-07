@@ -85,7 +85,7 @@ const CombatHud = styled.div`
  */
 const HealthBar = styled.div`
   position: relative;
-  width: 340px;
+  width: 440px;
   aspect-ratio: 1479 / 320;
 
   img {
@@ -121,26 +121,33 @@ const HealthGhost = styled.div<{ ratio: number }>`
   transition: width 0.55s ease 0.12s;
 `;
 
+/**
+ * 체력 게이지. 위 하이라이트 → 중간 본색 → 아래 어두운 그림자로 흐르는 세로
+ * 그라데이션에 가로 광택을 겹쳐 금속 프레임과 톤을 맞춘다. 눈금은 프레임이
+ * 장식적이라 오히려 지저분해 보여 없앴다(사용자 요청).
+ */
 const HealthFill = styled.div<{ ratio: number }>`
   position: absolute;
   inset: 0;
   width: ${({ ratio }) => Math.max(0, Math.min(1, ratio)) * 100}%;
   background: ${({ ratio }) =>
     ratio > 0.3
-      ? "linear-gradient(180deg, #e05055 0%, #a3242a 100%)"
-      : "linear-gradient(180deg, #ff8a3d 0%, #c8383c 100%)"};
+      ? `linear-gradient(180deg, #ff9297 0%, #e05055 28%, #a3242a 70%, #5e1216 100%)`
+      : `linear-gradient(180deg, #ffc48a 0%, #ff8a3d 30%, #c8383c 72%, #6e1c14 100%)`};
   transition: width 0.18s ease;
-`;
 
-/** 체력바 위를 지나는 눈금. 남은 칸 수를 셀 수 있어야 위험한 순간이 읽힌다. */
-const HealthTicks = styled.div`
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0) 0 24px,
-    rgba(0, 0, 0, 0.55) 24px 26px
-  );
+  /* 게이지 표면을 지나는 은은한 광택 — 단색 띠보다 액체처럼 차 있어 보인다. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.18) 45%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
 `;
 
 const StatusRow = styled.div`
@@ -478,7 +485,6 @@ export default function HUDOverlay() {
               {/* 흰 층이 먼저 남고 붉은 층이 앞서 줄어든다. 순서가 바뀌면 깎인 양이 안 보인다. */}
               <HealthGhost ratio={hud.hp / hud.maxHp} />
               <HealthFill ratio={hud.hp / hud.maxHp} />
-              <HealthTicks />
             </HealthWindow>
             {/* 정적 내보내기라 next/image 최적화가 안 붙는다. 픽셀아트 프레임 한 장이라 img로 충분하다. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}

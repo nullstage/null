@@ -356,6 +356,12 @@ export class Player {
     this.sprite = sprite;
     this.playAnim("idle");
 
+    // 도트 윤곽이 어두운 배경 위에서 너무 또렷해 혼자 붙여넣은 것처럼 보인다는 지적 —
+    // 적과 같은 계열의 옅은 글로우를 둘러 조명(붉은 앰비언트) 속에 섞는다. (WebGL 전용)
+    if (this.scene.game.renderer.type === Phaser.WEBGL) {
+      sprite.postFX.addGlow(0xff7a66, 1.5, 0);
+    }
+
     // 씬은 적 충돌만 걸어준다. 플레이어가 바닥을 밟는 건 플레이어 책임이다.
     this.scene.physics.add.collider(sprite, this.deps.arena.solids);
 
