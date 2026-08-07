@@ -151,6 +151,14 @@ const TUNING = {
    */
   airborneVelocityY: 60,
 
+  /**
+   * 공격 그림의 이 지점을 넘기면 이동 입력으로 끊을 수 있다.
+   *
+   * 끝까지 묶어두면 이미 걷고 있는데도 공격 자세가 남아 조작이 굼떠 보인다.
+   * 반대로 너무 이르면 휘두르다 마는 그림이 된다. 타격이 끝난 뒤쯤이 적당하다.
+   */
+  animCancelRatio: 0.55,
+
   /** 피격 시 뒤로 밀린다. 연타로 갇히지 않게 하는 안전장치이기도 하다. */
   knockback: { x: 220, y: -180 },
 
@@ -231,6 +239,8 @@ export class Player {
 
   /** 공격 애니메이션이 끝나는 시각. 그 전에는 다른 상태가 끼어들지 못한다. */
   private attackAnimUntilMs = 0;
+  /** 이 시각을 넘기면 이동 입력으로 공격 그림을 끊을 수 있다. */
+  private animCancelAtMs = 0;
   private invulnerableUntilMs = 0;
   private blinkTween: Phaser.Tweens.Tween | null = null;
 
@@ -404,14 +414,19 @@ export class Player {
 
   // ────────────────────────────── 공격 ──────────────────────────────
 
-  /** 모드에 맞는 공격으로 넘긴다. 쿨타임 판정은 각 공격 안에 있다. */
+  /**
+   * 모드에 맞는 공격으로 넘긴다. 쿨타임 판정은 각 공격 안에 있다.
+   *
+   * 그림은 공격이 실제로 나간 뒤에만 바꾼다.
+   * 먼저 재생하면 쿨타임에 막힌 입력까지 애니메이션을 처음으로 되돌려,
+   * 연타할 때 첫 자세만 반복되고 끝나면 마지막 프레임에 굳는다.
+   */
   private attack(): void {
-    // 검과 총은 그림이 갈려야 한다. 같은 모션이면 지금 무엇을 쓰는지 화면에서 안 보인다.
-    const state: PlayerAnimState = this.mode === "MELEE" ? "attack" : "shoot";
-    this.lockAnim(state);
+    const fired = this.mode === "MELEE" ? this.attackMelee() : this.attackRanged();
+    if (!fired) return;
 
-    if (this.mode === "MELEE") this.attackMelee();
-    else this.attackRanged();
+    // 검과 총은 그림이 갈려야 한다. 같은 모션이면 지금 무엇을 쓰는지 화면에서 안 보인다.
+    this.lockAnim(this.mode === "MELEE" ? "attack" : "shoot");
   }
 
   /**
@@ -431,15 +446,20 @@ export class Player {
         ? spec.frameDurations.reduce<number>((sum, ms) => sum + ms, 0)
         : 0;
 
-    this.attackAnimUntilMs = this.scene.time.now + base + extra;
+    const now = this.scene.time.now;
+    const total = base + extra;
+    this.attackAnimUntilMs = now + total;
+    // 앞부분(휘두르는 구간)은 끝까지 보여 주고, 뒷부분(마무리)만 이동으로 끊게 한다.
+    this.animCancelAtMs = now + total * TUNING.animCancelRatio;
     this.playAnim(state, true);
   }
 
   /** 근거리 공격 입력. 3연속 베기. */
-  attackMelee(): void {
+  attackMelee(): boolean {
     const sprite = this.sprite;
     const now = this.scene.time.now;
-    if (!sprite || this.isDead || now < this.nextAttackAtMs) return;
+    // 실제로 나갔는지를 돌려준다. 부르는 쪽이 이걸 보고 그림을 바꾼다.
+    if (!sprite || this.isDead || now < this.nextAttackAtMs) return false;
 
     // 콤보 창이 끊기면 1타부터 다시 시작한다.
     this.comboStep = now > this.comboExpiresAtMs ? 1 : (this.comboStep % 3) + 1;
@@ -498,13 +518,14 @@ export class Player {
     this.trailAfterimage(now);
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
+    return true;
   }
 
   /** 원거리 공격 입력. 짧은 쿨타임의 투사체. */
-  attackRanged(): void {
+  attackRanged(): boolean {
     const sprite = this.sprite;
     const now = this.scene.time.now;
-    if (!sprite || this.isDead || now < this.nextAttackAtMs) return;
+    if (!sprite || this.isDead || now < this.nextAttackAtMs) return false;
 
     const cooldown =
       PLAYER.rangedCooldownMs *
@@ -555,6 +576,7 @@ export class Player {
     playerBody.setVelocityX(playerBody.velocity.x - this.facing * ranged.recoil);
 
     this.punch(1 / TUNING.feedback.punchScale, TUNING.feedback.punchScale);
+    return true;
   }
 
   /**
@@ -752,10 +774,19 @@ export class Player {
 
   /** 지금 몸 상태에 맞는 애니메이션을 고른다. 공격 중이면 건드리지 않는다. */
   private syncAnim(): void {
-    if (this.isDead || this.attackAnimUntilMs > this.scene.time.now) return;
+    if (this.isDead) return;
 
     const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body) return;
+
+    const now = this.scene.time.now;
+    if (this.attackAnimUntilMs > now) {
+      // 마무리 구간에서 이미 움직이고 있다면 그림을 이동으로 넘긴다.
+      // 끝까지 붙잡으면 걷는 중에도 공격 자세가 남아 조작이 굼떠 보인다.
+      const canCancel = now >= this.animCancelAtMs && Math.abs(body.velocity.x) > 1;
+      if (!canCancel) return;
+      this.attackAnimUntilMs = 0;
+    }
 
     // 지면 판정만 보고 jump로 넘기면 안 된다.
     // 평지를 걷는 중에도 blocked.down이 한 프레임 흔들릴 수 있는데,
