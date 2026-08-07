@@ -186,8 +186,9 @@ const TUNING = {
     afterimageDriftPx: 16,
     afterimageStretch: 1.2,
     deathMs: 320,
-    hitShakeMs: 90,
-    hitShakeIntensity: 0.004,
+    /** 때린 순간의 흔들림. 너무 약하면 맞았는지 화면만 봐선 모른다. */
+    hitShakeMs: 110,
+    hitShakeIntensity: 0.008,
     damageShakeMs: 160,
     damageShakeIntensity: 0.01,
   },

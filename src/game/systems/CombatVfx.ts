@@ -98,11 +98,13 @@ const VFX = {
     reforged: { length: 124, headHeight: 8, core: 0xffffff, glow: 0xffb9c2 },
   },
   burst: {
-    count: 7,
+    count: 14,
     lifeMs: 260,
-    speed: { min: 130, max: 300 },
+    speed: { min: 160, max: 420 },
     size: PIXEL,
     color: 0xff8a94,
+    /** 파편보다 먼저, 아주 짧게 터지는 작은 충격 링. 순간의 무게를 더한다. */
+    ring: { points: 14, radius: 4, growTo: 3.2, lifeMs: 140 },
   },
   /**
    * 적이 죽는 순간.
@@ -284,14 +286,24 @@ export const slashArc = (
    * 얇은 선이 아니라 반지름이 살짝 다른 두 테두리(바깥·안쪽) 사이를 면으로 채운다.
    * 가운데(스윙 정점)에서 가장 두껍고 양 끝에서 점으로 모이는 초승달이 된다.
    */
-  const crescentPoints = (maxThickness: number) => {
+  /** 바깥 테두리만 따로 뽑는다. 날 선(칼날 반짝임)을 그 위에 얹기 위해서다. */
+  const outerEdge = (maxThickness: number) => {
     const outer: { x: number; y: number }[] = [];
-    const inner: { x: number; y: number }[] = [];
     for (let i = 0; i <= slash.segments; i += 1) {
       const t = i / slash.segments;
       // 양 끝은 아주 가느다랗게 남겨 완전히 뾰족한 점이 되지 않게 한다(0이면 이음매가 튄다).
       const half = (maxThickness * (0.06 + 0.94 * Math.sin(t * Math.PI))) / 2;
       outer.push(pointAt(t, radius + half));
+    }
+    return outer;
+  };
+
+  const crescentPoints = (maxThickness: number) => {
+    const outer = outerEdge(maxThickness);
+    const inner: { x: number; y: number }[] = [];
+    for (let i = 0; i <= slash.segments; i += 1) {
+      const t = i / slash.segments;
+      const half = (maxThickness * (0.06 + 0.94 * Math.sin(t * Math.PI))) / 2;
       inner.push(pointAt(t, radius - half));
     }
     return [...outer, ...inner.reverse()];
@@ -308,6 +320,14 @@ export const slashArc = (
     graphics.fillPoints(crescentPoints(look.crescentThickness * 0.85), true);
     graphics.fillStyle(look.core, 0.9);
     graphics.fillPoints(crescentPoints(look.crescentThickness * 0.4), true);
+
+    /**
+     * 날 선. 면만 채우면 부드러운 덩어리로만 보여 무엇으로 베었는지 안 읽힌다.
+     * 몸통보다 얇고 훨씬 밝은 테두리 하나를 바깥쪽 가장자리에 얹어야
+     * 칼날이 지나간 자리라는 게 또렷해진다.
+     */
+    graphics.lineStyle(2, 0xffffff, 0.95);
+    graphics.strokePoints(outerEdge(look.crescentThickness * 0.55), false);
   };
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
@@ -422,21 +442,49 @@ export const createBulletTrail = (
 export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
   const { burst } = VFX;
 
+  // 파편보다 먼저 아주 짧게 터지는 작은 링. 파편은 흩어지는 잔해고, 링은 충격 그 자체다.
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.fillStyle(burst.color, 1);
+  for (let i = 0; i < burst.ring.points; i += 1) {
+    const a = (i / burst.ring.points) * Math.PI * 2;
+    ring.fillRect(
+      Math.cos(a) * burst.ring.radius - 1.5,
+      Math.sin(a) * burst.ring.radius - 1.5,
+      3,
+      3,
+    );
+  }
+  scene.tweens.add({
+    targets: ring,
+    scale: burst.ring.growTo,
+    alpha: 0,
+    duration: burst.ring.lifeMs,
+    ease: "power2.out",
+    onComplete: () => ring.destroy(),
+  });
+
   for (let i = 0; i < burst.count; i += 1) {
-    const shard = scene.add.rectangle(x, y, burst.size, burst.size, burst.color);
+    // 크기를 들쭉날쭉하게 둬야 정갈한 패턴이 아니라 터져 흩어지는 파편처럼 보인다.
+    const size = burst.size * Phaser.Math.FloatBetween(0.6, 1.8);
+    const shard = scene.add.rectangle(x, y, size, size, burst.color);
     shard.setDepth(VFX.depth);
     shard.setBlendMode(Phaser.BlendModes.ADD);
+    shard.setAngle(Phaser.Math.Between(0, 360));
 
     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     const speed = Phaser.Math.Between(burst.speed.min, burst.speed.max);
+    const life = burst.lifeMs * Phaser.Math.FloatBetween(0.75, 1.15);
 
     scene.tweens.add({
       targets: shard,
-      x: x + Math.cos(angle) * speed * (burst.lifeMs / 1000),
+      x: x + Math.cos(angle) * speed * (life / 1000),
       // 위로 튄 뒤 떨어지는 것처럼 보이도록 세로에만 낙차를 더한다.
-      y: y + Math.sin(angle) * speed * (burst.lifeMs / 1000) + 24,
+      y: y + Math.sin(angle) * speed * (life / 1000) + 24,
+      angle: shard.angle + Phaser.Math.Between(-180, 180),
       alpha: 0,
-      duration: burst.lifeMs,
+      duration: life,
       ease: "power2.out",
       onComplete: () => shard.destroy(),
     });
