@@ -1047,6 +1047,44 @@ export const startAmbientParticles = (
 };
 
 /**
+ * 데미지 숫자. 맞은 자리에서 살짝 떠오르며 곧 사라진다.
+ * 좌우로 조금씩 흩어 연타 시 숫자가 겹쳐 안 읽히는 것을 막는다.
+ */
+export const damageNumber = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  amount: number,
+): void => {
+  const text = scene.add.text(
+    x + Phaser.Math.Between(-10, 10),
+    y - 16,
+    String(amount),
+    {
+      fontFamily: "monospace",
+      fontSize: "15px",
+      fontStyle: "bold",
+      color: "#ffe9e0",
+      stroke: "#4a0d12",
+      strokeThickness: 3,
+      // 캔버스가 창 크기로 확대되므로 2배 해상도로 그려야 확대 후에도 선명하다.
+      resolution: 2,
+    },
+  );
+  text.setOrigin(0.5, 1);
+  text.setDepth(VFX.depth + 1);
+
+  scene.tweens.add({
+    targets: text,
+    y: y - 44,
+    alpha: 0,
+    duration: 550,
+    ease: "power1.out",
+    onComplete: () => text.destroy(),
+  });
+};
+
+/**
  * 적(고블린)의 베기 이펙트. 플레이어 슬래시와 같은 문법(초승달 호)이되
  * 적 팔레트(어두운 몸통 + 붉은 심)로 그려 누가 벤 건지 색으로 구분된다.
  * 좌표는 오른쪽 기준으로만 계산하고 graphics 자체를 setScale로 뒤집는다(플레이어와 동일 기법).

@@ -17,7 +17,7 @@ import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Boss } from "../entities/Boss";
 import { Player } from "../entities/Player";
 import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
-import { attachHitFx, portalWipeOut } from "../systems/CombatVfx";
+import { attachHitFx, damageNumber, portalWipeOut } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { AUDIO, createArena, type CombatArena } from "../types/combat";
@@ -112,8 +112,11 @@ export class BossScene extends Phaser.Scene {
       hitSet.add(target);
       attack.setData("hitEnemies", hitSet);
 
-      target.takeDamage((attack.getData("damage") as number) ?? 0);
+      const damage = (attack.getData("damage") as number) ?? 0;
+      target.takeDamage(damage);
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
+      const hitPoint = bodyObj as Phaser.GameObjects.Sprite;
+      damageNumber(this, hitPoint.x, hitPoint.y - 30, damage);
 
       // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
       const mode = attack.getData("mode") as AttackMode | undefined;

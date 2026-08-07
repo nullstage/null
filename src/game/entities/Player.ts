@@ -813,13 +813,13 @@ export class Player {
     const point = at ?? { x: this.sprite?.x ?? 0, y: this.sprite?.y ?? 0 };
 
     // 검은 무겁고 총은 가볍다. 파편 연출부터 갈라야 두 방식이 구분된다.
+    // 붉은 화면 셰이더(pulseHitFx)는 내가 맞았을 때만 쓴다 — 내 공격에도 화면이
+    // 붉게 반짝이면 "맞았다"는 신호가 흐려진다는 피드백 반영. (takeDamage 참조)
     if (mode === "MELEE") {
       hitBurst(this.scene, point.x, point.y);
       hitStop(this.scene);
-      pulseHitFx(this.scene, 0.6);
     } else {
       rangedSpark(this.scene, point.x, point.y, this.facing);
-      pulseHitFx(this.scene, 0.3);
     }
   }
 

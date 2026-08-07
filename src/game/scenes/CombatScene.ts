@@ -26,6 +26,7 @@ import { RangedEnemy } from "../entities/enemies/RangedEnemy";
 import {
   attachAmbientLight,
   attachHitFx,
+  damageNumber,
   portalWipeOut,
   startAmbientParticles,
   updateAmbientLightCenter,
@@ -253,6 +254,15 @@ export class CombatScene extends Phaser.Scene {
       for (const decor of ROOM_ONE_DECOR) {
         addDecor(this, decor.key, decor.x, this.arena.bounds.floorY, decor.scale);
       }
+    } else {
+      // 전투방에도 폐허 장식을 몇 개 흩뿌린다. 지형과 함께 매 방 랜덤이라 방마다 표정이 다르다.
+      // 낭떠러지 위에 뜨지 않게 바닥 조각 위로만 보정한다.
+      const decorCount = Phaser.Math.Between(3, 4);
+      for (let i = 0; i < decorCount; i += 1) {
+        const decor = Phaser.Utils.Array.GetRandom([...ROOM_ONE_DECOR]);
+        const x = this.groundedSpawnX(Phaser.Math.Between(90, roomWidth - 90));
+        addDecor(this, decor.key, x, this.arena.bounds.floorY, decor.scale);
+      }
     }
 
     // 전송 게이트. 모든 일반 전투방(1~3) 끝에 세운다. 방 2·3은 적을 다 처치해야
@@ -283,6 +293,8 @@ export class CombatScene extends Phaser.Scene {
       color: "#f5ece0",
       backgroundColor: "#241a1fcc",
       padding: { x: 6, y: 3 },
+      // 캔버스(1280×720)가 창 크기로 확대되며 글자가 뭉개진다 — 2배 해상도로 그린다.
+      resolution: 2,
     });
     this.portalPrompt.setOrigin(0.5, 1);
     this.portalPrompt.setDepth(11);
@@ -426,9 +438,12 @@ export class CombatScene extends Phaser.Scene {
       hitSet.add(enemy);
       attack.setData("hitEnemies", hitSet);
 
-      enemy.takeDamage((attack.getData("damage") as number) ?? 0);
+      const damage = (attack.getData("damage") as number) ?? 0;
+      enemy.takeDamage(damage);
       // 매번 같은 피치면 단조롭다 — 살짝 흔들어 타격마다 다르게 들리게 한다.
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
+      const hitTarget = bodyObj as Phaser.GameObjects.Sprite;
+      damageNumber(this, hitTarget.x, hitTarget.y - 20, damage);
 
       const mode = attack.getData("mode") as AttackMode | undefined;
       // 파편은 맞은 적 위에서 터져야 한다. 플레이어 위치에서 터지면 누굴 쳤는지 모른다.
