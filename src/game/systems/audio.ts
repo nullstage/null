@@ -68,7 +68,11 @@ export const playSfx = (
  * 방 1(마을)에서 방 2(전투)로 넘어가는 것처럼 트랙이 바뀌는 경우엔 이전 트랙을 먼저 끈다.
  */
 export const startRoomBgm = (scene: Phaser.Scene, key: string): void => {
-  if (scene.sound.get(key)) return;
+  // `.get()`은 멈춘 소리도 매니저에 남아있는 한 계속 돌려준다 — 재생 중인지는
+  // `isPlaying`으로 따로 확인해야 한다. 여기서 존재만 보고 넘어가면, 한 번이라도
+  // stopRoomBgm을 거친 뒤엔 이 트랙이 다시는 재생되지 않는다.
+  const existing = scene.sound.get(key) as Phaser.Sound.BaseSound | undefined;
+  if (existing?.isPlaying) return;
   stopRoomBgm(scene);
   const sound = scene.sound.add(key, { loop: true, volume: bgmVolume() });
   activeLoops.set(sound, "bgm");
@@ -80,7 +84,8 @@ export const stopRoomBgm = (scene: Phaser.Scene): void => {
     const sound = scene.sound.get(key);
     if (!sound) continue;
     activeLoops.delete(sound);
-    sound.stop();
+    // stop만 하면 매니저에 죽은 소리로 남아 다음 startRoomBgm의 "이미 있음" 판정을 속인다.
+    sound.destroy();
   }
 };
 
