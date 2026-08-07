@@ -69,6 +69,8 @@ export class CombatScene extends Phaser.Scene {
   /** 게이트를 상호작용하면 실행할 다음 단계. `awaitPortal`이 채우고 상호작용 시 비운다. */
   private portalCallback: (() => void) | null = null;
   private interactKey?: Phaser.Input.Keyboard.Key;
+  /** 우상단 미니맵. 매 프레임 다시 그린다 — 사각형 몇 개라 비용이 없다. */
+  private minimap: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super("Combat");
@@ -156,6 +158,7 @@ export class CombatScene extends Phaser.Scene {
       if (!enemy.isDefeated) enemy.update(time, deltaMs);
     }
     if (this.portal) this.updatePortalPrompt();
+    this.drawMinimap();
 
     // 배경/구름 흐름. 트윈으로 하면 반복마다 원위치로 튀어서(Phaser 상대값 트윈의 특성)
     // 매 프레임 직접 누적한다 — `combat.ts`의 `createArena` 주석 참고.
@@ -275,6 +278,51 @@ export class CombatScene extends Phaser.Scene {
     this.portalPrompt.setVisible(false);
 
     this.interactKey = this.input.keyboard?.addKey(KEY_BINDINGS.INTERACT);
+
+    // 우상단 미니맵. 카메라에 고정하고(setScrollFactor 0) 매 프레임 다시 그린다.
+    this.minimap = this.add.graphics();
+    this.minimap.setScrollFactor(0);
+    this.minimap.setDepth(900);
+  }
+
+  /**
+   * 미니맵. 방 전체를 작은 사각형에 축소해 지형(검정 실루엣)·적(빨강)·플레이어(노랑)를 찍는다.
+   */
+  private drawMinimap(): void {
+    const minimap = this.minimap;
+    const player = this.player.sprite;
+    if (!minimap || !player) return;
+
+    const WIDTH = 180;
+    const HEIGHT = 62;
+    const PAD = 14;
+    const x0 = VIEWPORT.width - WIDTH - PAD;
+    const y0 = PAD;
+    const scaleX = WIDTH / this.arena.bounds.width;
+    const scaleY = HEIGHT / VIEWPORT.height;
+
+    minimap.clear();
+    minimap.fillStyle(0x060506, 0.55);
+    minimap.fillRect(x0, y0, WIDTH, HEIGHT);
+    minimap.lineStyle(1, 0xffffff, 0.18);
+    minimap.strokeRect(x0, y0, WIDTH, HEIGHT);
+
+    // 지형 — 바닥과 게이트를 검은 실루엣으로.
+    const floorTop = y0 + this.arena.bounds.floorY * scaleY;
+    minimap.fillStyle(0x000000, 0.9);
+    minimap.fillRect(x0, floorTop, WIDTH, HEIGHT - this.arena.bounds.floorY * scaleY);
+    if (this.portal) {
+      minimap.fillRect(x0 + this.portal.x * scaleX - 2, floorTop - 7, 4, 7);
+    }
+
+    minimap.fillStyle(0xff2f36, 1);
+    for (const enemy of this.enemies) {
+      if (enemy.isDefeated || !enemy.sprite) continue;
+      minimap.fillCircle(x0 + enemy.sprite.x * scaleX, y0 + enemy.sprite.y * scaleY, 2.5);
+    }
+
+    minimap.fillStyle(0xffd84a, 1);
+    minimap.fillCircle(x0 + player.x * scaleX, y0 + player.y * scaleY, 3);
   }
 
   /** 충돌 판정은 이 한 곳에서만 건다. 엔티티가 서로를 알 필요가 없다. */

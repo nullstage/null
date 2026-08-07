@@ -3,6 +3,7 @@
 import styled from "@emotion/styled";
 import { useCallback, useEffect, useState } from "react";
 
+import { assetPath } from "@/game/config/gameConfig";
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
@@ -78,14 +79,33 @@ const CombatHud = styled.div`
   pointer-events: none;
 `;
 
+/**
+ * 제공받은 장식 프레임(체력ui.png → ui/hp-frame.png, 1479x320). 마젠타 배경과
+ * 흰 게이지 창은 투명 처리했고, 창 위치는 원본에서 측정한 비율로 아래 HealthWindow가 잡는다.
+ */
 const HealthBar = styled.div`
   position: relative;
-  width: 268px;
-  height: 14px;
-  /* 도트 화면이라 모서리를 깎지 않는다. 안쪽 그림자로 판 위에 얹힌 금속처럼 보이게 한다. */
-  border: 1px solid rgba(200, 56, 60, 0.45);
-  background: rgba(8, 6, 7, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  width: 340px;
+  aspect-ratio: 1479 / 320;
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+`;
+
+/** 프레임의 게이지 창 영역. 원본 픽셀 좌표(394~1393, 96~158)를 비율로 환산한 값이다. */
+const HealthWindow = styled.div`
+  position: absolute;
+  left: 26.64%;
+  top: 30%;
+  width: 67.61%;
+  height: 19.69%;
+  background: rgba(8, 6, 7, 0.78);
   overflow: hidden;
 `;
 
@@ -454,10 +474,15 @@ export default function HUDOverlay() {
       {showCombatHud && (
         <CombatHud>
           <HealthBar>
-            {/* 흰 층이 먼저 남고 붉은 층이 앞서 줄어든다. 순서가 바뀌면 깎인 양이 안 보인다. */}
-            <HealthGhost ratio={hud.hp / hud.maxHp} />
-            <HealthFill ratio={hud.hp / hud.maxHp} />
-            <HealthTicks />
+            <HealthWindow>
+              {/* 흰 층이 먼저 남고 붉은 층이 앞서 줄어든다. 순서가 바뀌면 깎인 양이 안 보인다. */}
+              <HealthGhost ratio={hud.hp / hud.maxHp} />
+              <HealthFill ratio={hud.hp / hud.maxHp} />
+              <HealthTicks />
+            </HealthWindow>
+            {/* 정적 내보내기라 next/image 최적화가 안 붙는다. 픽셀아트 프레임 한 장이라 img로 충분하다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={assetPath("ui/hp-frame.png")} alt="" />
           </HealthBar>
 
           <StatusRow>
@@ -465,14 +490,6 @@ export default function HUDOverlay() {
             <HpText>
               {hud.hp} / {hud.maxHp}
             </HpText>
-            {phase === "BOSS" ? (
-              <span>BOSS</span>
-            ) : (
-              <>
-                <span>ROOM {hud.roomIndex}</span>
-                <span>남은 적 {hud.enemiesRemaining}</span>
-              </>
-            )}
           </StatusRow>
         </CombatHud>
       )}
