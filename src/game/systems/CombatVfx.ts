@@ -238,43 +238,46 @@ export const slashArc = (
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
 
-  /**
-   * 호를 아주 작은 점으로 촘촘히 찍는다.
-   *
-   * `lineStyle`+`strokePoints`가 더 자연스러워 보이지만 화면에 나오지 않았고,
-   * `fillRect`는 확실히 그려진다. 점을 두께보다 훨씬 촘촘히 찍으면 결국 같은 선이 된다.
-   *
-   * 점 크기가 곧 획의 굵기다. 크게 찍으면 예전처럼 뭉쳐서 둔탁해진다.
-   */
   // 눌러서 기울인 타원. 정원은 화면과 평행한 고리라 깊이가 없고 일자로 보인다.
   const tilt = Phaser.Math.DegToRad(slash.tiltDeg);
   const tiltCos = Math.cos(tilt);
   const tiltSin = Math.sin(tilt);
 
-  const stamp = (size: number, color: number, alpha: number) => {
-    graphics.fillStyle(color, alpha);
-    for (let i = 0; i <= slash.segments; i += 1) {
-      const angle = Phaser.Math.DegToRad(
-        Phaser.Math.Linear(sweep.from, sweep.to, i / slash.segments),
-      );
+  /** 타원+기울기 위의 한 점. 도트 격자에 맞추지 않는다 — 매끈한 선이 목적이다. */
+  const pointAt = (t: number) => {
+    const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(sweep.from, sweep.to, t));
+    const ex = Math.cos(angle) * radius;
+    const ey = Math.sin(angle) * radius * slash.flatten;
+    // 기울기는 바라보는 쪽을 따라 뒤집힌다. 그래야 어느 방향이든 위에서 아래로 내려 벤다.
+    return {
+      x: x + (ex * tiltCos - ey * tiltSin) * facing,
+      y: y + (ex * tiltSin * facing + ey * tiltCos),
+    };
+  };
 
-      // 세로만 눌러 타원으로 만든 뒤 통째로 기울인다.
-      const ex = Math.cos(angle) * radius;
-      const ey = Math.sin(angle) * radius * slash.flatten;
+  /**
+   * 짧은 선분을 이어 붙여 한 획을 그린다.
+   *
+   * (실험) 도트로 점을 찍는 대신 `lineStyle`로 매끈하게 긋는다.
+   * 구간마다 굵기·불투명도를 다르게 줘야 양 끝이 가늘어지는 붓질처럼 보인다 —
+   * Phaser Graphics는 한 획 안에서 굵기를 바꿀 수 없어서 짧은 선분으로 쪼갠다.
+   */
+  const stroke = (baseWidth: number, color: number, baseAlpha: number) => {
+    let prev = pointAt(0);
+    for (let i = 1; i <= slash.segments; i += 1) {
+      const t = i / slash.segments;
+      const mid = (i - 0.5) / slash.segments;
+      const next = pointAt(t);
 
-      // 기울기는 바라보는 쪽을 따라 뒤집힌다. 그래야 어느 방향이든 위에서 아래로 내려 벤다.
-      const ox = (ex * tiltCos - ey * tiltSin) * facing;
-      const oy = ex * tiltSin * facing + ey * tiltCos;
-
-      // 양 끝이 가늘어야 지나간 획으로 보인다. 가운데가 가장 굵다.
-      const taper = 0.35 + 0.65 * Math.sin((i / slash.segments) * Math.PI);
-      const width = size * taper;
-      graphics.fillRect(x + ox - width / 2, y + oy - width / 2, width, width);
+      const taper = 0.3 + 0.7 * Math.sin(mid * Math.PI);
+      graphics.lineStyle(Math.max(1, baseWidth * taper), color, baseAlpha * (0.5 + 0.5 * taper));
+      graphics.lineBetween(prev.x, prev.y, next.x, next.y);
+      prev = next;
     }
   };
 
-  stamp(look.outerWidth, look.body, 0.45);
-  stamp(look.innerWidth, look.core, 1);
+  stroke(look.outerWidth, look.body, 0.5);
+  stroke(look.innerWidth, look.core, 1);
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
@@ -304,14 +307,14 @@ export const beamLine = (
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
 
-  const top = Math.round(y / PIXEL) * PIXEL;
-  const left = facing > 0 ? Math.round(x / PIXEL) * PIXEL : Math.round((x - length) / PIXEL) * PIXEL;
+  const left = facing > 0 ? x : x - length;
+  const right = left + length;
 
-  // 바깥 옅은 선 + 안쪽 흰 심. 한 겹이면 너무 가늘어 안 보인다.
-  graphics.fillStyle(beam.glow, 0.5);
-  graphics.fillRect(left, top - beam.thickness, length, beam.thickness * 2);
-  graphics.fillStyle(beam.core, 1);
-  graphics.fillRect(left, top - beam.thickness / 2, length, beam.thickness);
+  // (실험) 도트 사각형 대신 매끈한 두 겹 선. 바깥 옅은 선 + 안쪽 흰 심.
+  graphics.lineStyle(beam.thickness * 2.4, beam.glow, 0.5);
+  graphics.lineBetween(left, y, right, y);
+  graphics.lineStyle(beam.thickness, beam.core, 1);
+  graphics.lineBetween(left, y, right, y);
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
   scene.tweens.add({
@@ -345,23 +348,21 @@ export const createBulletTrail = (
   graphics.setDepth(VFX.depth - 1);
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
-  const segmentWidth = look.length / look.segments;
+  /**
+   * (실험) 계단식 사각형 대신 뾰족한 삼각형 두 겹으로 혜성 꼬리를 그린다.
+   * 머리 쪽(0)은 두껍고 꼬리 끝은 한 점으로 모인다 — 도트가 아니라 매끈한 쐐기꼴이다.
+   */
+  const half = look.headHeight / 2;
+  const tailX = -facing * look.length;
 
-  for (let i = 0; i < look.segments; i += 1) {
-    const t = i / look.segments;
-    // 뒤로 갈수록 얇아지고 옅어진다. 두 가지가 같이 줄어야 뾰족해 보인다.
-    // 격자에 반올림하지 않는다. 반올림하면 계단이 생겨 가는 꼬리가 굵어 보인다.
-    const height = look.headHeight * (1 - t);
-    const left = -facing * (t * look.length) - (facing > 0 ? segmentWidth : 0);
+  graphics.fillStyle(look.glow, 0.55);
+  graphics.fillTriangle(0, -half, 0, half, tailX, 0);
+  graphics.fillStyle(look.core, 0.9);
+  graphics.fillTriangle(0, -half * 0.4, 0, half * 0.4, tailX * 0.65, 0);
 
-    // height가 이미 전체 두께다. 위아래로 한 번 더 늘리면 꼬리가 아니라 세로 빗살이 된다.
-    graphics.fillStyle(look.glow, 0.5 * (1 - t));
-    graphics.fillRect(left, -height / 2, segmentWidth, height);
-  }
-
-  // 총알 머리. 가장 밝은 한 점이 있어야 탄이 어디쯤인지 읽힌다.
+  // 총알 머리. 가장 밝은 점이 있어야 탄이 어디쯤인지 읽힌다.
   graphics.fillStyle(look.core, 1);
-  graphics.fillRect(-facing * 2, -look.headHeight / 2, 6, look.headHeight);
+  graphics.fillCircle(0, 0, half * 0.6);
 
   return graphics;
 };
