@@ -23,13 +23,20 @@ const PIXEL = 4;
 const VFX = {
   slash: {
     /** 짧을수록 날카롭다. 길게 남으면 휘두른 것이 아니라 걸어둔 것처럼 보인다. */
-    lifeMs: 120,
+    lifeMs: 160,
     /** 안쪽 밝은 심 + 바깥 옅은 획. 두 겹이되 심이 훨씬 얇아야 가늘게 보인다. */
     core: 0xfff2f3,
     body: 0xe0454e,
     /** 획의 굵기. 호가 커진 만큼 같이 굵어야 가늘어 보이지 않는다. */
     outerWidth: 8,
     innerWidth: 3,
+    /**
+     * (실험) 초승달 모양 채우기의 두께.
+     *
+     * 얇은 선이 아니라 면으로 채운 두꺼운 띠를 그린다 — 스컬류 게임의 큰 슬래시 이펙트를
+     * 참고했다. 가운데(스윙 정점)에서 가장 두껍고 양 끝에서 점으로 모인다.
+     */
+    crescentThickness: 46,
     /** 호를 몇 점으로 찍을지. 점 크기보다 촘촘해야 선으로 이어진다. */
     segments: 64,
     /**
@@ -57,7 +64,13 @@ const VFX = {
      * 수치만 오르면 무엇이 좋아졌는지 화면에서 알 수 없다.
      * 붉은 기를 걷고 흰빛으로 바꿔 손에 든 것이 달라졌음을 한눈에 보이게 한다.
      */
-    reforged: { core: 0xffffff, body: 0xffd8dc, outerWidth: 11, innerWidth: 4 },
+    reforged: {
+      core: 0xffffff,
+      body: 0xffd8dc,
+      outerWidth: 11,
+      innerWidth: 4,
+      crescentThickness: 58,
+    },
   },
   beam: {
     lifeMs: 100,
@@ -243,11 +256,14 @@ export const slashArc = (
   const tiltCos = Math.cos(tilt);
   const tiltSin = Math.sin(tilt);
 
-  /** 타원+기울기 위의 한 점. 도트 격자에 맞추지 않는다 — 매끈한 선이 목적이다. */
-  const pointAt = (t: number) => {
+  /**
+   * 타원+기울기 위의 한 점. 반지름을 바꿔 부를 수 있다 — 초승달의 안쪽/바깥쪽 테두리를
+   * 같은 함수로 그리기 위해서다. 도트 격자에 맞추지 않는다 — 매끈한 면이 목적이다.
+   */
+  const pointAt = (t: number, r: number) => {
     const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(sweep.from, sweep.to, t));
-    const ex = Math.cos(angle) * radius;
-    const ey = Math.sin(angle) * radius * slash.flatten;
+    const ex = Math.cos(angle) * r;
+    const ey = Math.sin(angle) * r * slash.flatten;
     // 기울기는 바라보는 쪽을 따라 뒤집힌다. 그래야 어느 방향이든 위에서 아래로 내려 벤다.
     return {
       x: x + (ex * tiltCos - ey * tiltSin) * facing,
@@ -256,28 +272,34 @@ export const slashArc = (
   };
 
   /**
-   * 짧은 선분을 이어 붙여 한 획을 그린다.
+   * (실험) 초승달 모양. 스컬류 게임의 큰 슬래시 이펙트를 참고했다.
    *
-   * (실험) 도트로 점을 찍는 대신 `lineStyle`로 매끈하게 긋는다.
-   * 구간마다 굵기·불투명도를 다르게 줘야 양 끝이 가늘어지는 붓질처럼 보인다 —
-   * Phaser Graphics는 한 획 안에서 굵기를 바꿀 수 없어서 짧은 선분으로 쪼갠다.
+   * 얇은 선이 아니라 반지름이 살짝 다른 두 테두리(바깥·안쪽) 사이를 면으로 채운다.
+   * 가운데(스윙 정점)에서 가장 두껍고 양 끝에서 점으로 모이는 초승달이 된다.
    */
-  const stroke = (baseWidth: number, color: number, baseAlpha: number) => {
-    let prev = pointAt(0);
-    for (let i = 1; i <= slash.segments; i += 1) {
+  const crescentPoints = (maxThickness: number) => {
+    const outer: { x: number; y: number }[] = [];
+    const inner: { x: number; y: number }[] = [];
+    for (let i = 0; i <= slash.segments; i += 1) {
       const t = i / slash.segments;
-      const mid = (i - 0.5) / slash.segments;
-      const next = pointAt(t);
-
-      const taper = 0.3 + 0.7 * Math.sin(mid * Math.PI);
-      graphics.lineStyle(Math.max(1, baseWidth * taper), color, baseAlpha * (0.5 + 0.5 * taper));
-      graphics.lineBetween(prev.x, prev.y, next.x, next.y);
-      prev = next;
+      // 양 끝은 아주 가느다랗게 남겨 완전히 뾰족한 점이 되지 않게 한다(0이면 이음매가 튄다).
+      const half = (maxThickness * (0.06 + 0.94 * Math.sin(t * Math.PI))) / 2;
+      outer.push(pointAt(t, radius + half));
+      inner.push(pointAt(t, radius - half));
     }
+    return [...outer, ...inner.reverse()];
   };
 
-  stroke(look.outerWidth, look.body, 0.5);
-  stroke(look.innerWidth, look.core, 1);
+  /** 같은 초승달을 여러 겹, 얇을수록 진하게 겹쳐서 부드러운 광채를 흉내 낸다. */
+  const glow = (thicknessScale: number, color: number, alpha: number) => {
+    graphics.fillStyle(color, alpha);
+    graphics.fillPoints(crescentPoints(look.crescentThickness * thicknessScale), true);
+  };
+
+  glow(2.4, look.body, 0.16);
+  glow(1.5, look.body, 0.32);
+  glow(0.85, look.core, 0.55);
+  glow(0.4, look.core, 0.9);
 
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
