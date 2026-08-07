@@ -12,7 +12,7 @@
  *   body.setData("enemy", this)           // 적 본체 필수. 씬이 이걸로 피해를 전달한다.
  */
 
-import type Phaser from "phaser";
+import Phaser from "phaser";
 
 export interface CombatArena {
   /** 바닥과 발판. 플레이어와 적이 올라선다. */
@@ -25,6 +25,10 @@ export interface CombatArena {
   enemyAttacks: Phaser.Physics.Arcade.Group;
   /** 방의 크기와 바닥 높이. 스폰과 순찰 범위를 여기서 가져다 쓴다. */
   bounds: { width: number; height: number; floorY: number };
+  /** 배경(있으면). 씬이 매 프레임 `tilePositionX`를 직접 늘려 구름이 흐르게 한다. */
+  background?: Phaser.GameObjects.TileSprite;
+  /** 배경 위에 얹는 구름 띠(있으면). 배경보다 살짝 더 빠르게 흘려 깊이감을 준다. */
+  clouds?: Phaser.GameObjects.TileSprite;
 }
 
 /**
@@ -69,6 +73,24 @@ export const TEXTURE = {
   floorTileStone: "tex_floor_stone",
   /** (실험) 전송 게이트 — 방 1을 클리어하는 지점. */
   gate: "tex_decor_gate",
+  /** (실험) 배경 위에 얹는 흐르는 구름 띠. 배경 그림 속 구름은 정적이라 따로 얹어 흐르게 한다. */
+  clouds: "tex_clouds",
+} as const;
+
+/** 전투 효과음·BGM 키. Phaser 내장 사운드로 재생한다 — UI 효과음(`sfx.ts`)과는 별도 경로다. */
+export const AUDIO = {
+  swordHit1: "sfx_sword_1",
+  swordHit2: "sfx_sword_2",
+  swordHit3: "sfx_sword_3",
+  gunShot: "sfx_gun",
+  shellDrop: "sfx_shell",
+  hitEnemy: "sfx_hit_enemy",
+  parry: "sfx_parry",
+  footstepRun: "sfx_run",
+  dash: "sfx_dash",
+  bgmCombat: "bgm_combat",
+  /** 방 1(튜토리얼) 전용 — 아직 전투가 없는 마을 분위기라 전투 BGM과 다르게 튼다. */
+  bgmVillage: "bgm_village",
 } as const;
 
 /**
@@ -95,7 +117,11 @@ export const PLAYER_SPRITE = {
   states: {
     idle: { row: 0, frames: 6, fps: 6, loop: true },
     run: { row: 1, frames: 8, fps: 12, loop: true },
-    jump: { row: 2, frames: 6, fps: 9, loop: false },
+    /**
+     * 1프레임만 쓴다. 원래 6프레임을 다 돌리면 공중에서 다리를 파닥거리는 것처럼
+     * 보였다 — 웅크린 자세(프레임 0) 하나로 붙잡아 두는 쪽이 더 깔끔하다.
+     */
+    jump: { row: 2, frames: 1, fps: 9, loop: false },
     dash: { row: 3, frames: 6, fps: 16, loop: false },
     /**
      * 왼손 검 3연타. 타마다 그림이 달라야 콤보가 콤보로 읽힌다.
@@ -105,7 +131,12 @@ export const PLAYER_SPRITE = {
      * 모든 프레임을 같은 길이로 재생하면 그림이 아무리 좋아도 정적으로 보인다.
      * 윈드업에서 뜸을 들이고 베는 순간은 최소 시간으로 지나가야 힘이 실린다.
      */
-    attack1: { row: 4, frames: 6, fps: 26, loop: false, frameDurations: [55, 40, 0, 0, 40, 80] },
+    /**
+     * 2·3프레임이 검을 드는 동작인데 원래 추가 시간이 0이라 순식간에 지나갔다
+     * (사용자 지적). 그 두 프레임에 뜸을 몰아주고, 실제로 베는 4프레임은 오히려
+     * 더 줄여 발도하듯 순간적으로 터지게 했다.
+     */
+    attack1: { row: 4, frames: 6, fps: 26, loop: false, frameDurations: [30, 20, 90, 60, 15, 80] },
     attack2: { row: 5, frames: 6, fps: 26, loop: false, frameDurations: [45, 30, 0, 0, 35, 75] },
     /** 마무리 타격. 가장 무겁게 뜸을 들이고 가장 길게 여운을 남긴다. */
     attack3: {
@@ -170,6 +201,9 @@ export const FLOOR_HEIGHT = 48;
 /** `background` 텍스처(`ruins-dusk.png`)의 원본 픽셀 크기. 비율 계산에 쓴다. */
 const BACKGROUND_SOURCE = { width: 1774, height: 887 };
 
+/** `clouds` 텍스처(`clouds.png`)의 원본 픽셀 크기. */
+const CLOUD_SOURCE = { width: 1536, height: 197 };
+
 /**
  * 바닥과 충돌 그룹을 만든다. 전투방과 보스방이 같은 구조를 쓴다.
  * 발판이 필요한 방 템플릿은 여기 만든 `solids`에 덧붙이면 된다. (MVP_PLAN §2-3)
@@ -187,15 +221,19 @@ export const createArena = (
   const { width, height } = viewport;
   const floorY = height - FLOOR_HEIGHT;
 
+  let background: Phaser.GameObjects.TileSprite | undefined;
   if (backgroundKey) {
     // 모든 것보다 뒤에 있어야 한다. 다른 오브젝트는 깊이 0 이상을 쓰므로 음수로 확실히 뺀다.
     const scale = height / BACKGROUND_SOURCE.height;
     const scaledWidth = BACKGROUND_SOURCE.width * scale;
 
-    // TileSprite를 쓴다 — 이미지는 정적이지만, tilePositionX를 아주 천천히 흘려서
-    // 그림 속 구름이 떠다니는 것처럼 보이게 한다(사용자 요청). 방이 넓어 반복 이음매가
-    // 보일 수 있는 지점까지 흐르려면 수십 분이 걸려 실제 플레이에서는 티가 안 난다.
-    let background: Phaser.GameObjects.TileSprite;
+    // TileSprite를 쓴다 — 이미지는 정적이지만, `tilePositionX`를 씬 쪽에서 매 프레임
+    // 조금씩 늘려 그림 속 구름이 떠다니는 것처럼 보이게 한다(사용자 요청).
+    //
+    // 처음엔 이걸 반복 트윈("+=40", repeat:-1)으로 돌렸다가 40초마다 배경이 원래
+    // 자리로 툭 튀는 버그가 났다 — Phaser 트윈은 상대값을 시작 시점에 딱 한 번만
+    // 절대값으로 확정하고, yoyo 없는 repeat는 매 반복마다 그 시작 값으로 되돌아간다.
+    // 그래서 한쪽으로만 계속 흐르게 하려면 트윈이 아니라 매 프레임 누적해야 한다.
     if (scaledWidth >= width) {
       // 방이 배경보다 좁다 — 세로 기준으로만 맞추고, 가운데만 보여주고 양옆은 잘린다.
       // 가로까지 방 폭에 맞춰 늘리면 배경 속 성이 옆으로 눌려 찌그러진다.
@@ -211,13 +249,19 @@ export const createArena = (
       background.setTileScale(width / BACKGROUND_SOURCE.width, height / BACKGROUND_SOURCE.height);
     }
     background.setDepth(-10);
-    scene.tweens.add({
-      targets: background,
-      tilePositionX: "+=40",
-      duration: 40000,
-      repeat: -1,
-      ease: "linear",
-    });
+  }
+
+  // 구름 띠. 배경 그림 속 구름은 정적이라 그 위에 옅게 겹쳐 얹고 흘려서 하늘이 살아있게 한다.
+  // 배경이 없는 방(보스방 등)에는 뜬금없이 하늘만 떠 있을 수 있어 배경이 있을 때만 만든다.
+  let clouds: Phaser.GameObjects.TileSprite | undefined;
+  if (backgroundKey) {
+    const cloudScale = 260 / CLOUD_SOURCE.height;
+    clouds = scene.add.tileSprite(0, 0, width, 260, TEXTURE.clouds);
+    clouds.setOrigin(0, 0);
+    clouds.setTileScale(cloudScale, cloudScale);
+    clouds.setDepth(-9);
+    clouds.setBlendMode(Phaser.BlendModes.ADD);
+    clouds.setAlpha(0.35);
   }
 
   const solids = scene.physics.add.staticGroup();
@@ -233,6 +277,8 @@ export const createArena = (
     const cap = scene.add.tileSprite(0, floorY, width, floorTileHeight, floorTileKey);
     cap.setOrigin(0, 0);
     cap.setDepth(1);
+    // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색으로 틴트.
+    cap.setTint(0x9b5366);
   }
 
   return {
@@ -242,6 +288,8 @@ export const createArena = (
     playerAttacks: scene.physics.add.group({ allowGravity: false }),
     enemyAttacks: scene.physics.add.group({ allowGravity: false }),
     bounds: { width, height, floorY },
+    background,
+    clouds,
   };
 };
 

@@ -32,9 +32,12 @@ import {
   pulseHitFx,
   rangedSpark,
   slashArc,
+  slashFlash,
 } from "../systems/CombatVfx";
+import { playSfx, startFootsteps, stopFootsteps } from "../systems/audio";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import {
+  AUDIO,
   MELEE_ANIM_BY_STEP,
   PLAYER_SPRITE,
   RANGED_ANIM_BY_STEP,
@@ -165,6 +168,9 @@ const TUNING = {
    */
   airborneVelocityY: 60,
 
+  /** 달릴 때 발밑 먼지가 튀는 간격. */
+  runDustIntervalMs: 220,
+
   /**
    * 공격 그림의 이 지점을 넘기면 이동 입력으로 끊을 수 있다.
    *
@@ -252,6 +258,15 @@ export class Player {
   isGrounded = true;
   isDashing = false;
   isDead = false;
+  /**
+   * 점프 자세를 유지 중인지. 세로 속도만 보고 매 프레임 판단하면 정점(속도가 0에
+   * 가까워지는 순간)에서 잠깐 "공중 아님"으로 오판해 자세가 풀렸다 다시 걸린다.
+   * 그래서 한 번 들어가면 착지할 때까지는 속도와 무관하게 붙잡아 둔다(syncAnim 참고).
+   */
+  private isJumpAnimating = false;
+  /** 달리는 동안만 재생되는 루프 발소리. 멈추거나 죽으면 정지한다. */
+  private footsteps: Phaser.Sound.BaseSound | null = null;
+  private nextRunDustAtMs = 0;
 
   private keys: Partial<Record<PlayerAction, Phaser.Input.Keyboard.Key>> = {};
   private facing: 1 | -1 = 1;
@@ -411,6 +426,8 @@ export class Player {
   }
 
   destroy(): void {
+    if (this.footsteps) stopFootsteps(this.footsteps);
+    this.footsteps = null;
     this.blinkTween?.remove();
     this.blinkTween = null;
     for (const { body, trail } of this.projectiles) {
@@ -451,8 +468,9 @@ export class Player {
     if (!sprite || !body) return;
     groundDust(this.scene, sprite.x, body.bottom, "jump");
     body.setVelocityY(-PLAYER.jumpVelocity);
-    // 뛰는 순간 세로로 늘어나면 도형이라도 도약이 읽힌다.
-    this.punch(0.86, 1.18);
+    // 스프라이트가 없던 시절 도형을 늘려 도약을 표현하던 펀치. 지금은 웅크린 자세
+    // 프레임(jump: frames 1)을 그대로 쓰는데, 이 스쿼시가 늘었다 돌아오며(yoyo)
+    // "다리를 굽혔다 편다"는 별개의 움직임처럼 겹쳐 보인다는 지적으로 없앤다.
   }
 
   /** 공중에서 막 바닥에 닿은 프레임에만 부른다. */
@@ -483,6 +501,7 @@ export class Player {
     if (this.dashRechargeAtMs <= now) this.dashRechargeAtMs = now + TUNING.dash.rechargeMs;
 
     this.telemetry.recordDash();
+    playSfx(this.scene, AUDIO.dash);
 
     this.isDashing = true;
     this.dashEndsAtMs = now + TUNING.dash.durationMs;
@@ -611,16 +630,31 @@ export class Player {
 
     this.scene.time.delayedCall(melee.hitboxLifeMs, () => hitbox.destroy());
 
+    const swordHitByStep = [AUDIO.swordHit1, AUDIO.swordHit2, AUDIO.swordHit3] as const;
+    playSfx(this.scene, swordHitByStep[this.comboStep - 1]);
+
     // 호는 몸 중심에서 그린다. 앞으로 밀어 그리면 판정 범위 밖까지 뻗어 헛스윙처럼 보인다.
-    slashArc(
-      this.scene,
-      sprite.x,
-      sprite.y - 6,
-      this.facing,
-      reach + TUNING.body.width / 2,
-      this.comboStep,
-      reforgedBlade,
-    );
+    // 1타만 발도(拔刀) 섬광 — 든 자세를 오래 보여준 뒤 순간적으로 긋는 애니메이션과 맞춘다.
+    if (this.comboStep === 1) {
+      slashFlash(
+        this.scene,
+        sprite.x,
+        sprite.y - 6,
+        this.facing,
+        reach + TUNING.body.width / 2,
+        reforgedBlade,
+      );
+    } else {
+      slashArc(
+        this.scene,
+        sprite.x,
+        sprite.y - 6,
+        this.facing,
+        reach + TUNING.body.width / 2,
+        this.comboStep,
+        reforgedBlade,
+      );
+    }
 
     const playerBody = sprite.body as Phaser.Physics.Arcade.Body;
     if (this.isGrounded) {
@@ -713,6 +747,10 @@ export class Player {
 
       // 예고가 끝나고 실제로 나가는 "팡" — 총구 섬광은 발사 순간에만 터진다.
       muzzleFlash(this.scene, projectile.x, projectile.y, facing);
+      // 1·2발째는 피치를 올려 연사가 급해지는 느낌을 준다. 마무리(3발째)는 원래 피치로 무게를 싣는다.
+      playSfx(this.scene, AUDIO.gunShot, { detune: this.rangedStep < 3 ? 400 : 0 });
+      // 탄피 소리는 총성과 겹치지 않게 그 텀에 낸다.
+      playSfx(this.scene, AUDIO.shellDrop, { delay: 180 });
 
       // 반동으로 뒤로 조금 밀린다. 검과 총의 감각이 갈리는 지점이다.
       const playerBody = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
@@ -829,6 +867,8 @@ export class Player {
   private die(): void {
     if (this.isDead) return;
     this.isDead = true;
+    if (this.footsteps) stopFootsteps(this.footsteps);
+    this.footsteps = null;
 
     const sprite = this.sprite;
     if (sprite) {
@@ -966,12 +1006,31 @@ export class Player {
     // 지면 판정만 보고 jump로 넘기면 안 된다.
     // 평지를 걷는 중에도 blocked.down이 한 프레임 흔들릴 수 있는데,
     // jump는 loop가 없어서 그때마다 run이 처음부터 다시 시작한다. 걷기가 뚝뚝 끊겨 보인다.
-    // 실제로 떠 있는지는 세로 속도로 판단한다.
-    const airborne = !this.isGrounded && Math.abs(body.velocity.y) > TUNING.airborneVelocityY;
+    // 진입은 세로 속도로 확인하되(순간 흔들림 배제), 한 번 들어가면 착지 전까지는
+    // 속도를 다시 보지 않는다 — 정점에서 속도가 0을 지나가는 순간에도 자세를 유지해야
+    // "몸이 다시 접힌다"는 깜빡임이 안 생긴다.
+    if (this.isGrounded) {
+      this.isJumpAnimating = false;
+    } else if (!this.isJumpAnimating && Math.abs(body.velocity.y) > TUNING.airborneVelocityY) {
+      this.isJumpAnimating = true;
+    }
 
-    if (airborne) this.playAnim("jump");
+    if (this.isJumpAnimating) this.playAnim("jump");
     else if (Math.abs(body.velocity.x) > 1) this.playAnim("run");
     else this.playAnim("idle");
+
+    // 발소리는 땅에서 실제로 이동 중일 때만 돈다 — 점프·정지 중엔 멎는다.
+    const running = this.isGrounded && !this.isJumpAnimating && Math.abs(body.velocity.x) > 1;
+    if (running && !this.footsteps) this.footsteps = startFootsteps(this.scene);
+    else if (!running && this.footsteps) {
+      stopFootsteps(this.footsteps);
+      this.footsteps = null;
+    }
+
+    if (running && now >= this.nextRunDustAtMs && this.sprite) {
+      groundDust(this.scene, this.sprite.x, body.bottom, "run");
+      this.nextRunDustAtMs = now + TUNING.runDustIntervalMs;
+    }
   }
 
   /** 모드가 색으로 구분돼야 HUD를 보지 않고도 지금 무엇을 쏘는지 안다. */

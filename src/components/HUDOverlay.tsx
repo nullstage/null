@@ -231,6 +231,7 @@ export default function HUDOverlay() {
   const changeAudio = useCallback((next: AudioSettings) => {
     setAudio(next);
     saveAudioSettings(next);
+    emitGameEvent("audio:change", next);
   }, []);
 
   const confirmFirstVisit = useCallback(() => setNeedsFirstVisit(false), []);

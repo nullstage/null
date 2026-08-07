@@ -13,6 +13,7 @@ import { assetPath } from "../config/gameConfig";
 import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
 import { runState } from "../systems/RunState";
 import {
+  AUDIO,
   PLAYER_SPRITE,
   SILHOUETTE,
   TEXTURE,
@@ -37,9 +38,22 @@ export class BootScene extends Phaser.Scene {
     this.load.image(TEXTURE.backgroundTutorial, assetPath("backgrounds/ruins-bloodmoon.png"));
     this.load.image(TEXTURE.floorTileStone, assetPath("decor/walls/wall-strip-floor.png"));
     this.load.image(TEXTURE.gate, assetPath("decor/gate/gate-full.png"));
+    this.load.image(TEXTURE.clouds, assetPath("decor/clouds.png"));
     for (const decor of ROOM_ONE_DECOR) {
       this.load.image(decor.key, assetPath(decor.path));
     }
+    // 전투 효과음·BGM. (OQ 없음 — 사용자가 제공한 파일을 그대로 매핑)
+    this.load.audio(AUDIO.swordHit1, assetPath("audio/sword-hit-1.mp3"));
+    this.load.audio(AUDIO.swordHit2, assetPath("audio/sword-hit-2.mp3"));
+    this.load.audio(AUDIO.swordHit3, assetPath("audio/sword-hit-3.mp3"));
+    this.load.audio(AUDIO.gunShot, assetPath("audio/gun-shot.mp3"));
+    this.load.audio(AUDIO.shellDrop, assetPath("audio/shell-drop.mp3"));
+    this.load.audio(AUDIO.hitEnemy, assetPath("audio/hit-enemy.mp3"));
+    this.load.audio(AUDIO.parry, assetPath("audio/parry.mp3"));
+    this.load.audio(AUDIO.footstepRun, assetPath("audio/footstep-run.mp3"));
+    this.load.audio(AUDIO.dash, assetPath("audio/dash.mp3"));
+    this.load.audio(AUDIO.bgmCombat, assetPath("audio/bgm-combat.mp3"));
+    this.load.audio(AUDIO.bgmVillage, assetPath("audio/bgm-village.mp3"));
     this.createPlaceholderTextures();
   }
 

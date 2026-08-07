@@ -15,10 +15,11 @@ import { VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { Boss } from "../entities/Boss";
 import { Player } from "../entities/Player";
+import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
 import { attachHitFx } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
-import { createArena, type CombatArena } from "../types/combat";
+import { AUDIO, createArena, type CombatArena } from "../types/combat";
 import type { AttackMode } from "../types/game";
 
 export class BossScene extends Phaser.Scene {
@@ -37,6 +38,7 @@ export class BossScene extends Phaser.Scene {
     this.finished = false;
     this.subscriptions = [];
     runState.setPhase("BOSS");
+    startRoomBgm(this, AUDIO.bgmCombat);
 
     this.cameras.main.setBackgroundColor("#140b10");
     // 전투방과 같은 피격 셰이더. 보스전만 연출이 빠지면 격이 낮아 보인다.
@@ -106,6 +108,7 @@ export class BossScene extends Phaser.Scene {
       attack.setData("hitEnemies", hitSet);
 
       target.takeDamage((attack.getData("damage") as number) ?? 0);
+      playSfx(this, AUDIO.hitEnemy);
 
       // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
       const mode = attack.getData("mode") as AttackMode | undefined;
@@ -137,6 +140,7 @@ export class BossScene extends Phaser.Scene {
 
     this.once("run:restart", () => {
       runState.reset(this.time.now);
+      stopRoomBgm(this);
       this.scene.start("Ready");
     });
   }

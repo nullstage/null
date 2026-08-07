@@ -138,15 +138,19 @@ const VFX = {
    * 총알이 수평으로만 날아가므로 모양이 변하지 않는다. 한 번 그려두고 위치만 옮긴다.
    */
   tail: {
-    /** 가로로 길고 세로로 얇아야 지나간 자국으로 읽힌다. 세로가 길면 빗살처럼 보인다. */
-    length: 84,
+    /**
+     * 가로로 길고 세로로 얇아야 지나간 자국으로 읽힌다. 세로가 길면 빗살처럼 보인다.
+     * 총구(몸 중심에서 facing*26px 앞)에서 뒤로 이 길이만큼 뻗는다 — 너무 길면
+     * 쏘는 순간 꼬리 뒷부분이 캐릭터 몸 뒤로 삐져나와 보인다는 지적이 있어 줄였다.
+     */
+    length: 50,
     segments: 6,
     /** 총알 머리의 두께. 여기서 뒤로 갈수록 얇아진다. 굵으면 총알이 아니라 광선이 된다. */
     headHeight: 5,
     core: 0xfff6f6,
     glow: 0xff5560,
     /** 총열을 개조한 뒤. 꼬리가 길고 두꺼워져 탄이 무거워진 것이 보인다. */
-    reforged: { length: 124, headHeight: 8, core: 0xffffff, glow: 0xffb9c2 },
+    reforged: { length: 70, headHeight: 8, core: 0xffffff, glow: 0xffb9c2 },
   },
   burst: {
     count: 14,
@@ -180,6 +184,8 @@ const VFX = {
     /** 밀어내는 정도만 다르다 — 착지가 더 세게, 더 많이 튄다. */
     jump: { count: 5, speed: { min: 50, max: 110 }, lifeMs: 200 },
     land: { count: 9, speed: { min: 90, max: 200 }, lifeMs: 260 },
+    /** 달릴 때 발밑에 살짝 — 착지·점프보다 훨씬 여리다. */
+    run: { count: 1, speed: { min: 15, max: 35 }, lifeMs: 180 },
   },
   hitStopMs: 45,
   depth: 40,
@@ -316,6 +322,12 @@ export class AmbientLightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
           // 중심부는 옅은 붉은 빛을 더해 은은한 광원처럼 보이게 한다.
           col += vec3(0.10, 0.02, 0.03) * (1.0 - shadow) * uStrength;
 
+          // 화면 가장자리 비네트. 캐릭터 조명과는 별개로 화면 자체의 네 귀퉁이를
+          // 눌러 시선이 화면 중앙(캐릭터가 대체로 머무는 자리)에 머물게 한다.
+          vec2 screenUv = outTexCoord - 0.5;
+          float vignette = smoothstep(0.35, 0.85, length(screenUv));
+          col *= 1.0 - vignette * 0.35 * uStrength;
+
           gl_FragColor = vec4(col, base.a);
         }
       `,
@@ -415,6 +427,12 @@ export const slashArc = (
 
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
+  // x·y에 facing을 따로따로(그것도 일관되지 않게) 곱하다가 왼쪽으로 벨 때
+  // 궤적이 뒤집히지 않는 버그가 났다(사용자가 여러 번 확인). slashFlash와 같은 방식으로
+  // 고친다 — 좌표는 항상 오른쪽 기준 고정값으로만 계산하고, 그래픽스 오브젝트 자체를
+  // `setScale(facing, 1)`로 통째로 뒤집는다. 아래 좌표는 전부 이 오브젝트 기준 로컬 좌표다.
+  graphics.setPosition(x, y);
+  graphics.setScale(facing, 1);
 
   // 눌러서 기울인 타원. 정원은 화면과 평행한 고리라 깊이가 없고 일자로 보인다.
   const tilt = Phaser.Math.DegToRad(slash.tiltDeg);
@@ -429,17 +447,17 @@ export const slashArc = (
   let revealTo: number = sweep.from;
 
   /**
-   * 타원+기울기 위의 한 점. 반지름을 바꿔 부를 수 있다 — 초승달의 안쪽/바깥쪽 테두리를
-   * 같은 함수로 그리기 위해서다. 도트 격자에 맞추지 않는다 — 매끈한 면이 목적이다.
+   * 타원+기울기 위의 한 점(그래픽스 로컬 좌표). 반지름을 바꿔 부를 수 있다 —
+   * 초승달의 안쪽/바깥쪽 테두리를 같은 함수로 그리기 위해서다.
+   * 도트 격자에 맞추지 않는다 — 매끈한 면이 목적이다.
    */
   const pointAt = (t: number, r: number) => {
     const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(sweep.from, revealTo, t));
     const ex = Math.cos(angle) * r;
     const ey = Math.sin(angle) * r * slash.flatten;
-    // 기울기는 바라보는 쪽을 따라 뒤집힌다. 그래야 어느 방향이든 위에서 아래로 내려 벤다.
     return {
-      x: x + (ex * tiltCos - ey * tiltSin) * facing,
-      y: y + (ex * tiltSin * facing + ey * tiltCos),
+      x: ex * tiltCos - ey * tiltSin,
+      y: ex * tiltSin + ey * tiltCos,
     };
   };
 
@@ -524,6 +542,78 @@ export const slashArc = (
       });
     },
   });
+};
+
+/**
+ * (실험) 발도(拔刀) 이펙트 — 검 1타 전용.
+ *
+ * 초승달 채우기(`slashArc`)와 달리 곧게 뻗는 한 줄기 섬광이다. 자라나는 리빌 없이
+ * 한 번에 다 그어지고, 대시 잔상처럼 같은 선을 살짝씩 어긋나게 여러 겹 쌓아
+ * "그은 자리에 잔상이 남는" 속도감을 낸다. 짧게 버티다 빠르게 사라진다 —
+ * 든 자세를 오래 보여준 뒤(애니메이션 쪽에서 처리) 벤 순간은 최대한 짧아야 한다.
+ */
+export const slashFlash = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+  reach: number,
+  reforged = false,
+): void => {
+  const { slash } = VFX;
+  const look = reforged ? slash.reforged : slash;
+
+  // 부호를 직접 곱해 좌우를 뒤집는 방식(dx *= facing)에서 반복해서 버그가 났다
+  // (사용자가 두 번 확인). 대신 `beamLine`과 똑같은 방식을 쓴다 — 좌표는 항상
+  // "오른쪽으로 향하는" 고정값으로만 계산하고, 그래픽스 오브젝트 자체를
+  // `setScale(facing, 1)`로 통째로 뒤집는다. Phaser의 스프라이트 좌우반전과 같은
+  // 메커니즘이라(이미 총 조준선에서 검증됨) 부호 계산을 헷갈릴 여지가 없다.
+  // "직선 일자로, 더 길게" 요청대로 세로 기울기는 작게, 가로는 더 길게 뻗는다.
+  const dx = reach * 1.3;
+  const dy = -10;
+
+  // 총 조준선(beamLine)처럼 가늘고 흐릿하게, 순식간에 끝까지 그어지는 "칭" 한 번.
+  // 몸통을 채우지 않는다 — 두꺼우면 광선검이 되고, 얇아야 검이 스친 자국으로 읽힌다.
+  const draw = (graphics: Phaser.GameObjects.Graphics, t: number) => {
+    graphics.clear();
+    const ex = dx * t;
+    const ey = dy * t;
+    graphics.lineStyle(5, look.body, 0.16);
+    graphics.lineBetween(0, 0, ex, ey);
+    graphics.lineStyle(1.5, look.core, 0.75);
+    graphics.lineBetween(0, 0, ex, ey);
+  };
+
+  const echoes = 2;
+  for (let i = 0; i <= echoes; i += 1) {
+    const isMain = i === echoes;
+    const graphics = scene.add.graphics();
+    graphics.setPosition(x, y);
+    graphics.setScale(facing, 1);
+    graphics.setDepth(VFX.depth);
+    graphics.setBlendMode(Phaser.BlendModes.ADD);
+    // 잔상일수록 시작점 쪽으로 당겨져 있어, 방금 지나간 자국처럼 겹쳐 보인다.
+    graphics.setAlpha(isMain ? 1 : 0.35);
+
+    const carrier = { t: 0 };
+    scene.tweens.add({
+      targets: carrier,
+      t: 1,
+      duration: 55,
+      delay: i * 14,
+      ease: "power1.out",
+      onUpdate: () => draw(graphics, carrier.t),
+      onComplete: () => {
+        scene.tweens.add({
+          targets: graphics,
+          alpha: 0,
+          duration: 70,
+          ease: "power2.in",
+          onComplete: () => graphics.destroy(),
+        });
+      },
+    });
+  }
 };
 
 /**
@@ -756,7 +846,7 @@ export const groundDust = (
   scene: Phaser.Scene,
   x: number,
   y: number,
-  variant: "jump" | "land",
+  variant: "jump" | "land" | "run",
 ): void => {
   const { dust } = VFX;
   const spec = dust[variant];
@@ -891,4 +981,67 @@ export const hitStop = (scene: Phaser.Scene, durationMs = VFX.hitStopMs): void =
 
   world.pause();
   scene.time.delayedCall(durationMs, () => world.resume());
+};
+
+/**
+ * (실험) 방 전체에 떠다니는 잔불/먼지 입자.
+ *
+ * 타격 파편·흙먼지와 달리 아주 느리게, 오래 떠 있다가 사라진다 — 분위기용이라
+ * 존재감은 옅게 둔다. 방 전체 폭에 걸쳐 계속 하나씩 새로 생기고, 위로 떠오르며
+ * 옅게 좌우로 흔들리다 사라진다. 붉은 톤이라 배경과 어울린다.
+ */
+const AMBIENT = {
+  color: 0xff8a4a,
+  size: PIXEL,
+  spawnIntervalMs: 260,
+  lifeMs: { min: 4000, max: 8000 },
+  maxAlpha: 0.45,
+  riseSpeed: { min: 8, max: 24 },
+  swayPx: { min: -30, max: 30 },
+} as const;
+
+/**
+ * 방 시작 시 한 번 불러 반복 스폰 타이머를 건다.
+ * 씬이 꺼지거나 재시작되면 Phaser가 씬에 딸린 타이머를 알아서 정리한다.
+ */
+export const startAmbientParticles = (
+  scene: Phaser.Scene,
+  roomWidth: number,
+  floorY: number,
+): void => {
+  const spawnOne = () => {
+    const x = Phaser.Math.Between(0, roomWidth);
+    const y = Phaser.Math.Between(0, floorY);
+    const size = AMBIENT.size * Phaser.Math.FloatBetween(0.6, 1.3);
+
+    const particle = scene.add.rectangle(x, y, size, size, AMBIENT.color);
+    // 배경보다는 앞, 바닥 타일·캐릭터·장식보다는 뒤 — 안개처럼 스치듯 지나가게 한다.
+    particle.setDepth(0);
+    particle.setBlendMode(Phaser.BlendModes.ADD);
+    particle.setAlpha(0);
+
+    const life = Phaser.Math.Between(AMBIENT.lifeMs.min, AMBIENT.lifeMs.max);
+    const rise = Phaser.Math.Between(AMBIENT.riseSpeed.min, AMBIENT.riseSpeed.max);
+    const sway = Phaser.Math.FloatBetween(AMBIENT.swayPx.min, AMBIENT.swayPx.max);
+
+    scene.tweens.add({
+      targets: particle,
+      y: y - (rise * life) / 1000,
+      x: x + sway,
+      duration: life,
+      ease: "sine.inOut",
+    });
+    // 알파를 yoyo로 왕복시키면 절반 지점에서 가장 밝았다가 서서히 꺼진다 —
+    // 갑자기 나타나거나 갑자기 사라지지 않는다.
+    scene.tweens.add({
+      targets: particle,
+      alpha: AMBIENT.maxAlpha,
+      duration: life / 2,
+      yoyo: true,
+      ease: "sine.inOut",
+      onComplete: () => particle.destroy(),
+    });
+  };
+
+  scene.time.addEvent({ delay: AMBIENT.spawnIntervalMs, loop: true, callback: spawnOne });
 };

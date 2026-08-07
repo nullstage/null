@@ -23,13 +23,19 @@ import { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
 import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
 import { RangedEnemy } from "../entities/enemies/RangedEnemy";
-import { attachAmbientLight, attachHitFx, updateAmbientLightCenter } from "../systems/CombatVfx";
+import {
+  attachAmbientLight,
+  attachHitFx,
+  startAmbientParticles,
+  updateAmbientLightCenter,
+} from "../systems/CombatVfx";
+import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems/DirectorPolicy";
 import { RoomController } from "../systems/RoomController";
 import { rollUpgradeChoices } from "../systems/UpgradeSystem";
 import { runState } from "../systems/RunState";
-import { addDecor, createArena, TEXTURE, type CombatArena } from "../types/combat";
+import { addDecor, AUDIO, createArena, TEXTURE, type CombatArena } from "../types/combat";
 import type {
   AttackMode,
   CombatTelemetry,
@@ -75,6 +81,11 @@ export class CombatScene extends Phaser.Scene {
 
   create(): void {
     runState.setPhase("COMBAT");
+    // 방 1(튜토리얼)은 아직 전투가 없는 마을 분위기라 다른 트랙을 쓴다.
+    startRoomBgm(
+      this,
+      this.roomId === FIXED_ROOM_SEQUENCE[0] ? AUDIO.bgmVillage : AUDIO.bgmCombat,
+    );
 
     this.buildStage();
 
@@ -138,6 +149,12 @@ export class CombatScene extends Phaser.Scene {
       if (!enemy.isDefeated) enemy.update(time, deltaMs);
     }
     if (this.portal) this.updatePortalPrompt();
+
+    // 배경/구름 흐름. 트윈으로 하면 반복마다 원위치로 튀어서(Phaser 상대값 트윈의 특성)
+    // 매 프레임 직접 누적한다 — `combat.ts`의 `createArena` 주석 참고.
+    // 구름을 배경보다 더 빠르게 흘려야 하늘에 깊이(원근)가 생긴다.
+    if (this.arena.background) this.arena.background.tilePositionX += deltaMs * 0.001;
+    if (this.arena.clouds) this.arena.clouds.tilePositionX += deltaMs * 0.004;
 
     const sprite = this.player.sprite;
     if (sprite?.body) {
@@ -206,6 +223,9 @@ export class CombatScene extends Phaser.Scene {
     // 방이 화면보다 넓을 때만 실제로 스크롤한다 — 좁으면 경계가 뷰포트와 같아 움직일 곳이 없다.
     this.cameras.main.setBounds(0, 0, roomWidth, VIEWPORT.height);
 
+    // (실험) 방 전체에 떠다니는 잔불 입자. 모든 일반 전투방에 건다.
+    startAmbientParticles(this, roomWidth, this.arena.bounds.floorY);
+
     if (isTutorialRoom) {
       for (const decor of ROOM_ONE_DECOR) {
         addDecor(this, decor.key, decor.x, this.arena.bounds.floorY, decor.scale);
@@ -269,6 +289,7 @@ export class CombatScene extends Phaser.Scene {
       attack.setData("hitEnemies", hitSet);
 
       enemy.takeDamage((attack.getData("damage") as number) ?? 0);
+      playSfx(this, AUDIO.hitEnemy);
 
       const mode = attack.getData("mode") as AttackMode | undefined;
       // 파편은 맞은 적 위에서 터져야 한다. 플레이어 위치에서 터지면 누굴 쳤는지 모른다.
@@ -420,6 +441,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.once("run:restart", () => {
       runState.reset(this.time.now);
+      stopRoomBgm(this);
       this.scene.start("Ready");
     });
   }
