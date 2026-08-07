@@ -26,7 +26,12 @@ import type {
 export interface GameEventMap {
   /** Phaser → React */
   "phase:change": { phase: GamePhase };
-  "room:start": { roomIndex: number; roomId: RoomId };
+  "room:start": {
+    roomIndex: number;
+    roomId: RoomId;
+    /** 방 1 기록자 대화창을 열지. 새 런의 첫 진입만 true — 사망·포기 복귀에는 안 연다. */
+    showIntro: boolean;
+  };
   "room:clear": { roomIndex: number; telemetry: CombatTelemetry };
   "analysis:ready": { analysis: DirectorAnalysis };
   "upgrade:offer": { choices: UpgradeDefinition[] };
@@ -44,6 +49,8 @@ export interface GameEventMap {
   "game:resume": Record<string, never>;
   /** 일시정지 메뉴의 나가기. 진행 중인 런을 버리고 시작 화면으로 돌아간다. */
   "run:abort": Record<string, never>;
+  /** 일시정지 메뉴의 포기하기. 사망과 같은 흐름 — 튜토리얼 방으로 되돌아간다. */
+  "run:giveup": Record<string, never>;
   /** 설정 패널에서 소리 값을 바꿀 때. Phaser 내장 사운드(BGM·발소리 루프)는 재생 시점에
    * 볼륨을 한 번만 읽어 두므로, 재생 중인 소리는 이 이벤트로 갱신해야 한다. */
   "audio:change": { master: number; bgm: number; sfx: number };

@@ -10,6 +10,7 @@
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
+import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import type {
   BossPattern,
   BossPatternWeights,
@@ -52,6 +53,9 @@ export class RunState {
   hp: number = PLAYER.maxHp;
   maxHp: number = PLAYER.maxHp;
 
+  /** 사망·포기로 튜토리얼에 되돌아온 상태인지. true면 방 1 기록자 대화창을 건너뛴다. */
+  skipTutorialIntro = false;
+
   private rooms: RoomRecord[] = [];
   private runStartedAtMs = 0;
   private runEndedAtMs = 0;
@@ -72,6 +76,7 @@ export class RunState {
     this.hp = PLAYER.maxHp;
     this.maxHp = PLAYER.maxHp;
     this.rooms = [];
+    this.skipTutorialIntro = false;
     this.runStartedAtMs = nowMs;
     this.runEndedAtMs = 0;
 
@@ -99,6 +104,7 @@ export class RunState {
     this.deception = null;
     this.rooms = [];
     this.hp = this.maxHp;
+    this.skipTutorialIntro = true;
   }
 
   setPhase(phase: GamePhase): void {
@@ -110,7 +116,11 @@ export class RunState {
   beginRoom(roomId: RoomId): void {
     this.roomIndex += 1;
     this.currentRoomId = roomId;
-    eventBus.emit("room:start", { roomIndex: this.roomIndex, roomId });
+    eventBus.emit("room:start", {
+      roomIndex: this.roomIndex,
+      roomId,
+      showIntro: roomId === FIXED_ROOM_SEQUENCE[0] && !this.skipTutorialIntro,
+    });
   }
 
   /** 방 클리어 기록. 같은 방에 두 번 호출되면 무시한다. (MVP_PLAN §12 중복 이벤트 대응) */

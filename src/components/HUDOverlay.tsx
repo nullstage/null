@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
-import { FIXED_ROOM_SEQUENCE } from "@/game/data/rooms";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
 import type {
   BossPatternWeights,
@@ -239,15 +238,15 @@ export default function HUDOverlay() {
   useGameEvent("phase:change", ({ phase: next }) => setPhase(next));
   useGameEvent("hud:update", ({ hud: next }) => setHud(next));
 
-  useGameEvent("room:start", ({ roomId: next }) => {
+  useGameEvent("room:start", ({ roomId: next, showIntro }) => {
     setRoomId(next);
     setActivePanel("none");
     // 다음 방이 실제로 시작됐다. 이제 로딩을 걷어도 아래가 비지 않는다.
     setRoomReady(true);
 
-    // 방 1은 씬이 스스로 멈춰 있다. 매번 새로 시작한 것처럼 대화창을 연다.
-    // 재방문 여부를 저장해 갈랐던 적이 있는데, 그 분기가 실제 버그였다(위 컴포넌트 주석 참고).
-    if (next === FIXED_ROOM_SEQUENCE[0]) setDialogueOpen(true);
+    // 방 1 기록자 대화창. 새 런의 첫 진입에만 연다 — 사망·포기 복귀에는 씬도
+    // 멈추지 않고(RunState.skipTutorialIntro) 대화창도 열지 않는다.
+    if (showIntro) setDialogueOpen(true);
   });
 
   useGameEvent("room:clear", ({ telemetry: next }) => setTelemetry(next));
@@ -376,6 +375,15 @@ export default function HUDOverlay() {
     emitGameEvent("run:abort", {});
   }, [clearRunState]);
 
+  /** 포기하기. 사망과 같은 흐름 — 런을 유지한 채 튜토리얼 마을로 되돌아간다. */
+  const giveUpRun = useCallback(() => {
+    setPaused(false);
+    setActivePanel("none");
+    // 메뉴가 씬을 멈춰 뒀다. 먼저 풀어야 전환 연출(트윈)이 돌아간다.
+    emitGameEvent("game:resume", {});
+    emitGameEvent("run:giveup", {});
+  }, []);
+
   // 전투 중에만 HUD를 띄운다. 시작 화면과 결과 화면에 이전 런의 값이 남으면 안 된다.
   const inCombat = phase === "COMBAT" || phase === "BOSS";
   const showCombatHud = hud !== null && inCombat && activePanel === "none";
@@ -474,6 +482,7 @@ export default function HUDOverlay() {
           audio={audio}
           onAudioChange={changeAudio}
           onResume={resumeGame}
+          onGiveUp={giveUpRun}
           onExit={exitToTitle}
         />
       )}

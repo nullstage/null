@@ -83,6 +83,9 @@ export class BossScene extends Phaser.Scene {
     this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () => this.finish(true));
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
+
+    // 일시정지 메뉴의 포기하기. 패배와 같은 흐름으로 튜토리얼 방에 되돌아간다.
+    this.once("run:giveup", () => this.finish(false));
   }
 
   update(time: number, deltaMs: number): void {

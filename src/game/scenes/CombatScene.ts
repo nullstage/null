@@ -142,9 +142,12 @@ export class CombatScene extends Phaser.Scene {
      * 대화가 시작되기 전에 적이 움직이거나 공격하는 일은 없다.
      * create() 끝에서 자기 자신을 멈추는 건 안전하다. 아직 update()가 한 번도 돌지 않았다.
      */
-    if (this.roomId === FIXED_ROOM_SEQUENCE[0]) {
+    if (this.roomId === FIXED_ROOM_SEQUENCE[0] && !runState.skipTutorialIntro) {
       this.scene.pause();
     }
+
+    // 일시정지 메뉴의 포기하기. 사망과 같은 흐름으로 튜토리얼 방에 되돌아간다.
+    this.once("run:giveup", () => this.handlePlayerDeath());
   }
 
   update(time: number, deltaMs: number): void {

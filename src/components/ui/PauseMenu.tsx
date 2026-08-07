@@ -117,16 +117,18 @@ const Hint = styled.p`
   color: rgba(255, 255, 255, 0.34);
 `;
 
-type ItemId = "resume" | "settings" | "save" | "exit";
+type ItemId = "resume" | "settings" | "save" | "giveup" | "exit";
 
 /**
  * 저장은 비활성이다. 세이브·로드는 MVP 범위 밖이라 임의로 만들지 않는다.
  * (CLAUDE.md 규칙 3, OQ-028 — 시작 화면의 이어하기와 같은 이유)
+ * 포기하기는 사망과 같은 흐름 — 런을 유지한 채 튜토리얼 마을로 되돌아간다.
  */
 const ITEMS: { id: ItemId; label: string; disabled: boolean }[] = [
   { id: "resume", label: "계속하기", disabled: false },
   { id: "settings", label: "설정", disabled: false },
   { id: "save", label: "저장", disabled: true },
+  { id: "giveup", label: "포기하기", disabled: false },
   { id: "exit", label: "나가기", disabled: false },
 ];
 
@@ -134,11 +136,13 @@ export default function PauseMenu({
   audio,
   onAudioChange,
   onResume,
+  onGiveUp,
   onExit,
 }: {
   audio: AudioSettings;
   onAudioChange: (next: AudioSettings) => void;
   onResume: () => void;
+  onGiveUp: () => void;
   onExit: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -162,9 +166,10 @@ export default function PauseMenu({
       playSfx(SFX.select);
       if (item.id === "resume") onResume();
       if (item.id === "settings") setSettingsOpen(true);
+      if (item.id === "giveup") onGiveUp();
       if (item.id === "exit") onExit();
     },
-    [onExit, onResume],
+    [onExit, onGiveUp, onResume],
   );
 
   useLayoutEffect(() => {
