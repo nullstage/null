@@ -27,10 +27,11 @@ const VFX = {
     /** 안쪽 밝은 심 + 바깥 옅은 획. 두 겹이되 심이 훨씬 얇아야 가늘게 보인다. */
     core: 0xfff2f3,
     body: 0xe0454e,
-    outerWidth: 5,
-    innerWidth: 2,
+    /** 획의 굵기. 호가 커진 만큼 같이 굵어야 가늘어 보이지 않는다. */
+    outerWidth: 8,
+    innerWidth: 3,
     /** 호를 몇 점으로 찍을지. 점 크기보다 촘촘해야 선으로 이어진다. */
-    segments: 48,
+    segments: 64,
     /**
      * 사거리에 곱해 호의 반지름을 정한다.
      * 1을 넘기면 그림이 판정 범위 밖까지 뻗어, 닿아 보이는데 안 맞는 일이 생긴다.
@@ -178,12 +179,12 @@ export const pulseHitFx = (scene: Phaser.Scene, strength = 0.55): void => {
  * 대각선으로 짧게 지나가야 날카롭게 읽힌다.
  */
 const SLASH_SWEEPS = [
-  /** 1타 — 뒤 위에서 앞 아래로 내려긋는다. */
-  { from: -112, to: -14, scale: 1 },
+  /** 1타 — 뒤 위에서 앞 아래로 크게 내려긋는다. */
+  { from: -130, to: 18, scale: 1 },
   /** 2타 — 앞 아래에서 뒤 위로 올려 벤다. 1타의 반대 방향이라 연타가 눈에 띈다. */
-  { from: 76, to: -12, scale: 1 },
+  { from: 100, to: -40, scale: 1 },
   /** 3타 — 같은 대각선을 더 길고 크게 가로지른다. */
-  { from: -126, to: 26, scale: 1.2 },
+  { from: -150, to: 46, scale: 1.25 },
 ] as const;
 
 /**

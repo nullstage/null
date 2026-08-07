@@ -69,11 +69,17 @@ const TUNING = {
     hitboxLifeMs: 90,
     /** 이 시간 안에 다시 치면 콤보가 이어진다. */
     comboWindowMs: 520,
-    reach: 34,
-    finisherReach: 54,
-    hitboxHeight: 34,
+    /**
+     * 사거리. 검을 크게 휘두르는 그림에 맞춰 넓게 잡는다.
+     *
+     * 그림만 키우고 이 값을 두면 닿아 보이는데 안 맞는 일이 생긴다.
+     * 사거리가 늘어도 피해량과 적 체력은 그대로라 소프트 카운터는 유지된다. (DEC-004)
+     */
+    reach: 54,
+    finisherReach: 78,
+    hitboxHeight: 46,
     /** MELEE_FINISHER_RANGE_UP이 마무리 타격에만 더해주는 사거리 */
-    finisherRangeBonus: 20,
+    finisherRangeBonus: 24,
   },
 
   ranged: {
@@ -121,6 +127,14 @@ const TUNING = {
 
   /** 공중에서 입력이 없을 때 수평 속도가 줄어드는 비율(프레임당). 1이면 영원히 날아간다. */
   airDragPerFrame: 0.94,
+
+  /**
+   * 이 세로 속도를 넘어야 "떠 있다"로 본다.
+   *
+   * 바닥을 걷는 동안에도 중력 때문에 아주 작은 세로 속도가 남는다.
+   * 0으로 두면 걷다가 점프 그림이 끼어들어 걷기가 끊긴다.
+   */
+  airborneVelocityY: 60,
 
   /** 피격 시 뒤로 밀린다. 연타로 갇히지 않게 하는 안전장치이기도 하다. */
   knockback: { x: 220, y: -180 },
@@ -695,7 +709,13 @@ export class Player {
     const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body) return;
 
-    if (!this.isGrounded) this.playAnim("jump");
+    // 지면 판정만 보고 jump로 넘기면 안 된다.
+    // 평지를 걷는 중에도 blocked.down이 한 프레임 흔들릴 수 있는데,
+    // jump는 loop가 없어서 그때마다 run이 처음부터 다시 시작한다. 걷기가 뚝뚝 끊겨 보인다.
+    // 실제로 떠 있는지는 세로 속도로 판단한다.
+    const airborne = !this.isGrounded && Math.abs(body.velocity.y) > TUNING.airborneVelocityY;
+
+    if (airborne) this.playAnim("jump");
     else if (Math.abs(body.velocity.x) > 1) this.playAnim("run");
     else this.playAnim("idle");
   }
