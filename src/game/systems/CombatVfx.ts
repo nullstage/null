@@ -37,6 +37,15 @@ const VFX = {
      * 참고했다. 가운데(스윙 정점)에서 가장 두껍고 양 끝에서 점으로 모인다.
      */
     crescentThickness: 46,
+    /**
+     * 두께가 스윙 진행률(0~1)의 몇 제곱에 반응할지.
+     *
+     * 1이면 사인 곡선 그대로라 초반부터(t=0.1에서 벌써 최대 두께의 35%) 두꺼워져
+     * 칼끝이 아니라 뭉툭한 덩어리가 바로 나온 것처럼 보인다. 지수를 올리면
+     * 초반엔 얇게 오래 버티다가 스윙 중후반(t≈0.7 부근)에서야 가장 두꺼워진다 —
+     * 가느다란 칼끝이 먼저 지나가고 그 뒤로 몸통이 굵게 따라붙는 모양이다.
+     */
+    taperPower: 2.2,
     /** 호를 몇 점으로 찍을지. 점 크기보다 촘촘해야 선으로 이어진다. */
     segments: 64,
     /**
@@ -284,16 +293,19 @@ export const slashArc = (
    * (실험) 초승달 모양. 스컬류 게임의 큰 슬래시 이펙트를 참고했다.
    *
    * 얇은 선이 아니라 반지름이 살짝 다른 두 테두리(바깥·안쪽) 사이를 면으로 채운다.
-   * 가운데(스윙 정점)에서 가장 두껍고 양 끝에서 점으로 모이는 초승달이 된다.
+   * `taperPower`로 두께 정점을 스윙 후반으로 밀어, 얇은 칼끝이 먼저 지나가고
+   * 굵은 몸통이 뒤따르는 모양을 만든다. 양 끝은 아주 가느다랗게 남겨 완전히
+   * 뾰족한 점이 되지 않게 한다(0이면 이음매가 튄다).
    */
+  const taperHalf = (maxThickness: number, t: number) =>
+    (maxThickness * (0.06 + 0.94 * Math.sin(Math.pow(t, slash.taperPower) * Math.PI))) / 2;
+
   /** 바깥 테두리만 따로 뽑는다. 날 선(칼날 반짝임)을 그 위에 얹기 위해서다. */
   const outerEdge = (maxThickness: number) => {
     const outer: { x: number; y: number }[] = [];
     for (let i = 0; i <= slash.segments; i += 1) {
       const t = i / slash.segments;
-      // 양 끝은 아주 가느다랗게 남겨 완전히 뾰족한 점이 되지 않게 한다(0이면 이음매가 튄다).
-      const half = (maxThickness * (0.06 + 0.94 * Math.sin(t * Math.PI))) / 2;
-      outer.push(pointAt(t, radius + half));
+      outer.push(pointAt(t, radius + taperHalf(maxThickness, t)));
     }
     return outer;
   };
@@ -303,8 +315,7 @@ export const slashArc = (
     const inner: { x: number; y: number }[] = [];
     for (let i = 0; i <= slash.segments; i += 1) {
       const t = i / slash.segments;
-      const half = (maxThickness * (0.06 + 0.94 * Math.sin(t * Math.PI))) / 2;
-      inner.push(pointAt(t, radius - half));
+      inner.push(pointAt(t, radius - taperHalf(maxThickness, t)));
     }
     return [...outer, ...inner.reverse()];
   };
