@@ -110,6 +110,11 @@ export interface RoomPreset {
   spawns: EnemySpawn[];
   /** 지연 폭발 장판 함정 활성화 여부 (MVP_PLAN §2) */
   hazardsEnabled: boolean;
+  /**
+   * `spawns`를 전멸시킨 뒤 몇 번 더 같은 구성으로 다시 스폰할지. 생략하면 0(웨이브 없음).
+   * 방은 이 웨이브를 전부 전멸시켜야 클리어된다 — 포탈은 그때만 열린다.
+   */
+  extraWaves?: number;
 }
 
 /** 결과 리포트에 쓰는 방 단위 기록 */

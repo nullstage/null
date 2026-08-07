@@ -11,6 +11,9 @@ import { getRoomPreset } from "../data/rooms";
 import type { CombatTelemetry, EnemySpawn, RoomId, RoomPreset } from "../types/game";
 import type { CombatTelemetryRecorder } from "./CombatTelemetry";
 
+/** 웨이브 전멸 후 다음 웨이브가 쏟아지기까지의 텀. */
+const WAVE_GAP_MS = 1200;
+
 export interface RoomControllerDeps {
   scene: Phaser.Scene;
   telemetry: CombatTelemetryRecorder;
@@ -29,6 +32,7 @@ export class RoomController {
   private pendingSpawns = 0;
   private aliveEnemies = 0;
   private cleared = false;
+  private wavesRemaining = 0;
   private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor(deps: RoomControllerDeps) {
@@ -41,12 +45,22 @@ export class RoomController {
     const preset = getRoomPreset(roomId);
     this.preset = preset;
     this.cleared = false;
-    this.pendingSpawns = preset.spawns.length;
-    this.aliveEnemies = 0;
+    this.wavesRemaining = preset.extraWaves ?? 0;
 
     this.deps.telemetry.begin(this.deps.scene.time.now);
 
     if (preset.hazardsEnabled) this.deps.enableHazards?.(preset);
+
+    this.spawnWave(preset);
+
+    // 적이 하나도 없는 프리셋이면 방이 영원히 안 끝난다. 즉시 클리어로 처리한다.
+    if (preset.spawns.length === 0) this.finish();
+  }
+
+  /** 프리셋의 스폰 구성을 그대로 다시 스폰한다. 최초 입장과 웨이브 재시작이 공유한다. */
+  private spawnWave(preset: RoomPreset): void {
+    this.pendingSpawns = preset.spawns.length;
+    this.aliveEnemies = 0;
 
     for (const spawn of preset.spawns) {
       if (spawn.delayMs <= 0) {
@@ -57,9 +71,6 @@ export class RoomController {
         this.deps.scene.time.delayedCall(spawn.delayMs, () => this.spawn(spawn, preset)),
       );
     }
-
-    // 적이 하나도 없는 프리셋이면 방이 영원히 안 끝난다. 즉시 클리어로 처리한다.
-    if (preset.spawns.length === 0) this.finish();
   }
 
   /** 전투 담당이 적 사망 시 호출한다. */
@@ -108,6 +119,17 @@ export class RoomController {
   private checkClear(): void {
     if (this.cleared) return;
     if (this.pendingSpawns > 0 || this.aliveEnemies > 0) return;
+
+    if (this.wavesRemaining > 0 && this.preset) {
+      this.wavesRemaining -= 1;
+      const preset = this.preset;
+      // 전멸 직후 바로 다시 쏟아지면 숨 돌릴 틈이 없다. 짧게 텀을 둔다.
+      this.timers.push(
+        this.deps.scene.time.delayedCall(WAVE_GAP_MS, () => this.spawnWave(preset)),
+      );
+      return;
+    }
+
     this.finish();
   }
 
