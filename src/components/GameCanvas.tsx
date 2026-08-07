@@ -17,6 +17,14 @@ const Mount = styled.div`
   position: absolute;
   inset: 0;
   z-index: ${theme.z.canvas};
+  /*
+   * Phaser의 Scale.FIT은 창 비율이 16:9와 다르면 위아래에 여백을 남긴다. 캔버스를
+   * 세로로 중앙 정렬하지 않고 맨 위에 붙였으므로(createGame.ts) 남는 여백은 전부
+   * 아래쪽에만 생긴다 — 위쪽엔 더 이상 배경색이 보일 자리가 없다.
+   * 그 여백이 기본 배경색(#12151c, 짙은 남색)이면 화면 톤과 안 맞고 파랗게 도드라져
+   * 보였다 — 검은색으로 채운다.
+   */
+  background: #000000;
 
   canvas {
     display: block;

@@ -63,7 +63,10 @@ export const createGame = (parent: HTMLElement): Phaser.Game => {
     pixelArt: true,
     scale: {
       mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
+      // 세로는 중앙 정렬하지 않는다. 창 비율이 16:9와 다를 때 남는 여백을 위아래로
+      // 나누면 위쪽에 빈 줄이 생겨 하늘 그림이 잘린 것처럼 보인다. 캔버스를 맨 위에
+      // 붙이면(가로만 중앙 정렬) 남는 여백이 전부 아래로 몰려 배경이 위까지 꽉 찬다.
+      autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
     },
     physics: {
       default: "arcade",
