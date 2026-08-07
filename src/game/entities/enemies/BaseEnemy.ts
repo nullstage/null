@@ -161,12 +161,16 @@ export abstract class BaseEnemy {
 
   // ────────────────────────────── 연출 ──────────────────────────────
 
-  /** 상태 표시색. 예고 중에는 예고색, 평소에는 원래 색이다. */
+  /**
+   * 상태 표시색. 예고 중에는 예고색, 평소에는 원래 색이다.
+   * setTint(곱연산)는 검은 실루엣 스프라이트에선 아무 변화가 없다 —
+   * 실루엣을 통째로 칠하는 setTintFill을 써야 예고가 보인다.
+   */
   protected setStateTint(color: number | null): void {
     this.stateTint = color;
     if (!this.sprite) return;
     if (color === null) this.sprite.clearTint();
-    else this.sprite.setTint(color);
+    else this.sprite.setTintFill(color);
   }
 
   /** 돌진처럼 빠른 이동에 남기는 잔상. 도형이라 속도감을 이걸로만 표현할 수 있다. */
@@ -195,7 +199,7 @@ export abstract class BaseEnemy {
     this.scene.time.delayedCall(HIT_FLASH_MS, () => {
       if (!body.active) return;
       if (this.stateTint === null) body.clearTint();
-      else body.setTint(this.stateTint);
+      else body.setTintFill(this.stateTint);
     });
 
     const { scaleX, scaleY } = body;

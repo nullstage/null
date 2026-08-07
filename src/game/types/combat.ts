@@ -209,9 +209,14 @@ export const ENEMY_ANIM = {
   rangedIdle: { key: TEXTURE.ranged, start: 0, frames: 8, fps: 8, loop: true },
   rangedWalk: { key: TEXTURE.ranged, start: 18, frames: 8, fps: 10, loop: true },
   rangedAttack: { key: TEXTURE.ranged, start: 54, frames: 12, fps: 14, loop: false },
-  chaserIdle: { key: TEXTURE.chaser, start: 36, frames: 8, fps: 8, loop: true },
-  chaserWalk: { key: TEXTURE.chaser, start: 44, frames: 8, fps: 10, loop: true },
-  chaserAttack: { key: TEXTURE.chaser, start: 68, frames: 8, fps: 14, loop: false },
+  /**
+   * 고블린 시트는 태그마다 새 행에서 시작하고 행 끝은 빈 칸이다.
+   * 그리드 번호는 aseprite JSON의 frame x·y에서 역산했다 — JSON 나열 순서(0,1,2…)를
+   * 그대로 쓰면 빈 칸이나 엉뚱한 동작이 재생된다(예고 중 고블린이 투명해지던 버그).
+   */
+  chaserIdle: { key: TEXTURE.chaser, start: 64, frames: 8, fps: 8, loop: true },
+  chaserWalk: { key: TEXTURE.chaser, start: 80, frames: 8, fps: 10, loop: true },
+  chaserAttack: { key: TEXTURE.chaser, start: 128, frames: 8, fps: 14, loop: false },
 } as const;
 
 /** 바닥 두께. 스폰 높이 계산의 기준이 된다. */
@@ -239,6 +244,9 @@ export const createArena = (
   /** 바닥 타일 틴트. 방 분위기에 따라 달리 칠한다(튜토리얼 vs 전투방). */
   floorTint = 0x27141d,
 ): CombatArena => {
+  // 위는 밝고 아래로 갈수록 어두워지는 세로 그라데이션 — 단색보다 입체감이 산다.
+  const tintTop = Phaser.Display.Color.ValueToColor(floorTint).lighten(28).color;
+  const tintBottom = Phaser.Display.Color.ValueToColor(floorTint).darken(35).color;
   const { width, height } = viewport;
   const floorY = height - FLOOR_HEIGHT;
 
@@ -298,8 +306,9 @@ export const createArena = (
     const cap = scene.add.tileSprite(0, floorY, width, floorTileHeight, floorTileKey);
     cap.setOrigin(0, 0);
     cap.setDepth(1);
-    // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색으로 틴트.
-    cap.setTint(floorTint);
+    // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색 기준으로
+    // 위 밝음 → 아래 어두움 코너 틴트를 걸어 세로 그라데이션을 만든다.
+    cap.setTint(tintTop, tintTop, tintBottom, tintBottom);
   }
 
   return {

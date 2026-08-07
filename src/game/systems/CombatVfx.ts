@@ -1047,6 +1047,124 @@ export const startAmbientParticles = (
 };
 
 /**
+ * 적(고블린)의 베기 이펙트. 플레이어 슬래시와 같은 문법(초승달 호)이되
+ * 적 팔레트(어두운 몸통 + 붉은 심)로 그려 누가 벤 건지 색으로 구분된다.
+ * 좌표는 오른쪽 기준으로만 계산하고 graphics 자체를 setScale로 뒤집는다(플레이어와 동일 기법).
+ */
+export const enemySlash = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+  reach: number,
+): void => {
+  const graphics = scene.add.graphics();
+  graphics.setPosition(x, y);
+  graphics.setScale(facing, 1);
+  graphics.setDepth(VFX.depth);
+  graphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  const segments = 26;
+  const from = Phaser.Math.DegToRad(-55);
+  const to = Phaser.Math.DegToRad(55);
+  const carrier = { t: 0 };
+
+  const draw = (t: number) => {
+    graphics.clear();
+    const revealTo = Phaser.Math.Linear(from, to, t);
+    for (let i = 0; i < segments; i += 1) {
+      const p = i / (segments - 1);
+      const angle = Phaser.Math.Linear(from, revealTo, p);
+      // sin 두께 곡선 — 스윙 정점에서 가장 두껍고 양 끝이 점으로 모인다.
+      const thickness = Math.sin(p * Math.PI) * 12;
+      if (thickness < 0.5) continue;
+      const px = Math.cos(angle) * reach;
+      const py = Math.sin(angle) * reach * 0.7;
+      graphics.fillStyle(0x8c1f2c, 0.5);
+      graphics.fillCircle(px, py, thickness);
+      graphics.fillStyle(0xff5560, 0.85);
+      graphics.fillCircle(px, py, thickness * 0.4);
+    }
+  };
+
+  scene.tweens.add({
+    targets: carrier,
+    t: 1,
+    duration: 120,
+    ease: "power2.out",
+    onUpdate: () => draw(carrier.t),
+    onComplete: () => {
+      scene.tweens.add({
+        targets: graphics,
+        alpha: 0,
+        duration: 130,
+        ease: "power2.in",
+        onComplete: () => graphics.destroy(),
+      });
+    },
+  });
+};
+
+/**
+ * 적 투사체의 꼬리. 밋밋한 사각형 대신 사인파로 출렁이는 침(스팅어) 궤적을 그린다.
+ *
+ * 투사체 물리는 그대로 직선으로 날고, 꼬리 그림만 진행 방향과 수직으로 sin 진동한다 —
+ * 판정은 예측 가능하게 유지하면서(DEC-004) 그림만 살아있게 하는 절충이다.
+ * 투사체가 파괴되면 스스로 정리된다.
+ */
+export const attachStingerTrail = (
+  scene: Phaser.Scene,
+  projectile: Phaser.GameObjects.Sprite,
+): void => {
+  const graphics = scene.add.graphics();
+  graphics.setDepth(VFX.depth);
+  graphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  // 최근 위치 기록으로 꼬리를 그린다. 위치 자체는 직선이고 흔들림은 그릴 때만 더한다.
+  const history: { x: number; y: number }[] = [];
+  let elapsed = 0;
+
+  const event = scene.time.addEvent({
+    delay: 16,
+    loop: true,
+    callback: () => {
+      if (!projectile.active) {
+        event.remove(false);
+        scene.tweens.add({
+          targets: graphics,
+          alpha: 0,
+          duration: 90,
+          onComplete: () => graphics.destroy(),
+        });
+        return;
+      }
+
+      elapsed += 16;
+      history.unshift({ x: projectile.x, y: projectile.y });
+      if (history.length > 9) history.pop();
+
+      const body = projectile.body as Phaser.Physics.Arcade.Body | null;
+      const angle = body ? Math.atan2(body.velocity.y, body.velocity.x) : 0;
+      // 진행 방향과 수직인 축으로 sin 진동을 얹는다.
+      const nx = -Math.sin(angle);
+      const ny = Math.cos(angle);
+
+      graphics.clear();
+      history.forEach((point, i) => {
+        const p = i / history.length;
+        const wave = Math.sin(elapsed * 0.03 - i * 0.9) * 5 * p;
+        const size = (1 - p) * 5 + 1;
+        graphics.fillStyle(0xff8a5f, (1 - p) * 0.7);
+        graphics.fillCircle(point.x + nx * wave, point.y + ny * wave, size);
+      });
+      // 머리는 밝게 — 어디가 탄인지 읽혀야 피할 수 있다.
+      graphics.fillStyle(0xffd9a8, 1);
+      graphics.fillCircle(projectile.x, projectile.y, 4);
+    },
+  });
+};
+
+/**
  * 게이트를 넘어갈 때의 화면 전환. 위·아래에서 검은 막이 부딪히듯 닫혀 화면을 덮는다.
  * 다 덮이면 `onCovered`를 불러 실제 방 전환(`scene.restart`/`scene.start`)을 그 순간에 실행한다 —
  * 덮이기 전에 다음 방으로 넘어가면 전환 중간 상태가 그대로 보인다.

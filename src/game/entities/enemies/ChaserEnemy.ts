@@ -13,6 +13,7 @@
 
 import type Phaser from "phaser";
 
+import { enemySlash } from "../../systems/CombatVfx";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
@@ -163,8 +164,27 @@ export class ChaserEnemy extends BaseEnemy {
     this.setStateTint(null);
     this.afterimageMs = 0;
     this.enter("LUNGE");
-    this.sprite?.setVelocityX(this.facing * LUNGE_SPEED);
-    this.sprite?.anims.play("chaserAttack", true);
+    const body = this.sprite;
+    if (!body) return;
+    body.setVelocityX(this.facing * LUNGE_SPEED);
+    body.anims.play("chaserAttack", true);
+
+    // 단검 베기 이펙트 + 실제 판정. 본체 접촉에만 의존하면 스치듯 지나갈 때
+    // 데미지가 안 들어가는 것처럼 느껴진다 — 돌진 구간 동안 앞쪽에 판정을 함께 실어 보낸다.
+    enemySlash(this.scene, body.x + this.facing * 20, body.y, this.facing as 1 | -1, 42);
+    const hitbox = this.scene.physics.add.image(
+      body.x + this.facing * 28,
+      body.y,
+      TEXTURE.enemyAttack,
+    );
+    hitbox.setDisplaySize(46, 40);
+    hitbox.setAlpha(0);
+    this.arena.enemyAttacks.add(hitbox);
+    (hitbox.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    (hitbox.body as Phaser.Physics.Arcade.Body).setVelocityX(this.facing * LUNGE_SPEED);
+    hitbox.setData("damage", this.definition.contactDamage);
+    hitbox.setData("consumeOnHit", true);
+    this.scene.time.delayedCall(LUNGE_MS, () => hitbox.destroy());
   }
 
   private clearTelegraph(): void {

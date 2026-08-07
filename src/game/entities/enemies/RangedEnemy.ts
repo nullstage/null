@@ -14,6 +14,7 @@
 // 각도·거리 계산에 Phaser.Math을 쓰므로 타입이 아니라 값으로 가져온다.
 import Phaser from "phaser";
 
+import { attachStingerTrail } from "../../systems/CombatVfx";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
@@ -154,6 +155,9 @@ export class RangedEnemy extends BaseEnemy {
       TEXTURE.enemyAttack,
     ) as Phaser.Physics.Arcade.Sprite;
     shot.setDisplaySize(PROJECTILE_SIZE, PROJECTILE_SIZE);
+    // 물리 판정용 사각형은 숨기고 그림은 출렁이는 침 궤적이 대신한다.
+    shot.setAlpha(0);
+    attachStingerTrail(this.scene, shot);
     shot.setData("damage", this.definition.contactDamage);
     shot.setData("consumeOnHit", true);
 
