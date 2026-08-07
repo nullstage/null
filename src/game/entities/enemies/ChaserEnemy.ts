@@ -16,9 +16,12 @@ import type Phaser from "phaser";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
-/** 본체 크기. 원본 시트(64px 정사각)에 맞춰 사람형 비율로 잡는다. */
-const BODY_WIDTH = 40;
-const BODY_HEIGHT = 52;
+/**
+ * 본체 크기. 예전 플레이스홀더 사각형 값을 그대로 뒀더니 64px 원본 그림이 너무
+ * 작게 눌려 보였다 — 플레이어 체감 크기(대략 60~70px)에 맞춰 키운다.
+ */
+const BODY_WIDTH = 56;
+const BODY_HEIGHT = 68;
 
 /** 이 거리 안으로 들어오면 돌진을 준비한다. */
 const LUNGE_RANGE = 230;
