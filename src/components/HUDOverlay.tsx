@@ -150,6 +150,63 @@ const HealthFill = styled.div<{ ratio: number }>`
   }
 `;
 
+/** 사망·포기 직후의 검은 결과창. 일시정지 메뉴와 같은 톤(중앙 붉은 그라데이션)을 쓴다. */
+const RespawnScreen = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: ${theme.z.prompt};
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(90% 70% at 50% 0%, rgba(112, 34, 35, 0.35) 0%, rgba(6, 5, 6, 0) 72%),
+    rgba(3, 2, 3, 0.94);
+`;
+
+const RespawnPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  font-family: ${theme.font.ui};
+  color: #fff;
+
+  h1 {
+    margin: 0;
+    font-weight: 200;
+    font-size: 40px;
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+    color: #e05055;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 8px 22px;
+    margin: 10px 0 0;
+    font-weight: 300;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+  }
+
+  dt {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  p {
+    margin: 22px 0 0;
+    font-family: ${theme.font.mono};
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.4);
+  }
+`;
+
 const StatusRow = styled.div`
   display: flex;
   align-items: center;
@@ -207,6 +264,12 @@ export default function HUDOverlay() {
    */
   const [dialogueOpen, setDialogueOpen] = useState(false);
   const [roomReady, setRoomReady] = useState(false);
+
+  /** 사망·포기 직후 뜨는 이번 시도 요약. 닫으면 튜토리얼 부활이 이어진다. */
+  const [respawnSummary, setRespawnSummary] = useState<{
+    survivedMs: number;
+    kills: number;
+  } | null>(null);
 
   /** 시작 화면 에셋 프리로드 완료 여부. 로딩 화면이 걷히기 시작할 때 켠다. */
   const [assetsReady, setAssetsReady] = useState(false);
@@ -300,6 +363,8 @@ export default function HUDOverlay() {
     setActivePanel("result");
   });
 
+  useGameEvent("respawn:summary", (summary) => setRespawnSummary(summary));
+
   // F1 디버그 토글. 브라우저 기본 도움말이 뜨지 않도록 막는다.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -320,7 +385,14 @@ export default function HUDOverlay() {
    */
   useEffect(() => {
     const pausable = phase === "COMBAT" || phase === "BOSS";
-    if (!pausable || activePanel !== "none" || transition !== "none" || roomLoading || dialogueOpen)
+    if (
+      !pausable ||
+      activePanel !== "none" ||
+      transition !== "none" ||
+      roomLoading ||
+      dialogueOpen ||
+      respawnSummary !== null
+    )
       return;
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -333,7 +405,24 @@ export default function HUDOverlay() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePanel, dialogueOpen, phase, roomLoading, transition]);
+  }, [activePanel, dialogueOpen, phase, respawnSummary, roomLoading, transition]);
+
+  /** 사망 결과창. Enter로 닫으면 튜토리얼 부활이 이어진다. */
+  const dismissRespawnSummary = useCallback(() => {
+    setRespawnSummary(null);
+    emitGameEvent("ui:continue", {});
+  }, []);
+
+  useEffect(() => {
+    if (!respawnSummary) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      dismissRespawnSummary();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dismissRespawnSummary, respawnSummary]);
 
   /**
    * READY가 되면 바로 넘긴다.
@@ -498,6 +587,24 @@ export default function HUDOverlay() {
             </HpText>
           </StatusRow>
         </CombatHud>
+      )}
+
+      {respawnSummary && (
+        <RespawnScreen onPointerDown={dismissRespawnSummary}>
+          <RespawnPanel>
+            <h1>쓰러졌다</h1>
+            <dl>
+              <dt>생존 시간</dt>
+              <dd>
+                {Math.floor(respawnSummary.survivedMs / 60000)}분{" "}
+                {Math.floor((respawnSummary.survivedMs % 60000) / 1000)}초
+              </dd>
+              <dt>처치한 적</dt>
+              <dd>{respawnSummary.kills}</dd>
+            </dl>
+            <p>ENTER — 마을에서 다시 일어난다</p>
+          </RespawnPanel>
+        </RespawnScreen>
       )}
 
       {paused && (

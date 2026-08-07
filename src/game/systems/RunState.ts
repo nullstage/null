@@ -56,6 +56,11 @@ export class RunState {
   /** 사망·포기로 튜토리얼에 되돌아온 상태인지. true면 방 1 기록자 대화창을 건너뛴다. */
   skipTutorialIntro = false;
 
+  /** 이번 시도(런 시작 또는 마지막 부활 이후)에 처치한 적 수. 사망 결과창에 쓴다. */
+  kills = 0;
+  /** 이번 시도가 시작된 시각. 사망 결과창의 생존 시간 계산 기준. */
+  private attemptStartedAtMs = 0;
+
   private rooms: RoomRecord[] = [];
   private runStartedAtMs = 0;
   private runEndedAtMs = 0;
@@ -77,6 +82,8 @@ export class RunState {
     this.maxHp = PLAYER.maxHp;
     this.rooms = [];
     this.skipTutorialIntro = false;
+    this.kills = 0;
+    this.attemptStartedAtMs = nowMs;
     this.runStartedAtMs = nowMs;
     this.runEndedAtMs = 0;
 
@@ -91,7 +98,7 @@ export class RunState {
    * 그 외 방 진행·텔레메트리·분석·보스 가중치는 `reset()`과 동일하게 되돌려야
    * 방 1부터 다시 겪을 때 이전 시도의 기록과 섞이지 않는다.
    */
-  respawnAtTutorial(): void {
+  respawnAtTutorial(nowMs: number): void {
     this.roomIndex = 0;
     this.currentRoomId = "";
     this.currentTelemetry = null;
@@ -105,6 +112,17 @@ export class RunState {
     this.rooms = [];
     this.hp = this.maxHp;
     this.skipTutorialIntro = true;
+    this.kills = 0;
+    this.attemptStartedAtMs = nowMs;
+  }
+
+  recordKill(): void {
+    this.kills += 1;
+  }
+
+  /** 이번 시도의 생존 시간. 사망 결과창에 쓴다. */
+  attemptDurationMs(nowMs: number): number {
+    return Math.max(0, nowMs - this.attemptStartedAtMs);
   }
 
   setPhase(phase: GamePhase): void {

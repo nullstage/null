@@ -39,6 +39,8 @@ export interface GameEventMap {
   "boss:weights": { weights: BossPatternWeights };
   "hud:update": { hud: HudState };
   "run:result": { result: RunResult };
+  /** 사망·포기 직후 검은 결과창에 띄울 이번 시도 요약. `ui:continue`로 닫는다. */
+  "respawn:summary": { survivedMs: number; kills: number };
 
   /** React → Phaser */
   "upgrade:select": { upgradeId: UpgradeId };

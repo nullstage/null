@@ -440,6 +440,7 @@ export class CombatScene extends Phaser.Scene {
 
       const damage = (attack.getData("damage") as number) ?? 0;
       enemy.takeDamage(damage);
+      if (enemy.isDefeated) runState.recordKill();
       // 매번 같은 피치면 단조롭다 — 살짝 흔들어 타격마다 다르게 들리게 한다.
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
       const hitTarget = bodyObj as Phaser.GameObjects.Sprite;
@@ -609,11 +610,23 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
-  /** 사망해도 런이 끝나지 않는다 — 체력을 채워 튜토리얼 방으로 돌려보낸다. (사용자 확정) */
+  /**
+   * 사망해도 런이 끝나지 않는다 — 검은 결과창(생존 시간·처치 수)을 먼저 보여주고,
+   * 닫으면 체력을 채워 튜토리얼 방으로 돌려보낸다. (사용자 확정)
+   */
   private handlePlayerDeath(): void {
-    runState.respawnAtTutorial();
-    playSfx(this, AUDIO.portal);
-    portalWipeOut(this, () => this.scene.restart({ roomId: FIXED_ROOM_SEQUENCE[0] }));
+    eventBus.emit("respawn:summary", {
+      survivedMs: runState.attemptDurationMs(this.time.now),
+      kills: runState.kills,
+    });
+    // 결과창이 떠 있는 동안 적이 시체를 계속 때리지 않게 씬을 멈춘다.
+    this.scene.pause();
+    this.once("ui:continue", () => {
+      this.scene.resume();
+      runState.respawnAtTutorial(this.time.now);
+      playSfx(this, AUDIO.portal);
+      portalWipeOut(this, () => this.scene.restart({ roomId: FIXED_ROOM_SEQUENCE[0] }));
+    });
   }
 
   // ────────────────────────────── 유틸 ──────────────────────────────

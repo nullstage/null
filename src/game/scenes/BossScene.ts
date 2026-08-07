@@ -144,10 +144,18 @@ export class BossScene extends Phaser.Scene {
     runState.hp = this.player.hp;
 
     if (!cleared) {
-      // 보스전 사망도 런을 끝내지 않는다 — 튜토리얼 방으로 돌려보낸다. (사용자 확정)
-      runState.respawnAtTutorial();
-      playSfx(this, AUDIO.portal);
-      portalWipeOut(this, () => this.scene.start("Combat", { roomId: FIXED_ROOM_SEQUENCE[0] }));
+      // 보스전 사망도 런을 끝내지 않는다 — 결과창을 먼저 보여준 뒤 튜토리얼로 돌려보낸다.
+      eventBus.emit("respawn:summary", {
+        survivedMs: runState.attemptDurationMs(this.time.now),
+        kills: runState.kills,
+      });
+      this.scene.pause();
+      this.once("ui:continue", () => {
+        this.scene.resume();
+        runState.respawnAtTutorial(this.time.now);
+        playSfx(this, AUDIO.portal);
+        portalWipeOut(this, () => this.scene.start("Combat", { roomId: FIXED_ROOM_SEQUENCE[0] }));
+      });
       return;
     }
 
