@@ -257,11 +257,18 @@ export const slashArc = (
   const tiltSin = Math.sin(tilt);
 
   /**
+   * 지금까지 실제로 그은 각도의 끝점. 처음엔 시작점(0)에서 멈춰 있다가
+   * 아래 리빌 트윈이 `sweep.to`까지 밀어 올린다 — 이게 있어야 "찍힌 자국"이 아니라
+   * "칼이 지나가며 긋는 궤적"으로 보인다.
+   */
+  let revealTo: number = sweep.from;
+
+  /**
    * 타원+기울기 위의 한 점. 반지름을 바꿔 부를 수 있다 — 초승달의 안쪽/바깥쪽 테두리를
    * 같은 함수로 그리기 위해서다. 도트 격자에 맞추지 않는다 — 매끈한 면이 목적이다.
    */
   const pointAt = (t: number, r: number) => {
-    const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(sweep.from, sweep.to, t));
+    const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(sweep.from, revealTo, t));
     const ex = Math.cos(angle) * r;
     const ey = Math.sin(angle) * r * slash.flatten;
     // 기울기는 바라보는 쪽을 따라 뒤집힌다. 그래야 어느 방향이든 위에서 아래로 내려 벤다.
@@ -291,24 +298,46 @@ export const slashArc = (
   };
 
   /** 같은 초승달을 여러 겹, 얇을수록 진하게 겹쳐서 부드러운 광채를 흉내 낸다. */
-  const glow = (thicknessScale: number, color: number, alpha: number) => {
-    graphics.fillStyle(color, alpha);
-    graphics.fillPoints(crescentPoints(look.crescentThickness * thicknessScale), true);
+  const redraw = () => {
+    graphics.clear();
+    graphics.fillStyle(look.body, 0.16);
+    graphics.fillPoints(crescentPoints(look.crescentThickness * 2.4), true);
+    graphics.fillStyle(look.body, 0.32);
+    graphics.fillPoints(crescentPoints(look.crescentThickness * 1.5), true);
+    graphics.fillStyle(look.core, 0.55);
+    graphics.fillPoints(crescentPoints(look.crescentThickness * 0.85), true);
+    graphics.fillStyle(look.core, 0.9);
+    graphics.fillPoints(crescentPoints(look.crescentThickness * 0.4), true);
   };
 
-  glow(2.4, look.body, 0.16);
-  glow(1.5, look.body, 0.32);
-  glow(0.85, look.core, 0.55);
-  glow(0.4, look.core, 0.9);
-
   graphics.setBlendMode(Phaser.BlendModes.ADD);
+  redraw();
+
+  /**
+   * 칼이 실제로 지나가는 시간. 전체 수명(`slash.lifeMs`)의 앞부분만 쓰고,
+   * 나머지는 다 그어진 자국이 옅어지는 잔상 구간이다.
+   */
+  const revealMs = Math.min(90, slash.lifeMs * 0.55);
+  const carrier = { p: 0 };
 
   scene.tweens.add({
-    targets: graphics,
-    alpha: 0,
-    duration: slash.lifeMs,
-    ease: "power2.in",
-    onComplete: () => graphics.destroy(),
+    targets: carrier,
+    p: 1,
+    duration: revealMs,
+    ease: "power1.out",
+    onUpdate: () => {
+      revealTo = Phaser.Math.Linear(sweep.from, sweep.to, carrier.p);
+      redraw();
+    },
+    onComplete: () => {
+      scene.tweens.add({
+        targets: graphics,
+        alpha: 0,
+        duration: Math.max(1, slash.lifeMs - revealMs),
+        ease: "power2.in",
+        onComplete: () => graphics.destroy(),
+      });
+    },
   });
 };
 
