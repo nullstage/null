@@ -1045,3 +1045,37 @@ export const startAmbientParticles = (
 
   scene.time.addEvent({ delay: AMBIENT.spawnIntervalMs, loop: true, callback: spawnOne });
 };
+
+/**
+ * 게이트를 넘어갈 때의 화면 전환. 위·아래에서 검은 막이 부딪히듯 닫혀 화면을 덮는다.
+ * 다 덮이면 `onCovered`를 불러 실제 방 전환(`scene.restart`/`scene.start`)을 그 순간에 실행한다 —
+ * 덮이기 전에 다음 방으로 넘어가면 전환 중간 상태가 그대로 보인다.
+ * 새 방 진입 쪽의 페이드인은 각 씬 `create()`의 `cameras.main.fadeIn`이 맡는다.
+ */
+export const portalWipeOut = (scene: Phaser.Scene, onCovered: () => void): void => {
+  const cam = scene.cameras.main;
+  const halfHeight = cam.height / 2 + 4;
+
+  const top = scene.add.rectangle(0, -halfHeight, cam.width, halfHeight, 0x000000, 1).setOrigin(0, 0);
+  const bottom = scene.add
+    .rectangle(0, cam.height + halfHeight, cam.width, halfHeight, 0x000000, 1)
+    .setOrigin(0, 1);
+  for (const curtain of [top, bottom]) {
+    curtain.setScrollFactor(0);
+    curtain.setDepth(1000);
+  }
+
+  let closed = 0;
+  const onCurtainClosed = () => {
+    closed += 1;
+    if (closed === 2) onCovered();
+  };
+  scene.tweens.add({ targets: top, y: 0, duration: 220, ease: "power2.in", onComplete: onCurtainClosed });
+  scene.tweens.add({
+    targets: bottom,
+    y: cam.height,
+    duration: 220,
+    ease: "power2.in",
+    onComplete: onCurtainClosed,
+  });
+};

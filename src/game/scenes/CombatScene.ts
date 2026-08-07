@@ -26,6 +26,7 @@ import { RangedEnemy } from "../entities/enemies/RangedEnemy";
 import {
   attachAmbientLight,
   attachHitFx,
+  portalWipeOut,
   startAmbientParticles,
   updateAmbientLightCenter,
 } from "../systems/CombatVfx";
@@ -80,6 +81,9 @@ export class CombatScene extends Phaser.Scene {
   }
 
   create(): void {
+    // 게이트를 넘어온 직후라면(portalWipeOut이 이미 화면을 덮어 둔 상태) 여기서
+    // 자연스럽게 밝아지며 드러난다. 방 1 최초 진입도 갑자기 뚝 뜨는 것보다 낫다.
+    this.cameras.main.fadeIn(300);
     runState.setPhase("COMBAT");
     // 방 1(튜토리얼)은 아직 전투가 없는 마을 분위기라 다른 트랙을 쓴다.
     startRoomBgm(
@@ -413,7 +417,8 @@ export class CombatScene extends Phaser.Scene {
         ? (runState.counterRoomId ?? "counter_mixed")
         : FIXED_ROOM_SEQUENCE[nextIndex - 1];
 
-    this.scene.restart({ roomId: nextRoomId });
+    playSfx(this, AUDIO.portal);
+    portalWipeOut(this, () => this.scene.restart({ roomId: nextRoomId }));
   }
 
   /**
@@ -431,7 +436,10 @@ export class CombatScene extends Phaser.Scene {
     );
     runState.setBossWeights(bossWeightsFor(actualStyle));
 
-    this.once("ui:continue", () => this.scene.start("Boss"));
+    this.once("ui:continue", () => {
+      playSfx(this, AUDIO.portal);
+      portalWipeOut(this, () => this.scene.start("Boss"));
+    });
   }
 
   private handlePlayerDeath(): void {

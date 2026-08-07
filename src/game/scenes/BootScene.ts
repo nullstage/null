@@ -52,6 +52,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio(AUDIO.parry, assetPath("audio/parry.mp3"));
     this.load.audio(AUDIO.footstepRun, assetPath("audio/footstep-run.mp3"));
     this.load.audio(AUDIO.dash, assetPath("audio/dash.mp3"));
+    this.load.audio(AUDIO.portal, assetPath("audio/portal.mp3"));
     this.load.audio(AUDIO.bgmCombat, assetPath("audio/bgm-combat.mp3"));
     this.load.audio(AUDIO.bgmVillage, assetPath("audio/bgm-village.mp3"));
     this.createPlaceholderTextures();

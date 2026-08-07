@@ -88,6 +88,7 @@ export const AUDIO = {
   parry: "sfx_parry",
   footstepRun: "sfx_run",
   dash: "sfx_dash",
+  portal: "sfx_portal",
   bgmCombat: "bgm_combat",
   /** 방 1(튜토리얼) 전용 — 아직 전투가 없는 마을 분위기라 전투 BGM과 다르게 튼다. */
   bgmVillage: "bgm_village",
@@ -278,7 +279,7 @@ export const createArena = (
     cap.setOrigin(0, 0);
     cap.setDepth(1);
     // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색으로 틴트.
-    cap.setTint(0x9b5366);
+    cap.setTint(0x27141d);
   }
 
   return {

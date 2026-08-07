@@ -37,6 +37,7 @@ export class BossScene extends Phaser.Scene {
   create(): void {
     this.finished = false;
     this.subscriptions = [];
+    this.cameras.main.fadeIn(300);
     runState.setPhase("BOSS");
     startRoomBgm(this, AUDIO.bgmCombat);
 
