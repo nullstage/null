@@ -25,6 +25,10 @@ export interface CombatArena {
   enemyAttacks: Phaser.Physics.Arcade.Group;
   /** 방의 크기와 바닥 높이. 스폰과 순찰 범위를 여기서 가져다 쓴다. */
   bounds: { width: number; height: number; floorY: number };
+  /** 바닥이 실제로 존재하는 구간들. 틈(낭떠러지)이 있는 방은 여러 조각이 된다. */
+  floorSegments: { x: number; width: number }[];
+  /** 공중 발판들. 미니맵 실루엣과 스폰 보정에 쓴다. */
+  platforms: { x: number; y: number; width: number }[];
   /** 배경(있으면). 씬이 매 프레임 `tilePositionX`를 직접 늘려 구름이 흐르게 한다. */
   background?: Phaser.GameObjects.TileSprite;
   /** 배경 위에 얹는 구름 띠(있으면). 배경보다 살짝 더 빠르게 흘려 깊이감을 준다. */
@@ -243,6 +247,14 @@ export const createArena = (
   floorTileHeight = 32,
   /** 바닥 타일 틴트. 방 분위기에 따라 달리 칠한다(튜토리얼 vs 전투방). */
   floorTint = 0x27141d,
+  /**
+   * (실험) 랜덤 지형. gaps는 바닥에 뚫리는 낭떠러지, platforms는 공중 발판.
+   * 안 넘기면 기존처럼 평평한 통짜 바닥이다(튜토리얼·보스방).
+   */
+  layout?: {
+    gaps: { x: number; width: number }[];
+    platforms: { x: number; y: number; width: number }[];
+  },
 ): CombatArena => {
   // 위는 밝고 아래로 갈수록 어두워지는 세로 그라데이션 — 단색보다 입체감이 산다.
   const tintTop = Phaser.Display.Color.ValueToColor(floorTint).lighten(28).color;
@@ -294,21 +306,69 @@ export const createArena = (
   }
 
   const solids = scene.physics.add.staticGroup();
-  const floor = solids.create(
-    width / 2,
-    floorY + FLOOR_HEIGHT / 2,
-    TEXTURE.solid,
-  ) as Phaser.Physics.Arcade.Sprite;
-  floor.setDisplaySize(width, FLOOR_HEIGHT).refreshBody();
 
-  if (floorTileKey) {
-    // 충돌은 위 단색 바닥이 그대로 맡는다. 이건 그 위에 얹는 장식(타일 반복)일 뿐이다.
-    const cap = scene.add.tileSprite(0, floorY, width, floorTileHeight, floorTileKey);
-    cap.setOrigin(0, 0);
-    cap.setDepth(1);
-    // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색 기준으로
-    // 위 밝음 → 아래 어두움 코너 틴트를 걸어 세로 그라데이션을 만든다.
-    cap.setTint(tintTop, tintTop, tintBottom, tintBottom);
+  // 틈(gaps)을 기준으로 바닥을 조각낸다. 틈이 없으면 통짜 한 장이다.
+  const floorSegments: { x: number; width: number }[] = [];
+  {
+    const sortedGaps = [...(layout?.gaps ?? [])].sort((a, b) => a.x - b.x);
+    let cursor = 0;
+    for (const gap of sortedGaps) {
+      if (gap.x > cursor) floorSegments.push({ x: cursor, width: gap.x - cursor });
+      cursor = gap.x + gap.width;
+    }
+    if (cursor < width) floorSegments.push({ x: cursor, width: width - cursor });
+  }
+
+  for (const segment of floorSegments) {
+    const floor = solids.create(
+      segment.x + segment.width / 2,
+      floorY + FLOOR_HEIGHT / 2,
+      TEXTURE.solid,
+    ) as Phaser.Physics.Arcade.Sprite;
+    floor.setDisplaySize(segment.width, FLOOR_HEIGHT).refreshBody();
+
+    if (floorTileKey) {
+      // 충돌은 위 단색 바닥이 맡는다. 이건 그 위에 얹는 장식(타일 반복)일 뿐이다.
+      const cap = scene.add.tileSprite(
+        segment.x,
+        floorY,
+        segment.width,
+        floorTileHeight,
+        floorTileKey,
+      );
+      cap.setOrigin(0, 0);
+      cap.setDepth(1);
+      // 타일 이음매가 조각 시작점마다 리셋되지 않게 방 좌표 기준으로 밀어 둔다.
+      cap.setTilePosition(segment.x, 0);
+      // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색 기준으로
+      // 위 밝음 → 아래 어두움 코너 틴트를 걸어 세로 그라데이션을 만든다.
+      cap.setTint(tintTop, tintTop, tintBottom, tintBottom);
+    }
+  }
+
+  // 공중 발판. 아래·옆에서 통과하고 위에서만 밟는 원웨이 플랫폼이다 —
+  // 옆면이 막히면 좁은 방에서 발판이 벽처럼 굴어 이동이 답답해진다.
+  const platforms = layout?.platforms ?? [];
+  for (const platform of platforms) {
+    const body = solids.create(
+      platform.x + platform.width / 2,
+      platform.y,
+      TEXTURE.solid,
+    ) as Phaser.Physics.Arcade.Sprite;
+    body.setDisplaySize(platform.width, 18).refreshBody();
+    const arcade = body.body as Phaser.Physics.Arcade.StaticBody;
+    arcade.checkCollision.down = false;
+    arcade.checkCollision.left = false;
+    arcade.checkCollision.right = false;
+
+    if (floorTileKey) {
+      const cap = scene.add.tileSprite(platform.x, platform.y - 9, platform.width, 18, floorTileKey);
+      cap.setOrigin(0, 0);
+      cap.setDepth(1);
+      // 발판은 바닥 띠보다 얇다 — 타일 세로를 눌러 얇은 판으로 보이게 한다.
+      cap.setTileScale(1, 18 / floorTileHeight);
+      cap.setTint(tintTop, tintTop, tintBottom, tintBottom);
+    }
   }
 
   return {
@@ -318,6 +378,8 @@ export const createArena = (
     playerAttacks: scene.physics.add.group({ allowGravity: false }),
     enemyAttacks: scene.physics.add.group({ allowGravity: false }),
     bounds: { width, height, floorY },
+    floorSegments,
+    platforms,
     background,
     clouds,
   };

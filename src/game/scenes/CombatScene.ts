@@ -53,6 +53,9 @@ export interface CombatSceneData {
 /** 방 3이 마지막 일반 방이다. 이후는 보스전이다. */
 const LAST_COMBAT_ROOM_INDEX = 3;
 
+/** 낭떠러지에 떨어졌을 때 깎이는 체력. */
+const FALL_DAMAGE = 15;
+
 
 export class CombatScene extends Phaser.Scene {
   private roomId: RoomId = FIXED_ROOM_SEQUENCE[0];
@@ -156,7 +159,12 @@ export class CombatScene extends Phaser.Scene {
     this.player.update(time, deltaMs);
     for (const enemy of this.enemies) {
       if (!enemy.isDefeated) enemy.update(time, deltaMs);
+      // 낭떠러지에 떨어진 적은 낙사 처리한다. 안 하면 화면 밖에 산 채로 남아 방이 안 끝난다.
+      if (!enemy.isDefeated && enemy.sprite && enemy.sprite.y > VIEWPORT.height + 40) {
+        enemy.takeDamage(9999);
+      }
     }
+    this.checkPlayerFall();
     if (this.portal) this.updatePortalPrompt();
     this.drawMinimap();
 
@@ -228,10 +236,13 @@ export class CombatScene extends Phaser.Scene {
       87,
       // 바닥 틴트 — 튜토리얼(마을)은 어두운 자주, 전투방은 사용자 지정 색.
       isTutorialRoom ? 0x27141d : 0x472b38,
+      // 튜토리얼은 장식 배치가 고정이라 평평하게 둔다. 전투방만 랜덤 지형.
+      isTutorialRoom ? undefined : this.rollLayout(roomWidth),
     );
 
-    // 물리 월드 경계도 넓혀야 한다. 안 넓히면 카메라는 늘어나도 플레이어가 옛 경계(1280px)에 막힌다.
-    this.physics.world.setBounds(0, 0, roomWidth, VIEWPORT.height);
+    // 물리 월드 경계. 아래로 여유를 둬야 낭떠러지에서 화면 밖까지 떨어지는 게 보인다 —
+    // 딱 화면 높이면 collideWorldBounds가 틈 바닥에서 캐릭터를 받쳐 얕은 웅덩이가 된다.
+    this.physics.world.setBounds(0, 0, roomWidth, VIEWPORT.height + 300);
     // 방이 화면보다 넓을 때만 실제로 스크롤한다 — 좁으면 경계가 뷰포트와 같아 움직일 곳이 없다.
     this.cameras.main.setBounds(0, 0, roomWidth, VIEWPORT.height);
 
@@ -286,6 +297,66 @@ export class CombatScene extends Phaser.Scene {
   }
 
   /**
+   * 낭떠러지 낙사. 화면 아래로 떨어지면 체력을 깎고 방 시작 지점에 다시 세운다.
+   * 낙사로 체력이 0이 되면 takeDamage 안에서 사망 흐름(튜토리얼 복귀)이 그대로 이어진다.
+   */
+  private checkPlayerFall(): void {
+    const sprite = this.player.sprite;
+    if (!sprite?.body || this.player.isDead) return;
+    if (sprite.y <= VIEWPORT.height + 40) return;
+
+    this.player.takeDamage(FALL_DAMAGE);
+    if (this.player.isDead) return;
+
+    sprite.setPosition(this.arena.bounds.width * 0.15, this.arena.bounds.floorY - 80);
+    (sprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.cameras.main.flash(180, 20, 0, 0);
+  }
+
+  /**
+   * 랜덤 지형 굴리기. 로그라이크답게 들어갈 때마다 조금씩 다른 방이 나온다.
+   *
+   * 규칙:
+   * - 낭떠러지 1~2개. 점프(약 190px)로 건널 수 있는 폭(110~150px)만 뚫는다.
+   *   시작 지점(왼쪽 22%)과 게이트 앞(오른쪽 20%)은 피한다.
+   * - 발판 2~3개. 1층은 점프 한 번(최대 도약 약 97px)에 닿는 높이, 2층은 1층에서 다시 점프.
+   */
+  private rollLayout(roomWidth: number): {
+    gaps: { x: number; width: number }[];
+    platforms: { x: number; y: number; width: number }[];
+  } {
+    const floorY = VIEWPORT.height - 48;
+    const gaps: { x: number; width: number }[] = [];
+    const gapCount = Phaser.Math.Between(1, 2);
+    const zoneStart = roomWidth * 0.22;
+    const zoneEnd = roomWidth * 0.8;
+    const zoneWidth = (zoneEnd - zoneStart) / gapCount;
+    for (let i = 0; i < gapCount; i += 1) {
+      const gapWidth = Phaser.Math.Between(110, 150);
+      // 각 구획 안에서만 굴려 틈끼리 붙지 않게 한다.
+      const x = Phaser.Math.Between(
+        Math.round(zoneStart + i * zoneWidth),
+        Math.round(zoneStart + (i + 1) * zoneWidth - gapWidth - 60),
+      );
+      gaps.push({ x, width: gapWidth });
+    }
+
+    const platforms: { x: number; y: number; width: number }[] = [];
+    const platformCount = Phaser.Math.Between(2, 3);
+    for (let i = 0; i < platformCount; i += 1) {
+      const width = Phaser.Math.Between(140, 230);
+      const tier = i === 2 ? 2 : 1;
+      platforms.push({
+        x: Phaser.Math.Between(Math.round(roomWidth * 0.12), Math.round(roomWidth * 0.82 - width)),
+        y: floorY - (tier === 1 ? 80 : 160),
+        width,
+      });
+    }
+
+    return { gaps, platforms };
+  }
+
+  /**
    * 미니맵. 방 전체를 작은 사각형에 축소해 지형(검정 실루엣)·적(빨강)·플레이어(노랑)를 찍는다.
    */
   private drawMinimap(): void {
@@ -307,10 +378,20 @@ export class CombatScene extends Phaser.Scene {
     minimap.lineStyle(1, 0xffffff, 0.18);
     minimap.strokeRect(x0, y0, WIDTH, HEIGHT);
 
-    // 지형 — 바닥과 게이트를 검은 실루엣으로.
+    // 지형 — 바닥 조각·발판·게이트를 검은 실루엣으로. 틈이 있으면 그대로 끊겨 보인다.
     const floorTop = y0 + this.arena.bounds.floorY * scaleY;
     minimap.fillStyle(0x000000, 0.9);
-    minimap.fillRect(x0, floorTop, WIDTH, HEIGHT - this.arena.bounds.floorY * scaleY);
+    for (const segment of this.arena.floorSegments) {
+      minimap.fillRect(
+        x0 + segment.x * scaleX,
+        floorTop,
+        segment.width * scaleX,
+        HEIGHT - this.arena.bounds.floorY * scaleY,
+      );
+    }
+    for (const platform of this.arena.platforms) {
+      minimap.fillRect(x0 + platform.x * scaleX, y0 + platform.y * scaleY, platform.width * scaleX, 2);
+    }
     if (this.portal) {
       minimap.fillRect(x0 + this.portal.x * scaleX - 2, floorTop - 7, 4, 7);
     }
@@ -382,9 +463,26 @@ export class CombatScene extends Phaser.Scene {
 
   private spawnEnemy(spawn: EnemySpawn, _preset: RoomPreset): void {
     const enemy = this.createEnemy(spawn.type);
-    enemy.spawn(this.arena.bounds.width * spawn.xRatio, this.arena.bounds.floorY - 60);
+    enemy.spawn(this.groundedSpawnX(this.arena.bounds.width * spawn.xRatio), this.arena.bounds.floorY - 60);
     this.enemies.push(enemy);
     this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+  }
+
+  /** 스폰 지점이 낭떠러지 위면 가장 가까운 바닥 조각 위로 옮긴다. 나오자마자 낙사하면 안 된다. */
+  private groundedSpawnX(x: number): number {
+    const MARGIN = 40;
+    let best = x;
+    let bestDistance = Infinity;
+    for (const segment of this.arena.floorSegments) {
+      if (segment.width < MARGIN * 2) continue;
+      const clamped = Phaser.Math.Clamp(x, segment.x + MARGIN, segment.x + segment.width - MARGIN);
+      const distance = Math.abs(clamped - x);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = clamped;
+      }
+    }
+    return best;
   }
 
   private createEnemy(type: EnemyType): BaseEnemy {
