@@ -18,11 +18,12 @@ import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
 /**
- * 본체 크기. 예전 플레이스홀더 값을 그대로 뒀더니 64px 원본 그림이 너무 작게
- * 눌려 보였다 — 플레이어 체감 크기에 맞춰 키운다. 벌형이라 폭·높이는 비슷하게.
+ * 히트박스 월드 크기와 시트 배치. 원본 셀(64px)에서 벌 그림은
+ * 대략 x25~37, 발끝 y≈47에만 있다 — 셀 여백을 빼고 그림 기준으로 잡는다.
  */
-const BODY_WIDTH = 58;
+const BODY_WIDTH = 44;
 const BODY_HEIGHT = 58;
+const SHEET = { scale: 3.0, anchorX: 31, anchorY: 47 };
 
 /** 유지하려는 거리. 이보다 가까우면 물러나고, 멀면 다가온다. */
 const KEEP_DISTANCE_MIN = 280;
@@ -60,7 +61,7 @@ export class RangedEnemy extends BaseEnemy {
   }
 
   spawn(x: number, y: number): void {
-    const body = this.spawnBody(x, y, TEXTURE.ranged, BODY_WIDTH, BODY_HEIGHT);
+    const body = this.spawnBody(x, y, TEXTURE.ranged, BODY_WIDTH, BODY_HEIGHT, SHEET);
     body.play("rangedIdle");
   }
 

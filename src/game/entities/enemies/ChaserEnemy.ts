@@ -17,11 +17,12 @@ import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
 /**
- * 본체 크기. 예전 플레이스홀더 사각형 값을 그대로 뒀더니 64px 원본 그림이 너무
- * 작게 눌려 보였다 — 플레이어 체감 크기(대략 60~70px)에 맞춰 키운다.
+ * 히트박스 월드 크기와 시트 배치. 원본 셀(64px)에서 고블린 그림은
+ * 대략 x22~43, 발끝 y≈44에만 있다 — 셀 여백을 빼고 그림 기준으로 잡는다.
  */
-const BODY_WIDTH = 56;
-const BODY_HEIGHT = 68;
+const BODY_WIDTH = 42;
+const BODY_HEIGHT = 48;
+const SHEET = { scale: 3.2, anchorX: 32.5, anchorY: 44 };
 
 /** 이 거리 안으로 들어오면 돌진을 준비한다. */
 const LUNGE_RANGE = 230;
@@ -57,7 +58,7 @@ export class ChaserEnemy extends BaseEnemy {
   }
 
   spawn(x: number, y: number): void {
-    const body = this.spawnBody(x, y, TEXTURE.chaser, BODY_WIDTH, BODY_HEIGHT);
+    const body = this.spawnBody(x, y, TEXTURE.chaser, BODY_WIDTH, BODY_HEIGHT, SHEET);
     body.play("chaserIdle");
   }
 

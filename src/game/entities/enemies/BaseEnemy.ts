@@ -10,7 +10,7 @@
  * 행동은 각 하위 클래스가 전부 따로 가진다. 역할이 눈으로 구분돼야 하기 때문이다. (MVP_PLAN §2)
  */
 
-import type Phaser from "phaser";
+import Phaser from "phaser";
 
 import { ENEMIES, type EnemyDefinition } from "../../data/enemies";
 import { deathBurst } from "../../systems/CombatVfx";
@@ -92,9 +92,28 @@ export abstract class BaseEnemy {
     texture: string,
     width: number,
     height: number,
+    /**
+     * 스프라이트시트용 배치 정보. 원본 셀(64px)에 여백이 많아 setDisplaySize로 셀을
+     * 통째로 늘리면 그림이 작아지고, 발이 셀 하단보다 위에 있어 떠 보인다.
+     * scale로 그림을 키우고, 히트박스(width/height는 월드 크기)를 그림 위치
+     * (anchorX=내용 가로 중심, anchorY=발끝 y — 둘 다 원본 텍스처 px)에 맞춘다.
+     */
+    sheet?: { scale: number; anchorX: number; anchorY: number },
   ): Phaser.Physics.Arcade.Sprite {
     const body = this.arena.enemyBodies.create(x, y, texture) as Phaser.Physics.Arcade.Sprite;
-    body.setDisplaySize(width, height);
+    if (sheet) {
+      body.setScale(sheet.scale);
+      const sizeW = width / sheet.scale;
+      const sizeH = height / sheet.scale;
+      body.setSize(sizeW, sizeH);
+      body.setOffset(sheet.anchorX - sizeW / 2, sheet.anchorY - sizeH);
+      // 검은 실루엣이 어두운 배경에 묻히지 않게 붉은 글로우를 두른다. (WebGL 전용)
+      if (this.scene.game.renderer.type === Phaser.WEBGL) {
+        body.postFX.addGlow(0xff5560, 3, 0);
+      }
+    } else {
+      body.setDisplaySize(width, height);
+    }
     // 화면 밖으로 밀려나면 플레이어가 처리할 수 없는 적이 된다.
     body.setCollideWorldBounds(true);
     // 씬이 이 데이터로만 피해 대상을 찾는다. 빠지면 적이 무적이 된다.
