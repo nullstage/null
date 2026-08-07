@@ -109,7 +109,7 @@ export class BossScene extends Phaser.Scene {
       attack.setData("hitEnemies", hitSet);
 
       target.takeDamage((attack.getData("damage") as number) ?? 0);
-      playSfx(this, AUDIO.hitEnemy);
+      playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
 
       // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
       const mode = attack.getData("mode") as AttackMode | undefined;

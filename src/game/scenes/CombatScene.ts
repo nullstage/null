@@ -293,7 +293,8 @@ export class CombatScene extends Phaser.Scene {
       attack.setData("hitEnemies", hitSet);
 
       enemy.takeDamage((attack.getData("damage") as number) ?? 0);
-      playSfx(this, AUDIO.hitEnemy);
+      // 매번 같은 피치면 단조롭다 — 살짝 흔들어 타격마다 다르게 들리게 한다.
+      playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
 
       const mode = attack.getData("mode") as AttackMode | undefined;
       // 파편은 맞은 적 위에서 터져야 한다. 플레이어 위치에서 터지면 누굴 쳤는지 모른다.
