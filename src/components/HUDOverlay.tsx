@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
+import { FIXED_ROOM_SEQUENCE } from "@/game/data/rooms";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
 import type {
   BossPatternWeights,
@@ -22,6 +23,7 @@ import { theme } from "@/styles/theme";
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
+import DialogueBox, { hasSeenTutorial, markTutorialSeen } from "./ui/DialogueBox";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
 import PauseMenu from "./ui/PauseMenu";
@@ -171,6 +173,13 @@ export default function HUDOverlay() {
    * 두 값을 나눈 이유는 로딩 화면이 "떠 있는가"와 "걷혀도 되는가"가 다른 시점이기 때문이다.
    */
   const [roomLoading, setRoomLoading] = useState(false);
+
+  /**
+   * 방 1 진입 시 뜨는 기록자 대화창.
+   * `CombatScene`이 방 1에서는 스스로를 멈춰 두므로, 여기서 열지 말지만 정하면 된다.
+   * 이미 봤으면 열지 않고 곧바로 씬을 풀어 준다.
+   */
+  const [dialogueOpen, setDialogueOpen] = useState(false);
   const [roomReady, setRoomReady] = useState(false);
 
   /** 시작 화면 에셋 프리로드 완료 여부. 로딩 화면이 걷히기 시작할 때 켠다. */
@@ -234,6 +243,12 @@ export default function HUDOverlay() {
     setActivePanel("none");
     // 다음 방이 실제로 시작됐다. 이제 로딩을 걷어도 아래가 비지 않는다.
     setRoomReady(true);
+
+    // 방 1은 씬이 스스로 멈춰 있다. 처음이면 대화창을 열고, 이미 봤으면 곧바로 풀어 준다.
+    if (next === FIXED_ROOM_SEQUENCE[0]) {
+      if (hasSeenTutorial()) emitGameEvent("game:resume", {});
+      else setDialogueOpen(true);
+    }
   });
 
   useGameEvent("room:clear", ({ telemetry: next }) => setTelemetry(next));
@@ -280,7 +295,8 @@ export default function HUDOverlay() {
    */
   useEffect(() => {
     const pausable = phase === "COMBAT" || phase === "BOSS";
-    if (!pausable || activePanel !== "none" || transition !== "none" || roomLoading) return;
+    if (!pausable || activePanel !== "none" || transition !== "none" || roomLoading || dialogueOpen)
+      return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -292,7 +308,7 @@ export default function HUDOverlay() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePanel, phase, roomLoading, transition]);
+  }, [activePanel, dialogueOpen, phase, roomLoading, transition]);
 
   /**
    * READY가 되면 바로 넘긴다.
@@ -340,6 +356,7 @@ export default function HUDOverlay() {
     // 방 전환 도중에 죽거나 나가면 흰 로딩이 그대로 남는다.
     setRoomLoading(false);
     setRoomReady(false);
+    setDialogueOpen(false);
   }, []);
 
   const restartRun = useCallback(() => {
@@ -398,6 +415,21 @@ export default function HUDOverlay() {
       )}
 
       {transition === "prologue" && <PrologueText onDone={endTransition} />}
+
+      {/*
+        방 1 진입 시 뜨는 기록자 대화창. 씬은 이미 멈춰 있다(CombatScene 자체 일시정지).
+        대화가 끝나야 봤다고 기록하고 씬을 풀어 준다 — 순서가 바뀌면 다음 방문부터
+        대화창 없이 멈춘 씬만 남는다.
+      */}
+      {dialogueOpen && (
+        <DialogueBox
+          onDone={() => {
+            markTutorialSeen();
+            setDialogueOpen(false);
+            emitGameEvent("game:resume", {});
+          }}
+        />
+      )}
 
       {/*
         방 사이 로딩. 강화를 고른 순간부터 다음 방이 시작될 때까지 덮는다.

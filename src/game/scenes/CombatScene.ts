@@ -105,6 +105,18 @@ export class CombatScene extends Phaser.Scene {
     );
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
+
+    /**
+     * 방 1은 첫 진입이다. 스스로 잠깐 멈춰 둔다.
+     *
+     * React가 대화창을 볼 차례인지(재방문 여부)를 판단하고, `game:resume`으로 풀어 준다.
+     * 못 봤으면 대화창이 뜨는 동안, 봤으면 다음 프레임에 곧바로 풀린다 — 어느 쪽이든
+     * 대화가 시작되기 전에 적이 움직이거나 공격하는 일은 없다.
+     * create() 끝에서 자기 자신을 멈추는 건 안전하다. 아직 update()가 한 번도 돌지 않았다.
+     */
+    if (this.roomId === FIXED_ROOM_SEQUENCE[0]) {
+      this.scene.pause();
+    }
   }
 
   update(time: number, deltaMs: number): void {

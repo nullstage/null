@@ -24,6 +24,8 @@ export const theme = {
     hud: 10,
     panel: 20,
     debug: 30,
+    /** 방 안에서 씬을 멈추고 뜨는 대화창. HUD보다는 위, 시스템 전환보다는 아래다. */
+    dialogue: 40,
     transition: 50,
     /** 로딩 화면은 전환 커버보다 위다. 전환 중에도 로딩을 보여 주기 때문이다. */
     loading: 60,
