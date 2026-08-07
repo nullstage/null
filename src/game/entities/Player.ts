@@ -80,6 +80,21 @@ const TUNING = {
     hitboxHeight: 46,
     /** MELEE_FINISHER_RANGE_UP이 마무리 타격에만 더해주는 사거리 */
     finisherRangeBonus: 24,
+
+    /**
+     * 벨 때 몸이 앞으로 밀려나가는 속도.
+     *
+     * 제자리에서 팔만 흔들면 아무리 그림이 좋아도 정적으로 보인다.
+     * 몸이 검을 따라가야 무게가 실린다. 마무리 타격은 더 크게 파고든다.
+     */
+    lungeSpeed: 260,
+    finisherLungeMultiplier: 1.6,
+    /** 파고든 뒤 멈추는 데 걸리는 시간. 길면 미끄러지고 짧으면 안 보인다. */
+    lungeMs: 130,
+    /** 파고드는 동안 프레임마다 남는 속도 비율 */
+    lungeDrag: 0.86,
+    /** 공중에서 벨 때 낙하 속도에 곱하는 값. 낮을수록 오래 머문다. */
+    airHangFactor: 0.3,
   },
 
   ranged: {
@@ -211,6 +226,9 @@ export class Player {
   private dashFollowupUntilMs = 0;
   private lastAfterimageAtMs = 0;
 
+  /** 공격으로 파고드는 중이면 이 시각까지 이동 입력이 속도를 덮지 않는다. */
+  private lungeUntilMs = 0;
+
   /** 공격 애니메이션이 끝나는 시각. 그 전에는 다른 상태가 끼어들지 못한다. */
   private attackAnimUntilMs = 0;
   private invulnerableUntilMs = 0;
@@ -286,7 +304,11 @@ export class Player {
 
     const direction =
       (this.keys.MOVE_RIGHT?.isDown ? 1 : 0) - (this.keys.MOVE_LEFT?.isDown ? 1 : 0);
-    if (this.isGrounded) {
+    if (this.isGrounded && time < this.lungeUntilMs) {
+      // 벤 기세로 파고드는 중이다. 여기서 이동 입력이 속도를 덮으면 몸이 그 자리에 멈춰
+      // 팔만 흔드는 그림이 된다. 잠깐은 관성을 살려 둔다.
+      body.setVelocityX(body.velocity.x * TUNING.melee.lungeDrag);
+    } else if (this.isGrounded) {
       body.setVelocityX(direction * PLAYER.moveSpeed);
     } else if (direction !== 0 && Math.sign(body.velocity.x) === direction &&
                Math.abs(body.velocity.x) > PLAYER.moveSpeed) {
@@ -399,7 +421,17 @@ export class Player {
    */
   private lockAnim(state: PlayerAnimState): void {
     const spec = PLAYER_SPRITE.states[state];
-    this.attackAnimUntilMs = this.scene.time.now + (spec.frames / spec.fps) * 1000;
+
+    // 프레임별 추가 시간이 있으면 그것까지 더해야 실제 길이가 나온다.
+    // 짧게 잡으면 휘두르다 만 그림에서 이동 애니메이션이 끼어든다.
+    const base = (spec.frames / spec.fps) * 1000;
+    // `as const` 탓에 원소 타입이 리터럴로 좁혀져 있다. 누산기 타입을 명시해야 더할 수 있다.
+    const extra =
+      "frameDurations" in spec
+        ? spec.frameDurations.reduce<number>((sum, ms) => sum + ms, 0)
+        : 0;
+
+    this.attackAnimUntilMs = this.scene.time.now + base + extra;
     this.playAnim(state, true);
   }
 
@@ -448,6 +480,22 @@ export class Player {
 
     // 호는 몸 중심에서 그린다. 앞으로 밀어 그리면 판정 범위 밖까지 뻗어 헛스윙처럼 보인다.
     slashArc(this.scene, sprite.x, sprite.y - 6, this.facing, reach + TUNING.body.width / 2, this.comboStep);
+
+    const playerBody = sprite.body as Phaser.Physics.Arcade.Body;
+    if (this.isGrounded) {
+      // 몸이 검을 따라 파고든다. 팔만 흔들면 아무리 그림이 좋아도 정적으로 보인다.
+      const lunge = melee.lungeSpeed * (isFinisher ? melee.finisherLungeMultiplier : 1);
+      playerBody.setVelocityX(this.facing * lunge);
+      this.lungeUntilMs = now + melee.lungeMs;
+    } else if (playerBody.velocity.y > 0) {
+      // 공중에서는 떨어지던 속도를 죽여 잠깐 머문다.
+      // 그대로 낙하하면 휘두르다 만 것처럼 보인다.
+      playerBody.setVelocityY(playerBody.velocity.y * melee.airHangFactor);
+    }
+
+    // 파고드는 궤적에 잔상을 남긴다. 대시와 같은 방식이라 톤이 어긋나지 않는다.
+    this.lastAfterimageAtMs = 0;
+    this.trailAfterimage(now);
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
   }

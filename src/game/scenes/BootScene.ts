@@ -52,12 +52,23 @@ export class BootScene extends Phaser.Scene {
       if (this.anims.exists(key)) continue;
 
       const start = spec.row * PLAYER_SPRITE.columns;
+      const frames = this.anims.generateFrameNumbers(PLAYER_SPRITE.key, {
+        start,
+        end: start + spec.frames - 1,
+      });
+
+      // 프레임마다 머무는 시간이 다른 상태가 있다. 공격이 그렇다.
+      // 전부 같은 길이로 넘기면 그림이 좋아도 기계적으로 보인다.
+      const durations = "frameDurations" in spec ? spec.frameDurations : null;
+      if (durations) {
+        frames.forEach((frame, index) => {
+          frame.duration = durations[index] ?? 0;
+        });
+      }
+
       this.anims.create({
         key,
-        frames: this.anims.generateFrameNumbers(PLAYER_SPRITE.key, {
-          start,
-          end: start + spec.frames - 1,
-        }),
+        frames,
         frameRate: spec.fps,
         repeat: spec.loop ? -1 : 0,
       });

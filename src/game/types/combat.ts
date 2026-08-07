@@ -89,10 +89,28 @@ export const PLAYER_SPRITE = {
     run: { row: 1, frames: 8, fps: 12, loop: true },
     jump: { row: 2, frames: 6, fps: 9, loop: false },
     dash: { row: 3, frames: 6, fps: 16, loop: false },
-    /** 왼손 검. 키 한 번에 한 번만 벤다. */
-    attack: { row: 4, frames: 8, fps: 14, loop: false },
+    /**
+     * 왼손 검. 키 한 번에 한 번만 벤다.
+     *
+     * `frameDurations`는 프레임마다 **더해지는** 시간이다(Phaser 규칙).
+     * 모든 프레임을 같은 길이로 재생하면 그림이 아무리 좋아도 정적으로 보인다.
+     * 윈드업에서 뜸을 들이고 베는 순간은 최소 시간으로 지나가야 힘이 실린다.
+     */
+    attack: {
+      row: 4,
+      frames: 8,
+      fps: 28,
+      loop: false,
+      frameDurations: [60, 50, 30, 0, 0, 25, 50, 90],
+    },
     /** 오른손 총. 근거리와 그림이 갈려야 지금 무엇을 쓰는지 보인다. */
-    shoot: { row: 5, frames: 6, fps: 14, loop: false },
+    shoot: {
+      row: 5,
+      frames: 6,
+      fps: 28,
+      loop: false,
+      frameDurations: [40, 0, 0, 30, 50, 80],
+    },
     switch: { row: 6, frames: 4, fps: 14, loop: false },
   },
 } as const;
