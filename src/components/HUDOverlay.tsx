@@ -23,7 +23,7 @@ import { theme } from "@/styles/theme";
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
-import DialogueBox, { hasSeenTutorial, markTutorialSeen } from "./ui/DialogueBox";
+import DialogueBox from "./ui/DialogueBox";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
 import PauseMenu from "./ui/PauseMenu";
@@ -244,11 +244,9 @@ export default function HUDOverlay() {
     // 다음 방이 실제로 시작됐다. 이제 로딩을 걷어도 아래가 비지 않는다.
     setRoomReady(true);
 
-    // 방 1은 씬이 스스로 멈춰 있다. 처음이면 대화창을 열고, 이미 봤으면 곧바로 풀어 준다.
-    if (next === FIXED_ROOM_SEQUENCE[0]) {
-      if (hasSeenTutorial()) emitGameEvent("game:resume", {});
-      else setDialogueOpen(true);
-    }
+    // 방 1은 씬이 스스로 멈춰 있다. 매번 새로 시작한 것처럼 대화창을 연다.
+    // 재방문 여부를 저장해 갈랐던 적이 있는데, 그 분기가 실제 버그였다(위 컴포넌트 주석 참고).
+    if (next === FIXED_ROOM_SEQUENCE[0]) setDialogueOpen(true);
   });
 
   useGameEvent("room:clear", ({ telemetry: next }) => setTelemetry(next));
@@ -418,13 +416,11 @@ export default function HUDOverlay() {
 
       {/*
         방 1 진입 시 뜨는 기록자 대화창. 씬은 이미 멈춰 있다(CombatScene 자체 일시정지).
-        대화가 끝나야 봤다고 기록하고 씬을 풀어 준다 — 순서가 바뀌면 다음 방문부터
-        대화창 없이 멈춘 씬만 남는다.
+        대화가 끝나야 씬을 풀어 준다. 재방문 여부는 기록하지 않는다 — 매번 새로 튼다.
       */}
       {dialogueOpen && (
         <DialogueBox
           onDone={() => {
-            markTutorialSeen();
             setDialogueOpen(false);
             emitGameEvent("game:resume", {});
           }}

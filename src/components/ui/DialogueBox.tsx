@@ -19,8 +19,13 @@ const chosunKg = localFont({
 /**
  * 기록자 대화창.
  *
- * 방 1(튜토리얼)에 처음 들어설 때 뜬다. 씬은 이미 멈춰 있다(`CombatScene`이 자기 자신을
+ * 방 1(튜토리얼)에 들어설 때마다 뜬다. 씬은 이미 멈춰 있다(`CombatScene`이 자기 자신을
  * 일시정지한다). 이 컴포넌트는 그 위에 뜨는 것만 책임지고, 재개는 `onDone`이 맡는다.
+ *
+ * 재방문 시 건너뛰는 로컬스토리지 기록은 두지 않는다. 그 분기가 실제로 버그였다 —
+ * "이미 봤으면 곧바로 재개" 이벤트가 `CombatScene`의 자기 일시정지보다 먼저 도착해서
+ * (씬이 아직 안 멈췄으니 재개는 허공에 날아가고) 그 뒤에 걸리는 일시정지만 남아
+ * 씬이 영원히 멈추는 경우가 있었다. 매번 새 게임을 시작한 것처럼 보여주면 이 경합 자체가 없다.
  *
  * 검은 화면을 또 까는 프롤로그와 달리 캐릭터가 서 있는 방을 그대로 보여 준다.
  * "깨어나 보니 여기더라"는 감각은 실제로 그 자리에 있어야 산다.
@@ -28,25 +33,6 @@ const chosunKg = localFont({
  * 조작 안내는 하드코딩하지 않는다. `KEY_BINDINGS`를 그대로 읽어서,
  * 설정에서 키를 바꾼 사용자에게도 맞는 안내가 나온다.
  */
-
-const TUTORIAL_SEEN_KEY = "null:tutorialSeen";
-
-export const hasSeenTutorial = (): boolean => {
-  try {
-    return window.localStorage.getItem(TUTORIAL_SEEN_KEY) === "1";
-  } catch {
-    // 저장소를 못 읽으면 매번 보여준다. 안내가 빠지는 편보다 낫다.
-    return false;
-  }
-};
-
-export const markTutorialSeen = (): void => {
-  try {
-    window.localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
-  } catch {
-    // 저장에 실패해도 이번 세션은 그대로 진행한다.
-  }
-};
 
 /** 화자는 방 클리어 후 뜨는 그 목소리와 같다. (DEC-011 기록자 톤) */
 const SPEAKER = "기록자";
