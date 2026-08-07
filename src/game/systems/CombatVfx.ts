@@ -81,12 +81,54 @@ const VFX = {
       crescentThickness: 58,
     },
   },
+  /**
+   * (실험) 레이저사이트 조준선.
+   *
+   * "찌잉(그어짐) → 팡(총성)" 두 박자로 읽히게 한다. 총구에서 순식간에 벽까지
+   * 얇고 흐릿한 선이 그어진 뒤(찌잉), 총알이 그 위를 훑고 지나가며 총성이 터진다(팡).
+   * 실제 목표 지점을 조준하지 않고 벽까지 긋는다 — 정확한 사거리 판정이 아니라
+   * "이 방향으로 쐈다"는 신호만 필요하기 때문이다.
+   */
   beam: {
-    lifeMs: 100,
-    /** 총알은 가늘어야 빠르게 보인다. 굵으면 광선이 되고 속도가 죽는다. */
-    thickness: 2,
+    /** 총구에서 벽까지 긋는 데 걸리는 시간. 이게 "찌잉" 구간이다. */
+    revealMs: 45,
+    /**
+     * 다 그어진 뒤 실제로 총알이 나가기까지 버티는 시간.
+     * 이 동안 조준선이 옅은 상태에서 점점 밝아진다 — "곧 쏜다"는 예고다.
+     * 총알 발사 자체가 이 시간만큼 늦춰진다(`BEAM_WINDUP_MS`로 노출).
+     */
+    holdMs: 140,
+    /** 발사와 함께 옅어지는 데 걸리는 시간. */
+    fadeMs: 90,
+    /** 얇아야 레이저사이트로 보인다. 굵으면 총 궤적이 아니라 광선검이 된다. */
+    thickness: 1,
+    /** 흐릿하게 두르는 겹의 굵기 배수. */
+    glowScale: 3.5,
     core: 0xfff3f4,
     glow: 0xff6b6b,
+    /** 다 밝아졌을 때(발사 직전)의 세기. 처음부터 이만큼 보이면 조준선이 아니라 광선이 된다. */
+    coreAlpha: 0.42,
+    glowAlpha: 0.12,
+    /** 막 그어진 순간의 세기. coreAlpha/glowAlpha에 곱해진다 — 낮을수록 "처음엔 거의 안 보임". */
+    startAlphaScale: 0.3,
+  },
+  /** 발사 순간 총구에서 터지는 짧은 섬광. beam의 "팡"에 해당한다. */
+  muzzle: {
+    lifeMs: 80,
+    core: 0xffffff,
+    spark: 0xffd9a8,
+    coreRadius: 5,
+    /** 총구에서 뻗는 짧은 불꽃 가닥 수. */
+    rays: 4,
+    rayLength: 16,
+  },
+  /** 총알이 맞았을 때. 검보다 가볍고 빨라야 한다 — 무거운 타격이 아니라 스치는 느낌이다. */
+  rangedSpark: {
+    count: 5,
+    lifeMs: 130,
+    speed: { min: 220, max: 380 },
+    length: 10,
+    color: 0xffd9a8,
   },
   /**
    * 총알 꼬리.
@@ -126,6 +168,18 @@ const VFX = {
     lifeMs: 380,
     speed: { min: 180, max: 420 },
     ring: { points: 22, radius: 14, growTo: 3.4, lifeMs: 300, dot: 3 },
+  },
+  /**
+   * 발밑 흙먼지 — 뛰어오를 때와 착지할 때.
+   * 전투 이펙트와 달리 가산 블렌드를 쓰지 않는다. 빛나면 흙이 아니라 불꽃처럼 보인다.
+   */
+  dust: {
+    color: 0xa89478,
+    alpha: 0.55,
+    size: PIXEL,
+    /** 밀어내는 정도만 다르다 — 착지가 더 세게, 더 많이 튄다. */
+    jump: { count: 5, speed: { min: 50, max: 110 }, lifeMs: 200 },
+    land: { count: 9, speed: { min: 90, max: 200 }, lifeMs: 260 },
   },
   hitStopMs: 45,
   depth: 40,
@@ -217,6 +271,106 @@ export const pulseHitFx = (scene: Phaser.Scene, strength = 0.55): void => {
     onUpdate: () => target.setIntensity(carrier.value),
     onComplete: () => target.setIntensity(0),
   });
+};
+
+/**
+ * (실험) 상시 배경 조명 셰이더.
+ *
+ * 화면 전체를 붉은 그림자 톤으로 가라앉히고, 플레이어가 있는 자리만 원형으로 밝게
+ * 남긴다 — "캐릭터에게 시선이 모이는" 명암을 만든다. `HitFx`와 달리 순간 번쩍이는
+ * 게 아니라 방에 들어서는 동안 계속 켜져 있는 셰이더다.
+ */
+export class AmbientLightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
+  private centerX = 0.5;
+  private centerY = 0.5;
+  private strength = 0;
+
+  constructor(game: Phaser.Game) {
+    super({
+      game,
+      name: "AmbientLight",
+      fragShader: `
+        precision mediump float;
+        uniform sampler2D uMainSampler;
+        uniform vec2 uSize;
+        uniform vec2 uCenter;
+        uniform float uStrength;
+        varying vec2 outTexCoord;
+
+        void main() {
+          vec4 base = texture2D(uMainSampler, outTexCoord);
+
+          // 화면 비율을 보정해야 밝은 자리가 타원이 아니라 원으로 보인다.
+          float aspect = uSize.x / uSize.y;
+          vec2 uv = vec2(outTexCoord.x * aspect, outTexCoord.y);
+          vec2 center = vec2(uCenter.x * aspect, uCenter.y);
+          float dist = distance(uv, center);
+
+          // 0(중심, 밝음) ~ 1(바깥, 그림자). 캐릭터 반경 밖으로 부드럽게 퍼진다.
+          float shadow = smoothstep(0.16, 0.62, dist) * uStrength;
+
+          // 그림자는 검게 죽이지 않고 붉은 톤으로 가라앉힌다 — 완전한 검정은 안개처럼 보인다.
+          vec3 shadowTone = base.rgb * vec3(0.42, 0.16, 0.18);
+          vec3 col = mix(base.rgb, shadowTone, shadow);
+
+          // 중심부는 옅은 붉은 빛을 더해 은은한 광원처럼 보이게 한다.
+          col += vec3(0.10, 0.02, 0.03) * (1.0 - shadow) * uStrength;
+
+          gl_FragColor = vec4(col, base.a);
+        }
+      `,
+    });
+  }
+
+  onPreRender(): void {
+    this.set2f("uSize", this.renderer.width, this.renderer.height);
+    this.set2f("uCenter", this.centerX, this.centerY);
+    this.set1f("uStrength", this.strength);
+  }
+
+  /** 밝은 중심을 화면 정규화 좌표(0~1)로 옮긴다. 카메라가 스크롤해도 매 프레임 다시 불러야 한다. */
+  setCenter(x: number, y: number): void {
+    this.centerX = x;
+    this.centerY = y;
+  }
+
+  /** 0~1. 방 진입 시 트윈으로 서서히 올리면 화면이 갑자기 어두워지지 않는다. */
+  setStrength(value: number): void {
+    this.strength = value;
+  }
+}
+
+/** 카메라에 상시 조명 셰이더를 붙인다. 씬 생성 때 한 번 부른다. */
+export const attachAmbientLight = (scene: Phaser.Scene, strength = 0.75): void => {
+  if (scene.game.renderer.type !== Phaser.WEBGL) return;
+  scene.cameras.main.setPostPipeline(AmbientLightPipeline);
+  const found = scene.cameras.main.getPostPipeline(AmbientLightPipeline);
+  const pipeline = (Array.isArray(found) ? found[0] : found) as AmbientLightPipeline | undefined;
+  pipeline?.setStrength(strength);
+};
+
+/**
+ * 매 프레임 불러서 밝은 중심을 캐릭터 화면 위치로 옮긴다.
+ * 월드 좌표에서 카메라 스크롤만큼 빼고 화면 크기로 나누면 정규화 좌표가 된다.
+ */
+export const updateAmbientLightCenter = (
+  scene: Phaser.Scene,
+  worldX: number,
+  worldY: number,
+): void => {
+  if (scene.game.renderer.type !== Phaser.WEBGL) return;
+
+  const found = scene.cameras.main.getPostPipeline(AmbientLightPipeline);
+  const pipeline = (Array.isArray(found) ? found[0] : found) as AmbientLightPipeline | undefined;
+  if (!pipeline) return;
+
+  const camera = scene.cameras.main;
+  // WebGL 프레임버퍼는 원점이 왼쪽 아래라 outTexCoord.y가 화면 기준과 뒤집혀 있다.
+  // 정규화한 y를 1에서 빼야 화면에서 실제로 보이는 자리와 맞는다.
+  pipeline.setCenter(
+    (worldX - camera.scrollX) / camera.width,
+    1 - (worldY - camera.scrollY) / camera.height,
+  );
 };
 
 /**
@@ -373,37 +527,113 @@ export const slashArc = (
 };
 
 /**
- * 총 궤적.
+ * 총 궤적 — 레이저사이트 조준선.
  *
- * 투사체가 날아가는 것과 별개로, 쏜 순간 총구에서 뻗는 얇은 직선을 한 번 남긴다.
- * 이게 없으면 어디로 쐈는지 투사체를 눈으로 좇아야만 알 수 있다.
+ * 투사체가 날아가는 것과 별개로, 쏜 순간 총구에서 사거리 끝(보통 벽)까지 뻗는
+ * 얇고 흐릿한 선을 남긴다. 총알을 눈으로 좇지 않아도 어느 방향으로 쐈는지 즉시 읽힌다.
+ *
+ * 세 박자로 움직인다: 순식간에 끝까지 그어지는 "찌잉"(reveal) → 옅게 시작해 점점
+ * 밝아지며 버티는 "예고"(hold, `BEAM_WINDUP_MS` 동안 실제 발사가 미뤄진다) → 발사와
+ * 함께 옅어지는 "여운"(fade). 총알처럼 채워서 그리지 않고 매 프레임 길이만 다시
+ * 그린다 — 짧은 선이라 매 틱 다시 그려도 비용이 크지 않다.
  */
 export const beamLine = (
   scene: Phaser.Scene,
   x: number,
   y: number,
   facing: 1 | -1,
+  /** 총구에서 사거리 끝(벽 또는 최대 사거리)까지의 거리. */
   length: number,
 ): void => {
   const { beam } = VFX;
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
-
-  const left = facing > 0 ? x : x - length;
-  const right = left + length;
-
-  // (실험) 도트 사각형 대신 매끈한 두 겹 선. 바깥 옅은 선 + 안쪽 흰 심.
-  graphics.lineStyle(beam.thickness * 2.4, beam.glow, 0.5);
-  graphics.lineBetween(left, y, right, y);
-  graphics.lineStyle(beam.thickness, beam.core, 1);
-  graphics.lineBetween(left, y, right, y);
-
   graphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  const draw = (current: number) => {
+    graphics.clear();
+    const right = current;
+    // 흐릿한 바깥 겹 + 얇은 안쪽 심. 두 겹 다 옅어야 "레이저사이트"로 읽힌다 — 진하면 광선이 된다.
+    graphics.lineStyle(beam.thickness * beam.glowScale, beam.glow, beam.glowAlpha);
+    graphics.lineBetween(0, 0, right, 0);
+    graphics.lineStyle(beam.thickness, beam.core, beam.coreAlpha);
+    graphics.lineBetween(0, 0, right, 0);
+  };
+
+  graphics.setPosition(x, y);
+  graphics.setScale(facing, 1);
+  // 전체 세기를 곱하는 겉겹 알파. 그어지는 순간엔 거의 안 보이다가 예고 구간에서 밝아진다.
+  graphics.setAlpha(beam.startAlphaScale);
+  draw(0);
+
+  const carrier = { extend: 0 };
+  scene.tweens.add({
+    targets: carrier,
+    extend: length,
+    duration: beam.revealMs,
+    ease: "power2.out",
+    onUpdate: () => draw(carrier.extend),
+    onComplete: () => {
+      scene.tweens.add({
+        targets: graphics,
+        alpha: 1,
+        duration: beam.holdMs,
+        ease: "sine.in",
+        onComplete: () => {
+          scene.tweens.add({
+            targets: graphics,
+            alpha: 0,
+            duration: beam.fadeMs,
+            ease: "power2.in",
+            onComplete: () => graphics.destroy(),
+          });
+        },
+      });
+    },
+  });
+};
+
+/** 조준선이 다 그어진 뒤 실제 총알이 나가기까지의 시간. 발사 지연은 이 값을 그대로 쓴다. */
+export const BEAM_WINDUP_MS = VFX.beam.revealMs + VFX.beam.holdMs;
+
+/**
+ * 총구 섬광 — beam의 "팡".
+ *
+ * 발사 순간 총구에서 한 번 번쩍이는 흰 점 + 짧게 뻗는 불꽃 가닥. 조준선(beam)이
+ * "그어지는" 연출이라면 이건 그 시작점에서 "터지는" 연출이다. 둘이 같이 있어야
+ * 찌잉(그어짐)과 팡(터짐)이 한 세트로 읽힌다.
+ */
+export const muzzleFlash = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+): void => {
+  const { muzzle } = VFX;
+  const graphics = scene.add.graphics({ x, y });
+  graphics.setDepth(VFX.depth + 1);
+  graphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  graphics.fillStyle(muzzle.spark, 0.9);
+  graphics.fillCircle(0, 0, muzzle.coreRadius * 1.6);
+  graphics.fillStyle(muzzle.core, 1);
+  graphics.fillCircle(0, 0, muzzle.coreRadius);
+
+  // 총구 방향(전방 반원)으로만 불꽃 가닥을 뻗는다. 뒤로 뻗으면 반동처럼 보여 어색하다.
+  graphics.lineStyle(2, muzzle.spark, 0.85);
+  for (let i = 0; i < muzzle.rays; i += 1) {
+    const spread = Phaser.Math.FloatBetween(-0.5, 0.5);
+    const rayX = facing * muzzle.rayLength * (0.7 + Phaser.Math.FloatBetween(0, 0.4));
+    const rayY = spread * muzzle.rayLength * 0.5;
+    graphics.lineBetween(0, 0, rayX, rayY);
+  }
+
   scene.tweens.add({
     targets: graphics,
     alpha: 0,
-    duration: beam.lifeMs,
-    ease: "power2.in",
+    scale: 1.4,
+    duration: muzzle.lifeMs,
+    ease: "power2.out",
     onComplete: () => graphics.destroy(),
   });
 };
@@ -442,9 +672,25 @@ export const createBulletTrail = (
   graphics.fillStyle(look.core, 0.9);
   graphics.fillTriangle(0, -half * 0.4, 0, half * 0.4, tailX * 0.65, 0);
 
-  // 총알 머리. 가장 밝은 점이 있어야 탄이 어디쯤인지 읽힌다.
+  /**
+   * 총알 머리. 예전엔 점 하나뿐이라 밋밋하고 못생겨 보였다.
+   * 진짜 셰이더 없이도, 반지름이 다른 원을 옅은 것부터 겹쳐 쌓으면(값싼 블룸) 빛나 보인다.
+   * 십자 플레어를 하나 더 얹어 "반짝인다"는 인상을 확실히 준다.
+   */
+  const headRadius = half * 0.6;
+  graphics.fillStyle(look.glow, 0.18);
+  graphics.fillCircle(0, 0, headRadius * 3.2);
+  graphics.fillStyle(look.glow, 0.35);
+  graphics.fillCircle(0, 0, headRadius * 2);
+  graphics.fillStyle(look.core, 0.6);
+  graphics.fillCircle(0, 0, headRadius * 1.35);
   graphics.fillStyle(look.core, 1);
-  graphics.fillCircle(0, 0, half * 0.6);
+  graphics.fillCircle(0, 0, headRadius);
+
+  const flare = headRadius * 2.8;
+  graphics.lineStyle(1, 0xffffff, 0.8);
+  graphics.lineBetween(-flare, 0, flare, 0);
+  graphics.lineBetween(0, -flare, 0, flare);
 
   return graphics;
 };
@@ -498,6 +744,79 @@ export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
       duration: life,
       ease: "power2.out",
       onComplete: () => shard.destroy(),
+    });
+  }
+};
+
+/**
+ * 발밑 흙먼지. 점프로 뛰어오르거나 착지할 때 부른다.
+ * 타격 파편과 같은 방사형 흩어짐을 쓰되, 위쪽 반원으로만 퍼지게 해 "발밑에서 튀는" 모양을 낸다.
+ */
+export const groundDust = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  variant: "jump" | "land",
+): void => {
+  const { dust } = VFX;
+  const spec = dust[variant];
+
+  for (let i = 0; i < spec.count; i += 1) {
+    const size = dust.size * Phaser.Math.FloatBetween(0.7, 1.6);
+    const puff = scene.add.rectangle(x, y, size, size, dust.color, dust.alpha);
+    puff.setDepth(VFX.depth - 2);
+
+    // 표준 각도 기준 207°~333° — 정확히 위쪽을 중심으로 좌우로 퍼진다. 아래로는 안 튄다.
+    const angle = Phaser.Math.FloatBetween(Math.PI * 1.15, Math.PI * 1.85);
+    const speed = Phaser.Math.Between(spec.speed.min, spec.speed.max);
+    const life = spec.lifeMs * Phaser.Math.FloatBetween(0.8, 1.2);
+
+    scene.tweens.add({
+      targets: puff,
+      x: x + Math.cos(angle) * speed * (life / 1000),
+      // 세로 이동을 눌러 낮게 깔리게 한다 — 그대로 두면 불꽃 파편처럼 위로 튄다.
+      y: y + Math.sin(angle) * speed * (life / 1000) * 0.4,
+      alpha: 0,
+      scale: 1.6,
+      duration: life,
+      ease: "power2.out",
+      onComplete: () => puff.destroy(),
+    });
+  }
+};
+
+/**
+ * 총알이 맞았을 때 튀는 파편 — hitBurst의 가벼운 버전.
+ *
+ * 근접타는 몸으로 부딪히는 무게가 있지만, 총알은 스치듯 지나간다.
+ * 조각 수를 줄이고 사각형 대신 짧은 선(빗금)으로 그려 "관통해 지나간" 느낌을 낸다.
+ * 검 쪽 hitBurst와 같은 자리에서 부르되, 색과 모양을 다르게 둬 두 무기가 구분되게 한다.
+ */
+export const rangedSpark = (scene: Phaser.Scene, x: number, y: number, facing: 1 | -1): void => {
+  const { rangedSpark: spark } = VFX;
+
+  for (let i = 0; i < spark.count; i += 1) {
+    // 총알이 지나온 방향을 중심으로 좁게 흩어진다 — 원형 파편이면 근접타와 구분이 안 된다.
+    const angle = Math.PI + Phaser.Math.FloatBetween(-0.6, 0.6) * facing;
+    const speed = Phaser.Math.Between(spark.speed.min, spark.speed.max);
+    const life = spark.lifeMs * Phaser.Math.FloatBetween(0.7, 1.1);
+    const len = spark.length * Phaser.Math.FloatBetween(0.6, 1);
+
+    const line = scene.add.graphics({ x, y });
+    line.setDepth(VFX.depth);
+    line.setBlendMode(Phaser.BlendModes.ADD);
+    line.lineStyle(2, spark.color, 0.95);
+    line.lineBetween(0, 0, Math.cos(angle) * len, Math.sin(angle) * len);
+    line.setRotation(angle);
+
+    scene.tweens.add({
+      targets: line,
+      x: x + Math.cos(angle) * speed * (life / 1000),
+      y: y + Math.sin(angle) * speed * (life / 1000),
+      alpha: 0,
+      duration: life,
+      ease: "power2.out",
+      onComplete: () => line.destroy(),
     });
   }
 };

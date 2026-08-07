@@ -22,11 +22,15 @@ import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
 import {
+  BEAM_WINDUP_MS,
   beamLine,
   createBulletTrail,
+  groundDust,
   hitBurst,
   hitStop,
+  muzzleFlash,
   pulseHitFx,
+  rangedSpark,
   slashArc,
 } from "../systems/CombatVfx";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
@@ -105,8 +109,9 @@ const TUNING = {
     /**
      * 총알은 눈으로 좇는 것이 아니라 지나간 자국으로 읽는다.
      * 느리면 피할 수 있는 투사체처럼 보여서, 쏜 순간 도달한 것처럼 빠르게 보낸다.
+     * 1500이면 화면 하나(1280px)를 가로지르는 데 0.85초가 걸려 총이라기엔 굼떴다.
      */
-    speed: 1500,
+    speed: 3200,
     width: 10,
     height: 6,
     /** 빨라진 만큼 화면을 금방 벗어난다. 수명은 화면 밖 정리로 충분하다. */
@@ -114,8 +119,6 @@ const TUNING = {
     /** RANGED_PIERCE가 없을 때 관통 0명 = 최대 1명 적중 */
     baseMaxHits: 1,
     pierceBonusHits: 1,
-    /** 쏜 순간 총구에서 뻗는 직선의 길이. 조준선 역할만 하므로 실제 사거리와 무관하다. */
-    trailLength: 200,
     /** 반동으로 뒤로 밀리는 속도 */
     recoil: 70,
     /** 이 시간 안에 다시 쏘면 연사가 이어진다. 끊기면 1발째 자세로 돌아간다. */
@@ -191,10 +194,27 @@ const TUNING = {
     hitShakeIntensity: 0.008,
     damageShakeMs: 160,
     damageShakeIntensity: 0.01,
+    /** 착지 무게감. 전투 흔들림보다 약해야 한다 — 평범한 이동이지 피격이 아니다. */
+    landShakeMs: 70,
+    landShakeIntensity: 0.004,
   },
 
   /** 플레이어가 항상 위에 보여야 한다. 도형이라 겹치면 구분이 안 된다. */
-  depth: { player: 10, attack: 9, afterimage: 8 },
+  depth: { player: 10, attack: 9, afterimage: 8, shadow: 2 },
+
+  /**
+   * 발밑 그림자. 바닥에 고정된 채 x만 따라가고, 뜬 높이에 따라 작아지고 옅어진다.
+   * 공중에 있다는 걸 그림자만 보고도 알 수 있어야 한다.
+   */
+  shadow: {
+    width: 24,
+    height: 8,
+    color: 0x000000,
+    maxAlpha: 0.4,
+    /** 이 높이(px)에서 가장 작고 옅어진다. 점프 최고점(~96px)보다 살짝 넉넉하게 잡는다. */
+    maxHeight: 140,
+    minScale: 0.45,
+  },
 } as const;
 
 const MOVE_ACTIONS = [
@@ -225,6 +245,7 @@ export class Player {
   private readonly deps: PlayerDeps;
 
   sprite: Phaser.Physics.Arcade.Sprite | null = null;
+  private shadow: Phaser.GameObjects.Ellipse | null = null;
 
   mode: AttackMode = "MELEE";
   hp: number = PLAYER.maxHp;
@@ -291,7 +312,17 @@ export class Player {
 
   /** 방 시작 시 호출된다. */
   spawn(x: number, y: number): void {
-    const { body, depth } = TUNING;
+    const { body, depth, shadow } = TUNING;
+
+    this.shadow = this.scene.add.ellipse(
+      x,
+      this.deps.arena.bounds.floorY,
+      shadow.width,
+      shadow.height,
+      shadow.color,
+      shadow.maxAlpha,
+    );
+    this.shadow.setDepth(depth.shadow);
 
     const sprite = this.scene.physics.add.sprite(x, y, PLAYER_SPRITE.key);
     // 도트는 정수 배율로만 키운다. 소수 배율은 픽셀 격자를 무너뜨린다.
@@ -323,9 +354,14 @@ export class Player {
     if (!sprite?.body) return;
     const body = sprite.body as Phaser.Physics.Arcade.Body;
 
+    const wasGrounded = this.isGrounded;
     this.isGrounded = body.blocked.down || body.touching.down;
+    this.updateShadow(sprite, body);
     this.cullProjectiles(time);
     if (this.isDead) return;
+
+    // 공중이었다가 막 닿은 프레임만 착지다. 서 있는 동안 매 프레임 걸리면 안 된다.
+    if (!wasGrounded && this.isGrounded) this.onLand(sprite, body);
 
     if (this.isDashing) {
       this.trailAfterimage(time);
@@ -384,17 +420,56 @@ export class Player {
     this.projectiles = [];
     this.sprite?.destroy();
     this.sprite = null;
+    this.shadow?.destroy();
+    this.shadow = null;
     this.keys = {};
+  }
+
+  /**
+   * 그림자를 바닥에 고정한 채 x만 따라가게 하고, 뜬 높이만큼 작고 옅게 만든다.
+   * 발판 위·바닥 위 구분 없이 항상 `floorY`에 그린다 — 발판 그림자까지 다루기엔
+   * 지금 이 방 템플릿엔 중간 발판이 없다.
+   */
+  private updateShadow(sprite: Phaser.Physics.Arcade.Sprite, body: Phaser.Physics.Arcade.Body): void {
+    if (!this.shadow) return;
+    const { shadow } = TUNING;
+
+    const height = Math.max(0, this.deps.arena.bounds.floorY - body.bottom);
+    const t = Phaser.Math.Clamp(height / shadow.maxHeight, 0, 1);
+    const scale = Phaser.Math.Linear(1, shadow.minScale, t);
+
+    this.shadow.setPosition(sprite.x, this.deps.arena.bounds.floorY);
+    this.shadow.setScale(scale);
+    this.shadow.setAlpha(shadow.maxAlpha * (1 - t * 0.7));
   }
 
   // ────────────────────────────── 이동 ──────────────────────────────
 
   private jump(): void {
-    const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
-    if (!body) return;
+    const sprite = this.sprite;
+    const body = sprite?.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!sprite || !body) return;
+    groundDust(this.scene, sprite.x, body.bottom, "jump");
     body.setVelocityY(-PLAYER.jumpVelocity);
     // 뛰는 순간 세로로 늘어나면 도형이라도 도약이 읽힌다.
     this.punch(0.86, 1.18);
+  }
+
+  /** 공중에서 막 바닥에 닿은 프레임에만 부른다. */
+  private onLand(sprite: Phaser.Physics.Arcade.Sprite, body: Phaser.Physics.Arcade.Body): void {
+    groundDust(this.scene, sprite.x, body.bottom, "land");
+    /**
+     * 착지 스쿼시를 `punch()`(스프라이트 scaleY 트윈)로 만들면 안 된다.
+     * Phaser Arcade Body는 매 프레임 `sourceHeight * scaleY`로 충돌 박스 높이를,
+     * `offset.y * scaleY`로 위치를 다시 계산한다(`Body.updateFromGameObject`).
+     * 접지 상태에서 scaleY를 순간적으로 줄이면 박스 바닥이 바닥면 위로 살짝 뜨고,
+     * 다음 프레임 중력이 그 틈만큼 다시 끌어내려 "착지 직후 훅 꺼지는" 것처럼 보였다.
+     * 물리에 관여하지 않는 카메라 흔들림으로만 무게감을 준다.
+     */
+    this.scene.cameras.main.shake(
+      TUNING.feedback.landShakeMs,
+      TUNING.feedback.landShakeIntensity,
+    );
   }
 
   dash(): void {
@@ -591,49 +666,89 @@ export class Player {
     const reforgedBarrel = this.hasUpgrade("BARREL_REFORGED");
     const maxHits =
       ranged.baseMaxHits + (this.hasUpgrade("RANGED_PIERCE") ? ranged.pierceBonusHits : 0);
-
-    const projectile = this.scene.physics.add.image(
-      sprite.x + this.facing * TUNING.body.width,
-      sprite.y,
-      TEXTURE.playerAttack,
-    );
-    projectile.setDisplaySize(ranged.width, ranged.height);
-    projectile.setDepth(TUNING.depth.attack);
-    // 탄 자체는 안 보이게 두고 꼬리로만 보여준다. 사각형 두 개가 겹치면 지저분하다.
-    projectile.setAlpha(0);
-    this.deps.arena.playerAttacks.add(projectile);
-
-    // 꼬리는 총알에 자식으로 붙이지 않는다. 붙이면 물리 바디까지 함께 커진다.
-    const trail = createBulletTrail(this.scene, this.facing, reforgedBarrel);
-    trail.setPosition(projectile.x, projectile.y);
-
-    const body = projectile.body as Phaser.Physics.Arcade.Body;
-    body.setAllowGravity(false);
-    body.setVelocityX(
-      this.facing *
-        ranged.speed *
-        (reforgedBarrel ? TUNING.upgrade.barrelSpeedMultiplier : 1),
+    const rangedDamage = Math.round(
+      this.applyDashFollowup(
+        ranged.damage * (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1),
+      ),
     );
 
-    const rangedDamage =
-      ranged.damage * (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1);
-    projectile.setData("damage", Math.round(this.applyDashFollowup(rangedDamage)));
-    projectile.setData("mode", "RANGED" satisfies AttackMode);
-    // 관통이 없으면 씬이 첫 적중에서 없애준다. 관통이 있으면 여기서 횟수를 센다.
-    projectile.setData("consumeOnHit", maxHits <= 1);
-    projectile.setData("maxHits", maxHits);
-    projectile.setData("expiresAtMs", now + ranged.lifeMs);
-    this.projectiles.push({ body: projectile, trail });
+    // 조준한 자리를 미리 붙잡아 둔다. 예고 구간(BEAM_WINDUP_MS) 동안 플레이어가 움직여도
+    // 총알은 조준선이 그어진 그 자리에서 나가야 한다 — 아니면 조준선과 발사 위치가 어긋난다.
+    const originX = sprite.x + this.facing * TUNING.body.width;
+    const originY = sprite.y;
+    const facing = this.facing;
 
-    // 총구에서 뻗는 얇은 직선. 투사체보다 먼저 눈에 들어와 조준선 역할을 한다.
-    beamLine(this.scene, projectile.x, projectile.y, this.facing, ranged.trailLength);
+    // 총구 섬광 없이 조준선만 먼저 보여준다. 이게 "찌잉" — 옅게 그어졌다가 밝아지며 곧 쏜다고 예고한다.
+    const reachToWall = facing > 0 ? this.deps.arena.bounds.width - originX : originX;
+    const reach = Math.min(reachToWall, this.beamReachToEnemy(originX, originY, facing));
+    beamLine(this.scene, originX, originY, facing, reach);
 
-    // 반동으로 뒤로 조금 밀린다. 검과 총의 감각이 갈리는 지점이다.
-    const playerBody = sprite.body as Phaser.Physics.Arcade.Body;
-    playerBody.setVelocityX(playerBody.velocity.x - this.facing * ranged.recoil);
+    this.scene.time.delayedCall(BEAM_WINDUP_MS, () => {
+      if (this.isDead) return;
 
-    this.punch(1 / TUNING.feedback.punchScale, TUNING.feedback.punchScale);
+      const projectile = this.scene.physics.add.image(originX, originY, TEXTURE.playerAttack);
+      projectile.setDisplaySize(ranged.width, ranged.height);
+      projectile.setDepth(TUNING.depth.attack);
+      // 탄 자체는 안 보이게 두고 꼬리로만 보여준다. 사각형 두 개가 겹치면 지저분하다.
+      projectile.setAlpha(0);
+      this.deps.arena.playerAttacks.add(projectile);
+
+      // 꼬리는 총알에 자식으로 붙이지 않는다. 붙이면 물리 바디까지 함께 커진다.
+      const trail = createBulletTrail(this.scene, facing, reforgedBarrel);
+      trail.setPosition(projectile.x, projectile.y);
+
+      const body = projectile.body as Phaser.Physics.Arcade.Body;
+      body.setAllowGravity(false);
+      body.setVelocityX(
+        facing * ranged.speed * (reforgedBarrel ? TUNING.upgrade.barrelSpeedMultiplier : 1),
+      );
+
+      projectile.setData("damage", rangedDamage);
+      projectile.setData("mode", "RANGED" satisfies AttackMode);
+      // 관통이 없으면 씬이 첫 적중에서 없애준다. 관통이 있으면 여기서 횟수를 센다.
+      projectile.setData("consumeOnHit", maxHits <= 1);
+      projectile.setData("maxHits", maxHits);
+      projectile.setData("expiresAtMs", this.scene.time.now + ranged.lifeMs);
+      this.projectiles.push({ body: projectile, trail });
+
+      // 예고가 끝나고 실제로 나가는 "팡" — 총구 섬광은 발사 순간에만 터진다.
+      muzzleFlash(this.scene, projectile.x, projectile.y, facing);
+
+      // 반동으로 뒤로 조금 밀린다. 검과 총의 감각이 갈리는 지점이다.
+      const playerBody = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
+      playerBody?.setVelocityX(playerBody.velocity.x - facing * ranged.recoil);
+
+      this.punch(1 / TUNING.feedback.punchScale, TUNING.feedback.punchScale);
+    });
+
     return true;
+  }
+
+  /**
+   * 조준선이 벽까지 가지 않고 그 경로에 있는 가장 가까운 적 앞에서 멈추게 한다.
+   * 벽까지 쭉 그으면 "저기까지 쏜다"가 아니라 "저 뒤까지 뚫는다"처럼 보여 실제 사거리와 어긋난다.
+   *
+   * @returns 총구에서 가장 가까운 적의 앞면까지 거리. 경로에 적이 없으면 `Infinity`(호출부에서 벽까지 거리와 min).
+   */
+  private beamReachToEnemy(originX: number, originY: number, facing: 1 | -1): number {
+    let nearest = Infinity;
+
+    for (const child of this.deps.arena.enemyBodies.getChildren()) {
+      const enemy = child as Phaser.Physics.Arcade.Sprite;
+      if (!enemy.active) continue;
+
+      // 조준선과 같은 높이에 걸쳐 있는 적만 본다 — 그래야 실제로 맞는 적까지만 선이 멈춘다.
+      const halfHeight = enemy.displayHeight / 2;
+      if (Math.abs(enemy.y - originY) > halfHeight) continue;
+
+      const towardEnemy = facing > 0 ? enemy.x - originX : originX - enemy.x;
+      if (towardEnemy <= 0) continue;
+
+      const distanceToFace = towardEnemy - enemy.displayWidth / 2;
+      nearest = Math.min(nearest, Math.max(0, distanceToFace));
+    }
+
+    return nearest;
   }
 
   /**
@@ -651,13 +766,14 @@ export class Player {
 
     // 맞은 자리를 모르면 플레이어 위치에라도 터뜨린다. 아무것도 안 나오는 것보다 낫다.
     const point = at ?? { x: this.sprite?.x ?? 0, y: this.sprite?.y ?? 0 };
-    hitBurst(this.scene, point.x, point.y);
 
-    // 검은 무겁고 총은 가볍다. 같은 연출을 쓰면 두 방식이 구분되지 않는다.
+    // 검은 무겁고 총은 가볍다. 파편 연출부터 갈라야 두 방식이 구분된다.
     if (mode === "MELEE") {
+      hitBurst(this.scene, point.x, point.y);
       hitStop(this.scene);
       pulseHitFx(this.scene, 0.6);
     } else {
+      rangedSpark(this.scene, point.x, point.y, this.facing);
       pulseHitFx(this.scene, 0.3);
     }
   }
