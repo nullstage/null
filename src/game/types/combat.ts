@@ -71,7 +71,7 @@ export const TEXTURE = {
  */
 export const PLAYER_SPRITE = {
   key: "player_sheet",
-  /** 512x448, 8열 7행. 오른손 총·왼손 검을 함께 든 양손 무기 시트다. */
+  /** 512x704, 8열 11행. 오른손 총·왼손 검을 함께 든 양손 무기 시트다. */
   path: "sprites/player/player.png",
   frameWidth: 64,
   frameHeight: 64,
@@ -90,32 +90,56 @@ export const PLAYER_SPRITE = {
     jump: { row: 2, frames: 6, fps: 9, loop: false },
     dash: { row: 3, frames: 6, fps: 16, loop: false },
     /**
-     * 왼손 검. 키 한 번에 한 번만 벤다.
+     * 왼손 검 3연타. 타마다 그림이 달라야 콤보가 콤보로 읽힌다.
+     * 1타 수평 베기 → 2타 올려 베기 → 3타 내려찍기.
      *
      * `frameDurations`는 프레임마다 **더해지는** 시간이다(Phaser 규칙).
      * 모든 프레임을 같은 길이로 재생하면 그림이 아무리 좋아도 정적으로 보인다.
      * 윈드업에서 뜸을 들이고 베는 순간은 최소 시간으로 지나가야 힘이 실린다.
      */
-    attack: {
-      row: 4,
-      frames: 8,
-      fps: 28,
+    attack1: { row: 4, frames: 6, fps: 26, loop: false, frameDurations: [55, 40, 0, 0, 40, 80] },
+    attack2: { row: 5, frames: 6, fps: 26, loop: false, frameDurations: [45, 30, 0, 0, 35, 75] },
+    /** 마무리 타격. 가장 무겁게 뜸을 들이고 가장 길게 여운을 남긴다. */
+    attack3: {
+      row: 6,
+      frames: 7,
+      fps: 24,
       loop: false,
-      frameDurations: [60, 50, 30, 0, 0, 25, 50, 90],
+      frameDurations: [70, 55, 0, 0, 40, 70, 110],
     },
-    /** 오른손 총. 근거리와 그림이 갈려야 지금 무엇을 쓰는지 보인다. */
-    shoot: {
-      row: 5,
+    /**
+     * 오른손 총 3연사. 근거리와 그림이 갈려야 지금 무엇을 쓰는지 보인다.
+     * 1발 뽑아 들며 사격 → 2발 겨눈 채 후속 → 3발 버티며 강한 반동.
+     */
+    shoot1: { row: 7, frames: 5, fps: 26, loop: false, frameDurations: [45, 25, 0, 35, 70] },
+    shoot2: { row: 8, frames: 5, fps: 26, loop: false, frameDurations: [20, 0, 25, 40, 65] },
+    shoot3: {
+      row: 9,
       frames: 6,
-      fps: 28,
+      fps: 24,
       loop: false,
-      frameDurations: [40, 0, 0, 30, 50, 80],
+      frameDurations: [50, 30, 0, 45, 70, 100],
     },
-    switch: { row: 6, frames: 4, fps: 14, loop: false },
+    switch: { row: 10, frames: 4, fps: 14, loop: false },
   },
 } as const;
 
 export type PlayerAnimState = keyof typeof PLAYER_SPRITE.states;
+
+/**
+ * 콤보 단계(1~3)를 애니메이션 상태로 바꾼다.
+ *
+ * 단계 번호와 시트 행이 어긋나면 2타를 쳤는데 3타 그림이 나온다.
+ * 화면에서만 티가 나고 오류로는 드러나지 않으니 한 곳에서만 관리한다.
+ */
+export const MELEE_ANIM_BY_STEP = ["attack1", "attack2", "attack3"] as const;
+export const RANGED_ANIM_BY_STEP = ["shoot1", "shoot2", "shoot3"] as const;
+
+/** 단계 값이 범위를 벗어나도 첫 타로 떨어지게 한다. */
+export const comboAnim = (
+  table: readonly PlayerAnimState[],
+  step: number,
+): PlayerAnimState => table[Math.min(Math.max(step, 1), table.length) - 1];
 
 /** 애니메이션 키. 씬과 엔티티가 같은 문자열을 쓰도록 한 곳에서 만든다. */
 export const playerAnimKey = (state: PlayerAnimState): string => `player-${state}`;

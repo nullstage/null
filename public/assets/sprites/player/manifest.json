@@ -1,429 +1,161 @@
 {
-  "characterId": "player",
-  "engine": "component-row",
-  "game_input": "sprite-sheet-alpha.png",
-  "degraded_static_fallback": false,
-  "curation_applied": false,
-  "frame_variant": "pixel",
-  "sprite_sheet_alpha": "sprite-sheet-alpha.png",
-  "sprite_sheet_alpha_report": "sprite-sheet-alpha.report.json",
-  "base_image": "base-source.png",
-  "cell": {
-    "shape": "square",
-    "width": 64,
-    "height": 64,
-    "safe_margin_x": 6,
-    "safe_margin_y": 6,
-    "size": 64,
-    "safe_margin": 6
-  },
-  "chroma_key": {
-    "name": "magenta",
-    "hex": "#FF00FF",
-    "rgb": [
-      255,
-      0,
-      255
-    ],
-    "selection": "manual"
-  },
-  "animation": {
-    "cellWidth": 64,
-    "cellHeight": 64,
-    "columns": 8,
-    "rows": {
-      "idle": {
-        "row": 0,
-        "frames": 6,
-        "fps": 6,
-        "durations_ms": [
-          167,
-          167,
-          167,
-          167,
-          167,
-          167
-        ],
-        "loop": true,
-        "frame_variant": "pixel"
-      },
-      "run": {
-        "row": 1,
-        "frames": 8,
-        "fps": 12,
-        "durations_ms": [
-          83,
-          83,
-          83,
-          83,
-          83,
-          83,
-          83,
-          83
-        ],
-        "loop": true,
-        "frame_variant": "pixel"
-      },
-      "jump": {
-        "row": 2,
-        "frames": 6,
-        "fps": 9,
-        "durations_ms": [
-          111,
-          111,
-          111,
-          111,
-          111,
-          111
-        ],
-        "loop": false,
-        "frame_variant": "pixel"
-      },
-      "dash": {
-        "row": 3,
-        "frames": 6,
-        "fps": 16,
-        "durations_ms": [
-          62,
-          62,
-          62,
-          62,
-          62,
-          62
-        ],
-        "loop": false,
-        "frame_variant": "pixel"
-      },
-      "attack": {
-        "row": 4,
-        "frames": 8,
-        "fps": 14,
-        "durations_ms": [
-          71,
-          71,
-          71,
-          71,
-          71,
-          71,
-          71,
-          71
-        ],
-        "loop": false,
-        "frame_variant": "pixel"
-      },
-      "shoot": {
-        "row": 5,
-        "frames": 6,
-        "fps": 14,
-        "durations_ms": [
-          71,
-          71,
-          71,
-          71,
-          71,
-          71
-        ],
-        "loop": false,
-        "frame_variant": "pixel"
-      },
-      "switch": {
-        "row": 6,
-        "frames": 4,
-        "fps": 14,
-        "durations_ms": [
-          71,
-          71,
-          71,
-          71
-        ],
-        "loop": false,
-        "frame_variant": "pixel"
-      }
-    }
-  },
-  "frame_layout": {
-    "sheetWidth": 512,
-    "sheetHeight": 448,
-    "cellWidth": 64,
-    "cellHeight": 64,
-    "rows": {
-      "idle": [
-        {
-          "x": 0,
-          "y": 0,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 0,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 0,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 0,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 256,
-          "y": 0,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 320,
-          "y": 0,
-          "w": 64,
-          "h": 64
-        }
-      ],
-      "run": [
-        {
-          "x": 0,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 256,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 320,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 384,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 448,
-          "y": 64,
-          "w": 64,
-          "h": 64
-        }
-      ],
-      "jump": [
-        {
-          "x": 0,
-          "y": 128,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 128,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 128,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 128,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 256,
-          "y": 128,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 320,
-          "y": 128,
-          "w": 64,
-          "h": 64
-        }
-      ],
-      "dash": [
-        {
-          "x": 0,
-          "y": 192,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 192,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 192,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 192,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 256,
-          "y": 192,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 320,
-          "y": 192,
-          "w": 64,
-          "h": 64
-        }
-      ],
-      "attack": [
-        {
-          "x": 0,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 256,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 320,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 384,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 448,
-          "y": 256,
-          "w": 64,
-          "h": 64
-        }
-      ],
-      "shoot": [
-        {
-          "x": 0,
-          "y": 320,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 320,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 320,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 320,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 256,
-          "y": 320,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 320,
-          "y": 320,
-          "w": 64,
-          "h": 64
-        }
-      ],
-      "switch": [
-        {
-          "x": 0,
-          "y": 384,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 64,
-          "y": 384,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 128,
-          "y": 384,
-          "w": 64,
-          "h": 64
-        },
-        {
-          "x": 192,
-          "y": 384,
-          "w": 64,
-          "h": 64
-        }
+  "cellWidth": 64,
+  "cellHeight": 64,
+  "columns": 8,
+  "sheetWidth": 512,
+  "sheetHeight": 704,
+  "rows": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "fps": 6,
+      "loop": true,
+      "durations_ms": [
+        167,
+        167,
+        167,
+        167,
+        167,
+        167
+      ]
+    },
+    "run": {
+      "row": 1,
+      "frames": 8,
+      "fps": 12,
+      "loop": true,
+      "durations_ms": [
+        83,
+        83,
+        83,
+        83,
+        83,
+        83,
+        83,
+        83
+      ]
+    },
+    "jump": {
+      "row": 2,
+      "frames": 6,
+      "fps": 9,
+      "loop": false,
+      "durations_ms": [
+        111,
+        111,
+        111,
+        111,
+        111,
+        111
+      ]
+    },
+    "dash": {
+      "row": 3,
+      "frames": 6,
+      "fps": 16,
+      "loop": false,
+      "durations_ms": [
+        62,
+        62,
+        62,
+        62,
+        62,
+        62
+      ]
+    },
+    "attack1": {
+      "row": 4,
+      "frames": 6,
+      "fps": 26,
+      "loop": false,
+      "durations_ms": [
+        38,
+        38,
+        38,
+        38,
+        38,
+        38
+      ]
+    },
+    "attack2": {
+      "row": 5,
+      "frames": 6,
+      "fps": 26,
+      "loop": false,
+      "durations_ms": [
+        38,
+        38,
+        38,
+        38,
+        38,
+        38
+      ]
+    },
+    "attack3": {
+      "row": 6,
+      "frames": 7,
+      "fps": 24,
+      "loop": false,
+      "durations_ms": [
+        42,
+        42,
+        42,
+        42,
+        42,
+        42,
+        42
+      ]
+    },
+    "shoot1": {
+      "row": 7,
+      "frames": 5,
+      "fps": 26,
+      "loop": false,
+      "durations_ms": [
+        38,
+        38,
+        38,
+        38,
+        38
+      ]
+    },
+    "shoot2": {
+      "row": 8,
+      "frames": 5,
+      "fps": 26,
+      "loop": false,
+      "durations_ms": [
+        38,
+        38,
+        38,
+        38,
+        38
+      ]
+    },
+    "shoot3": {
+      "row": 9,
+      "frames": 6,
+      "fps": 24,
+      "loop": false,
+      "durations_ms": [
+        42,
+        42,
+        42,
+        42,
+        42,
+        42
+      ]
+    },
+    "switch": {
+      "row": 10,
+      "frames": 4,
+      "fps": 14,
+      "loop": false,
+      "durations_ms": [
+        71,
+        71,
+        71,
+        71
       ]
     }
   }

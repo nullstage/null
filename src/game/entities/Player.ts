@@ -31,9 +31,12 @@ import {
 } from "../systems/CombatVfx";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import {
+  MELEE_ANIM_BY_STEP,
   PLAYER_SPRITE,
+  RANGED_ANIM_BY_STEP,
   SILHOUETTE,
   TEXTURE,
+  comboAnim,
   playerAnimKey,
   type CombatArena,
   type PlayerAnimState,
@@ -115,6 +118,8 @@ const TUNING = {
     trailLength: 200,
     /** 반동으로 뒤로 밀리는 속도 */
     recoil: 70,
+    /** 이 시간 안에 다시 쏘면 연사가 이어진다. 끊기면 1발째 자세로 돌아간다. */
+    burstWindowMs: 900,
   },
 
   dash: {
@@ -227,6 +232,14 @@ export class Player {
   private nextAttackAtMs = 0;
   private comboStep = 0;
   private comboExpiresAtMs = 0;
+
+  /**
+   * 사격 단계(1~3). 근접 콤보와 따로 센다.
+   *
+   * 총은 맞히는 순서가 아니라 연사 리듬이라, 창이 끊기면 다시 1발째 자세로 돌아간다.
+   */
+  private rangedStep = 0;
+  private rangedComboExpiresAtMs = 0;
 
   private dashCharges: number = PLAYER.dashCharges;
   private dashEndsAtMs = 0;
@@ -425,8 +438,13 @@ export class Player {
     const fired = this.mode === "MELEE" ? this.attackMelee() : this.attackRanged();
     if (!fired) return;
 
-    // 검과 총은 그림이 갈려야 한다. 같은 모션이면 지금 무엇을 쓰는지 화면에서 안 보인다.
-    this.lockAnim(this.mode === "MELEE" ? "attack" : "shoot");
+    // 검과 총은 그림이 갈려야 하고, 같은 무기 안에서도 타마다 달라야 콤보로 읽힌다.
+    // 단계는 각 공격 안에서 이미 갱신됐으므로 여기서는 읽기만 한다.
+    this.lockAnim(
+      this.mode === "MELEE"
+        ? comboAnim(MELEE_ANIM_BY_STEP, this.comboStep)
+        : comboAnim(RANGED_ANIM_BY_STEP, this.rangedStep),
+    );
   }
 
   /**
@@ -531,7 +549,12 @@ export class Player {
       PLAYER.rangedCooldownMs *
       (this.hasUpgrade("RANGED_COOLDOWN_DOWN") ? TUNING.upgrade.rangedCooldownMultiplier : 1);
     this.nextAttackAtMs = now + cooldown;
+    // 검을 놓았으니 근접 콤보는 끊긴다.
     this.comboStep = 0;
+
+    // 연사 리듬. 창이 끊기면 다시 1발째 자세로 돌아간다.
+    this.rangedStep = now > this.rangedComboExpiresAtMs ? 1 : (this.rangedStep % 3) + 1;
+    this.rangedComboExpiresAtMs = now + TUNING.ranged.burstWindowMs;
 
     this.telemetry.recordRangedAttack();
     if (!this.isGrounded) this.telemetry.recordAirAttack();
@@ -608,7 +631,9 @@ export class Player {
   /** 근거리 ↔ 원거리 모드 전환. 즉시 전환한다. (PLAYER.modeSwitchMs) */
   switchMode(): void {
     this.mode = this.mode === "MELEE" ? "RANGED" : "MELEE";
+    // 무기를 바꾸면 양쪽 흐름 다 끊긴다. 다음 공격은 1타부터 시작한다.
     this.comboStep = 0;
+    this.rangedStep = 0;
     this.applyModeTint();
     // 손을 바꾸는 그림만 짧게 보여 준다. 전환 자체는 즉시라 입력을 막지 않는다.
     this.lockAnim("switch");
