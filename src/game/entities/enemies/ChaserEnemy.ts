@@ -16,9 +16,9 @@ import type Phaser from "phaser";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
-/** 본체 크기. 셋 중 가장 날렵한 실루엣이라 좁고 낮다. */
-const BODY_WIDTH = 34;
-const BODY_HEIGHT = 46;
+/** 본체 크기. 원본 시트(64px 정사각)에 맞춰 사람형 비율로 잡는다. */
+const BODY_WIDTH = 40;
+const BODY_HEIGHT = 52;
 
 /** 이 거리 안으로 들어오면 돌진을 준비한다. */
 const LUNGE_RANGE = 230;
@@ -54,7 +54,8 @@ export class ChaserEnemy extends BaseEnemy {
   }
 
   spawn(x: number, y: number): void {
-    this.spawnBody(x, y, TEXTURE.chaser, BODY_WIDTH, BODY_HEIGHT);
+    const body = this.spawnBody(x, y, TEXTURE.chaser, BODY_WIDTH, BODY_HEIGHT);
+    body.play("chaserIdle");
   }
 
   update(_time: number, deltaMs: number): void {
@@ -68,6 +69,8 @@ export class ChaserEnemy extends BaseEnemy {
       case "CHASE":
         this.facing = dx === 0 ? this.facing : Math.sign(dx);
         body.setVelocityX(this.facing * this.definition.moveSpeed);
+        body.setFlipX(this.facing < 0);
+        body.anims.play("chaserWalk", true);
         if (Math.abs(dx) <= LUNGE_RANGE) this.beginWindup();
         break;
 
@@ -92,6 +95,7 @@ export class ChaserEnemy extends BaseEnemy {
       case "RECOVER":
       case "STAGGER":
         body.setVelocityX(0);
+        body.anims.play("chaserIdle", true);
         if (this.stateMs >= (this.state === "RECOVER" ? RECOVER_MS : STAGGER_MS)) {
           this.setStateTint(null);
           this.enter("CHASE");
@@ -156,6 +160,7 @@ export class ChaserEnemy extends BaseEnemy {
     this.afterimageMs = 0;
     this.enter("LUNGE");
     this.sprite?.setVelocityX(this.facing * LUNGE_SPEED);
+    this.sprite?.anims.play("chaserAttack", true);
   }
 
   private clearTelegraph(): void {

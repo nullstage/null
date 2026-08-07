@@ -14,6 +14,7 @@ import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
 import { runState } from "../systems/RunState";
 import {
   AUDIO,
+  ENEMY_ANIM,
   PLAYER_SPRITE,
   SILHOUETTE,
   TEXTURE,
@@ -27,10 +28,19 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 적과 보스는 아직 도형이다. 플레이어만 스프라이트로 교체됐다. (OQ-024)
+    // 보스는 아직 도형이다. 플레이어·근접형·원거리형은 스프라이트로 교체됐다. (OQ-024)
     this.load.spritesheet(PLAYER_SPRITE.key, assetPath(PLAYER_SPRITE.path), {
       frameWidth: PLAYER_SPRITE.frameWidth,
       frameHeight: PLAYER_SPRITE.frameHeight,
+    });
+    // 적1(원거리)·적2(근접) 시트를 원본 그대로 64px 정사각 그리드로 로드한다.
+    this.load.spritesheet(TEXTURE.ranged, assetPath("sprites/enemies/ranged.png"), {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
+    this.load.spritesheet(TEXTURE.chaser, assetPath("sprites/enemies/chaser.png"), {
+      frameWidth: 64,
+      frameHeight: 64,
     });
     // (실험) 방 2·3 배경. 보스방은 아직 이 텍스처를 쓰지 않는다.
     this.load.image(TEXTURE.background, assetPath("backgrounds/ruins-dusk.png"));
@@ -60,6 +70,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.registerPlayerAnimations();
+    this.registerEnemyAnimations();
     runState.reset(this.time.now);
     runState.setPhase("READY");
     this.scene.start("Ready");
@@ -100,16 +111,31 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
+  /** 적1(원거리)·적2(근접) 스프라이트의 idle·walk·attack 애니메이션을 등록한다. */
+  private registerEnemyAnimations(): void {
+    for (const [key, spec] of Object.entries(ENEMY_ANIM)) {
+      if (this.anims.exists(key)) continue;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers(spec.key, {
+          start: spec.start,
+          end: spec.start + spec.frames - 1,
+        }),
+        frameRate: spec.fps,
+        repeat: spec.loop ? -1 : 0,
+      });
+    }
+  }
+
   /**
    * 에셋 없이도 형태를 구분할 수 있게 단색 사각형 텍스처를 만든다. (OQ-024)
    * 색은 `types/combat.ts`의 팔레트를 따른다. 스프라이트가 들어오면 이 함수만 걷어내면 된다.
+   * chaser·ranged는 이제 실제 시트를 쓰므로 여기서 만들지 않는다(이미 존재해 스킵됨).
    */
   private createPlaceholderTextures(): void {
     const swatches: Record<string, number> = {
       [TEXTURE.player]: SILHOUETTE.player,
       [TEXTURE.playerAttack]: SILHOUETTE.playerAttack,
-      [TEXTURE.chaser]: SILHOUETTE.chaser,
-      [TEXTURE.ranged]: SILHOUETTE.ranged,
       [TEXTURE.mobility]: SILHOUETTE.mobility,
       [TEXTURE.boss]: SILHOUETTE.boss,
       [TEXTURE.enemyAttack]: SILHOUETTE.enemyAttack,

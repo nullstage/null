@@ -196,6 +196,24 @@ export const comboAnim = (
 /** 애니메이션 키. 씬과 엔티티가 같은 문자열을 쓰도록 한 곳에서 만든다. */
 export const playerAnimKey = (state: PlayerAnimState): string => `player-${state}`;
 
+/**
+ * 적 애니메이션. 제공된 스프라이트시트에서 프레임 구간만 골라 쓴다.
+ *
+ * 원본 시트를 그대로 로드하므로(64px 정사각 셀) start는 `행 * 열수 + 칸` 또는
+ * (적2처럼) 소스의 프레임 태그를 기준으로 역산한 값이다.
+ *   - 적1(ranged, 18열): idle=0행, walk=1행, attack=3행(투사체 던지는 구간 포함)
+ *   - 적2(chaser, 16열): aseprite 태그 기준 idle/walk/attack 1 구간 (1-based 태그 → 0-based로 -1)
+ * 애니메이션 키 문자열은 이 객체의 속성 이름을 그대로 쓴다(`registerEnemyAnimations` 참고).
+ */
+export const ENEMY_ANIM = {
+  rangedIdle: { key: TEXTURE.ranged, start: 0, frames: 8, fps: 8, loop: true },
+  rangedWalk: { key: TEXTURE.ranged, start: 18, frames: 8, fps: 10, loop: true },
+  rangedAttack: { key: TEXTURE.ranged, start: 54, frames: 12, fps: 14, loop: false },
+  chaserIdle: { key: TEXTURE.chaser, start: 36, frames: 8, fps: 8, loop: true },
+  chaserWalk: { key: TEXTURE.chaser, start: 44, frames: 8, fps: 10, loop: true },
+  chaserAttack: { key: TEXTURE.chaser, start: 68, frames: 8, fps: 14, loop: false },
+} as const;
+
 /** 바닥 두께. 스폰 높이 계산의 기준이 된다. */
 export const FLOOR_HEIGHT = 48;
 

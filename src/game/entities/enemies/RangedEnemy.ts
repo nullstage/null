@@ -17,9 +17,9 @@ import Phaser from "phaser";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
-/** 본체 크기. 셋 중 가장 가늘고 높아 멀리서도 구분된다. */
-const BODY_WIDTH = 30;
-const BODY_HEIGHT = 54;
+/** 본체 크기. 벌형 시트는 둥글고 낮아 세로로 길지 않다. */
+const BODY_WIDTH = 38;
+const BODY_HEIGHT = 38;
 
 /** 유지하려는 거리. 이보다 가까우면 물러나고, 멀면 다가온다. */
 const KEEP_DISTANCE_MIN = 280;
@@ -57,7 +57,8 @@ export class RangedEnemy extends BaseEnemy {
   }
 
   spawn(x: number, y: number): void {
-    this.spawnBody(x, y, TEXTURE.ranged, BODY_WIDTH, BODY_HEIGHT);
+    const body = this.spawnBody(x, y, TEXTURE.ranged, BODY_WIDTH, BODY_HEIGHT);
+    body.play("rangedIdle");
   }
 
   update(_time: number, deltaMs: number): void {
@@ -66,8 +67,13 @@ export class RangedEnemy extends BaseEnemy {
 
     this.stateMs += deltaMs;
 
+    // 조준 중이든 아니든 플레이어 쪽을 보고 있어야 "겨냥한다"가 읽힌다.
+    const facingTarget = this.getPlayerPosition().x - body.x;
+    if (facingTarget !== 0) body.setFlipX(facingTarget < 0);
+
     if (this.aiming) {
       body.setVelocityX(0);
+      body.anims.play("rangedAttack", true);
       if (this.stateMs >= this.definition.telegraphMs) this.fire();
       return;
     }
@@ -90,6 +96,7 @@ export class RangedEnemy extends BaseEnemy {
     }
 
     body.setAlpha(this.cornered ? CORNERED_ALPHA : 1);
+    body.anims.play(body.body?.velocity.x !== 0 ? "rangedWalk" : "rangedIdle", true);
 
     // 몰려 있는 동안에는 쏘지 않는다. 이 빈틈이 "벽에 몰리면 취약"의 실체다.
     if (this.cornered) return;
