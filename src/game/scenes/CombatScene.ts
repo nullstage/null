@@ -263,7 +263,8 @@ export class CombatScene extends Phaser.Scene {
       for (let i = 0; i < decorCount; i += 1) {
         const decor = Phaser.Utils.Array.GetRandom([...ROOM_ONE_DECOR]);
         const x = this.groundedSpawnX(Phaser.Math.Between(90, roomWidth - 90));
-        addDecor(this, decor.key, x, this.arena.bounds.floorY, decor.scale);
+        // recede=true — 전투방에서는 구조물이 적보다 눈에 띄면 안 된다.
+        addDecor(this, decor.key, x, this.arena.bounds.floorY, decor.scale, true);
       }
     }
 

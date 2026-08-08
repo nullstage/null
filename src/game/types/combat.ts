@@ -245,6 +245,19 @@ export const ENEMY_ANIM = {
   chaserAttack: { key: TEXTURE.chaser, start: 128, frames: 8, fps: 14, loop: false },
 } as const;
 
+/**
+ * 렌더 순서. 흩어져 있으면 "장식이 적을 가린다" 같은 문제가 생겨 한 곳에 모은다.
+ * 적은 예전에 depth를 지정하지 않아 기본값 0이었고, 그래서 장식(2)에 가려졌다.
+ */
+export const DEPTH = {
+  background: -10,
+  clouds: -9,
+  floor: 1,
+  decor: 2,
+  enemy: 6,
+  player: 10,
+} as const;
+
 /** 바닥 두께. 스폰 높이 계산의 기준이 된다. */
 export const FLOOR_HEIGHT = 48;
 
@@ -311,7 +324,7 @@ export const createArena = (
       background.setOrigin(0, 0);
       background.setTileScale(width / BACKGROUND_SOURCE.width, height / BACKGROUND_SOURCE.height);
     }
-    background.setDepth(-10);
+    background.setDepth(DEPTH.background);
   }
 
   // 구름 띠. 배경 그림 속 구름은 정적이라 그 위에 옅게 겹쳐 얹고 흘려서 하늘이 살아있게 한다.
@@ -322,7 +335,7 @@ export const createArena = (
     clouds = scene.add.tileSprite(0, 0, width, 260, TEXTURE.clouds);
     clouds.setOrigin(0, 0);
     clouds.setTileScale(cloudScale, cloudScale);
-    clouds.setDepth(-9);
+    clouds.setDepth(DEPTH.clouds);
     clouds.setBlendMode(Phaser.BlendModes.ADD);
     clouds.setAlpha(0.35);
   }
@@ -359,7 +372,7 @@ export const createArena = (
         floorTileKey,
       );
       cap.setOrigin(0, 0);
-      cap.setDepth(1);
+      cap.setDepth(DEPTH.floor);
       // 타일 이음매가 조각 시작점마다 리셋되지 않게 방 좌표 기준으로 밀어 둔다.
       cap.setTilePosition(segment.x, 0);
       // 원본 돌바닥은 무채색 회갈색이라 방의 붉은 톤과 겉돈다. 사용자 지정 색 기준으로
@@ -386,7 +399,7 @@ export const createArena = (
     if (floorTileKey) {
       const cap = scene.add.tileSprite(platform.x, platform.y - 9, platform.width, 18, floorTileKey);
       cap.setOrigin(0, 0);
-      cap.setDepth(1);
+      cap.setDepth(DEPTH.floor);
       // 발판은 바닥 띠보다 얇다 — 타일 세로를 눌러 얇은 판으로 보이게 한다.
       cap.setTileScale(1, 18 / floorTileHeight);
       cap.setTint(tintTop, tintTop, tintBottom, tintBottom);
@@ -445,10 +458,23 @@ export const addDecor = (
   x: number,
   floorY: number,
   scale = 1,
+  /**
+   * 배경으로 물릴지. 전투방에서는 구조물이 선명하면 적보다 눈에 먼저 들어와 시선을
+   * 뺏는다 — 흐리고 어둡게 눌러 뒤로 보낸다. 튜토리얼은 볼거리가 장식뿐이라 끈다.
+   */
+  recede = false,
 ): void => {
   const image = scene.add.image(x, floorY, key);
   image.setOrigin(0.5, 1);
   image.setScale(scale);
-  // 플레이어(depth 10)보다는 뒤, 바닥 타일(depth 1)보다는 앞 — 바닥 위에 서 있는 것처럼 보인다.
-  image.setDepth(2);
+  // 적(DEPTH.enemy)보다 뒤, 바닥 타일보다는 앞 — 바닥 위에 서 있는 것처럼 보인다.
+  image.setDepth(DEPTH.decor);
+
+  if (!recede) return;
+  // 어둡게 깔아 배경 톤에 묻히게 한다. 흐림은 WebGL에서만 걸린다(Canvas는 색만 적용된다).
+  image.setTint(0x6b5560);
+  image.setAlpha(0.85);
+  if (scene.game.renderer.type === Phaser.WEBGL) {
+    image.postFX.addBlur(1, 2, 2, 1.1);
+  }
 };

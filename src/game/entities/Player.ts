@@ -274,6 +274,10 @@ export class Player {
   private nextRunDustAtMs = 0;
   /** 기상 인트로가 끝나는 시각. 그때까지는 입력을 받지 않는다. */
   private introUntilMs = 0;
+  /** 진행 중인 스케일 펀치. 대시 시작 때 걷어내려고 들고 있는다. */
+  private punchTween: Phaser.Tweens.Tween | null = null;
+  /** 지금 대시가 지상 대시인지. 지상 대시만 세로 속도를 눌러 수평을 유지한다. */
+  private dashGrounded = false;
 
   private keys: Partial<Record<PlayerAction, Phaser.Input.Keyboard.Key>> = {};
   private facing: 1 | -1 = 1;
@@ -414,6 +418,9 @@ export class Player {
     if (!wasGrounded && this.isGrounded) this.onLand(sprite, body);
 
     if (this.isDashing) {
+      // 지상 대시의 수평 유지. 중력은 켜 둔 채(바닥 분리가 계속 돌게) 세로 속도만
+      // 지운다 — 다음 프레임에 중력이 한 틱만큼만 붙어 바닥을 계속 눌러준다.
+      if (this.dashGrounded) body.setVelocityY(0);
       this.trailAfterimage(time);
       if (time >= this.dashEndsAtMs) this.endDash();
       return;
@@ -546,13 +553,21 @@ export class Player {
       now + PLAYER.dashInvulnerabilityMs,
     );
 
+    // 스케일 펀치가 남아 있으면 대시 중에 충돌 박스가 계속 흔들린다(punch 주석 참고).
+    this.clearPunch();
+
     // 거리와 시간으로 속도를 역산한다. dashDistance가 바뀌어도 체감 거리가 유지된다.
     const speed = PLAYER.dashDistance / (TUNING.dash.durationMs / 1000);
+    this.dashGrounded = this.isGrounded;
     body.setVelocity(this.facing * speed, this.isGrounded ? 0 : -TUNING.dash.airLiftVelocity);
-    // 대시 중에는 중력을 끊는다. 공중 대시가 아래로 처지면 회피기로 못 쓴다.
     if (this.isGrounded) {
-      // 지상 대시는 회피기다. 직선이어야 판단하기 쉽다.
-      body.setAllowGravity(false);
+      /**
+       * 지상 대시는 직선이어야 판단하기 쉽다. 하지만 예전처럼 중력을 꺼서 직선을
+       * 만들면 안 된다 — 중력이 꺼지면 몸이 바닥을 누르지 않아 매 프레임 일어나던
+       * 바닥 분리(separation)가 멎고, 그 사이 충돌 박스가 조금이라도 어긋나면
+       * 되잡히지 못해 지면 아래로 빠진다("대시할 때 땅으로 꺼지는" 버그).
+       * 중력은 그대로 두고 세로 속도만 매 프레임 지워 수평을 유지한다(update 참고).
+       */
     } else {
       // 공중 대시는 중력을 조금 남겨 호를 그린다. 완전히 끄면 일자로 날아 딱딱하다.
       body.setGravityY(-this.scene.physics.world.gravity.y * (1 - TUNING.dash.airGravityScale));
@@ -564,8 +579,11 @@ export class Player {
 
   private endDash(): void {
     this.isDashing = false;
+    this.dashGrounded = false;
     const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body) return;
+    // 지상 대시는 이제 중력을 끄지 않지만, 예전 상태나 공중 대시에서 넘어올 수 있어
+    // 양쪽 모두 기본값으로 되돌린다.
     body.setAllowGravity(true);
     body.setGravityY(0);
   }
@@ -962,18 +980,38 @@ export class Player {
   }
 
   /** 공격·점프·전환에 각각 다른 방향의 스케일 펀치를 준다. */
+  /**
+   * 타격감용 스케일 펀치.
+   *
+   * Arcade Body는 매 프레임 스프라이트의 scaleY로 충돌 박스의 높이와 위치를 다시
+   * 계산한다(`Body.updateFromGameObject`). 평소에는 중력이 매 프레임 바닥으로
+   * 눌러줘서 어긋난 만큼 곧바로 되잡히지만, 대시 중에는 그 보정이 약하다 —
+   * 그래서 대시 중에는 아예 걸지 않고, 진행 중이던 것도 대시 시작 때 걷어낸다.
+   */
   private punch(scaleX: number, scaleY: number): void {
     const sprite = this.sprite;
-    if (!sprite) return;
-    this.scene.tweens.add({
+    if (!sprite || this.isDashing) return;
+
+    this.punchTween?.remove();
+    this.punchTween = this.scene.tweens.add({
       targets: sprite,
       scaleX: this.baseScale.x * scaleX,
       scaleY: this.baseScale.y * scaleY,
       duration: TUNING.feedback.punchMs,
       yoyo: true,
       // 겹쳐 들어와도 원래 크기로 확실히 돌아오게 한다.
-      onComplete: () => sprite.setScale(this.baseScale.x, this.baseScale.y),
+      onComplete: () => {
+        sprite.setScale(this.baseScale.x, this.baseScale.y);
+        this.punchTween = null;
+      },
     });
+  }
+
+  /** 진행 중인 스케일 펀치를 걷어내고 원래 크기로 되돌린다. */
+  private clearPunch(): void {
+    this.punchTween?.remove();
+    this.punchTween = null;
+    this.sprite?.setScale(this.baseScale.x, this.baseScale.y);
   }
 
   /** 대시 잔상. 지나간 자리를 남겨야 순간이동이 아니라 이동으로 읽힌다. */

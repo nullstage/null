@@ -14,7 +14,7 @@ import Phaser from "phaser";
 
 import { ENEMIES, type EnemyDefinition } from "../../data/enemies";
 import { deathBurst } from "../../systems/CombatVfx";
-import type { CombatArena } from "../../types/combat";
+import { DEPTH, type CombatArena } from "../../types/combat";
 import type { EnemyType } from "../../types/game";
 
 /** 스폰 팝인 시간(ms). 적이 한 프레임 만에 나타나면 어디서 나왔는지 인지하지 못한다. */
@@ -101,6 +101,8 @@ export abstract class BaseEnemy {
     sheet?: { scale: number; anchorX: number; anchorY: number },
   ): Phaser.Physics.Arcade.Sprite {
     const body = this.arena.enemyBodies.create(x, y, texture) as Phaser.Physics.Arcade.Sprite;
+    // depth를 지정하지 않으면 기본값 0이라 장식(DEPTH.decor)에 가린다.
+    body.setDepth(DEPTH.enemy);
     if (sheet) {
       body.setScale(sheet.scale);
       const sizeW = width / sheet.scale;
