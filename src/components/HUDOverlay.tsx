@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { assetPath, debugFlag } from "@/game/config/gameConfig";
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
+import { UPGRADES } from "@/game/data/upgrades";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
 import type {
   BossPatternWeights,
@@ -686,7 +687,11 @@ export default function HUDOverlay() {
               {hud.hp} / {hud.maxHp}
             </HpText>
             <ShardTag>◆ {hud.shards}</ShardTag>
-            {hud.hasSkill && <SkillTag ready={hud.skillReady}>Q 검기</SkillTag>}
+            {hud.skills.map((skill) => (
+              <SkillTag key={skill.id} ready={skill.ready}>
+                {skill.key} {UPGRADES[skill.id].name}
+              </SkillTag>
+            ))}
             {hud.mode === "RANGED" &&
               (hud.reloading ? (
                 <ReloadTag>재장전</ReloadTag>
