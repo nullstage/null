@@ -24,6 +24,15 @@ export interface RoomControllerDeps {
   onRoomClear: (telemetry: CombatTelemetry) => void;
   /** 방 종료 시 기록할 남은 체력을 돌려준다. */
   getRemainingHp: () => number;
+  /**
+   * 다음 웨이브가 시작되기 직전에 호출된다(1웨이브 제외). 지금까지 쌓인 텔레메트리를
+   * 근거로 이 웨이브부터 다른 프리셋을 쓰고 싶으면 그 프리셋을 반환한다.
+   * 반환하지 않으면(undefined) 원래 프리셋을 그대로 쓴다. (OQ-010 RESOLVED, DEC-016)
+   */
+  resolveWaveOverride?: (
+    telemetrySoFar: CombatTelemetry,
+    waveIndex: number,
+  ) => RoomPreset | undefined;
 }
 
 export class RoomController {
@@ -33,6 +42,10 @@ export class RoomController {
   private aliveEnemies = 0;
   private cleared = false;
   private wavesRemaining = 0;
+  /** 지금 시작하는(또는 막 끝난) 웨이브 번호. 1부터 시작한다. */
+  private currentWaveIndex = 1;
+  /** `resolveWaveOverride`가 한 번 고른 프리셋. 다음 웨이브에도 그대로 재사용한다. */
+  private waveOverride: RoomPreset | null = null;
   private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor(deps: RoomControllerDeps) {
@@ -46,6 +59,8 @@ export class RoomController {
     this.preset = preset;
     this.cleared = false;
     this.wavesRemaining = preset.extraWaves ?? 0;
+    this.currentWaveIndex = 1;
+    this.waveOverride = null;
 
     this.deps.telemetry.begin(this.deps.scene.time.now);
 
@@ -122,10 +137,17 @@ export class RoomController {
 
     if (this.wavesRemaining > 0 && this.preset) {
       this.wavesRemaining -= 1;
-      const preset = this.preset;
+      this.currentWaveIndex += 1;
+      const basePreset = this.preset;
+      const waveIndex = this.currentWaveIndex;
       // 전멸 직후 바로 다시 쏟아지면 숨 돌릴 틈이 없다. 짧게 텀을 둔다.
       this.timers.push(
-        this.deps.scene.time.delayedCall(WAVE_GAP_MS, () => this.spawnWave(preset)),
+        this.deps.scene.time.delayedCall(WAVE_GAP_MS, () => {
+          const telemetrySoFar = this.deps.telemetry.snapshot();
+          const override = this.deps.resolveWaveOverride?.(telemetrySoFar, waveIndex);
+          if (override) this.waveOverride = override;
+          this.spawnWave(this.waveOverride ?? basePreset);
+        }),
       );
       return;
     }

@@ -2,10 +2,13 @@
  * 방 프리셋. (MVP_PLAN §2, §5)
  *
  * 카운터 방 4종은 MVP_PLAN §5에 확정되어 있어 그대로 옮겼다.
- * 방 1·방 2 구성은 아직 정해지지 않았다.
- *   OQ-009 미결정 — 방 1 중립 / 방 2 혼합 구성의 적 종류와 수
- *   OQ-010 미결정 — 방 2가 방 1 분석 결과를 반영할지 여부
- * 아래 `room_1`, `room_2`는 흐름을 굴리기 위한 임시 구성이다.
+ * 방 1은 무전투 튜토리얼이라 텔레메트리가 없다(OQ-009 미결정 — 적 구성은 별개 문제).
+ *
+ * 방 2는 OQ-010 RESOLVED(DEC-016)에 따라 소프트 카운터를 쓴다. 방 1이 무전투로 바뀌면서
+ * "방 1 분석"이라는 원래 전제가 사라져, 방 2 자신의 1웨이브 텔레메트리로 2·3웨이브를
+ * 정하는 방식으로 조정했다 — `room_2`가 1웨이브(중립 구성)이고, `room_2_soft_*`가
+ * 2·3웨이브 후보다. 실제 선택은 `RoomController.resolveWaveOverride`(CombatScene에서 주입)가
+ * `SOFT_COUNTER_ROOM_2_BY_STYLE`(directorRules.ts)로 한다.
  */
 
 import type { RoomId, RoomPreset } from "../types/game";
@@ -23,8 +26,9 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   },
 
   /**
-   * 방 2 — 성향 분석용 혼합 방 (OQ-009, OQ-010 미결정, 임시 구성)
-   * 전멸시켜야 포탈이 열린다. 2번 더 같은 구성으로 다시 몰려온다(총 3웨이브).
+   * 방 2 — 성향 분석용 혼합 방 (OQ-009 미결정, 임시 구성). 3웨이브 중 1웨이브다.
+   * 전멸시켜야 다음 웨이브(또는 포탈)가 열린다. 2·3웨이브 구성은 1웨이브 텔레메트리로
+   * `RoomController`의 `resolveWaveOverride`가 정한다 — 아래 `room_2_soft_*` 참고. (DEC-016)
    */
   {
     id: "room_2",
@@ -36,6 +40,40 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
       { type: "RANGED", xRatio: 0.9, delayMs: 1500 },
       { type: "CHASER", xRatio: 0.2, delayMs: 4000 },
       { type: "RANGED", xRatio: 0.4, delayMs: 5500 },
+    ],
+  },
+
+  /**
+   * 방 2 소프트 카운터 3종. (MVP_PLAN §5 "방 2 소프트 카운터", DEC-016)
+   * 방 2의 2·3웨이브 전용 구성이다 — 대응 방 3 카운터의 다수 그룹만 2기로 남긴 축소판.
+   * `room_2` 자체의 `spawns`(1웨이브)는 그대로 두고, `RoomController.resolveWaveOverride`가
+   * 1웨이브 텔레메트리로 이 중 하나를 골라 2·3웨이브에 대신 쓴다.
+   */
+  {
+    id: "room_2_soft_ranged",
+    template: "HORIZONTAL",
+    hazardsEnabled: false,
+    spawns: [
+      { type: "CHASER", xRatio: 0.7, delayMs: 0 },
+      { type: "CHASER", xRatio: 0.9, delayMs: 800 },
+    ],
+  },
+  {
+    id: "room_2_soft_melee",
+    template: "PLATFORM",
+    hazardsEnabled: false,
+    spawns: [
+      { type: "RANGED", xRatio: 0.1, delayMs: 0 },
+      { type: "RANGED", xRatio: 0.9, delayMs: 0 },
+    ],
+  },
+  {
+    id: "room_2_soft_mobile",
+    template: "PLATFORM",
+    hazardsEnabled: true,
+    spawns: [
+      { type: "MOBILITY_COUNTER", xRatio: 0.25, delayMs: 0 },
+      { type: "MOBILITY_COUNTER", xRatio: 0.75, delayMs: 1200 },
     ],
   },
 
@@ -100,7 +138,11 @@ export const ROOM_PRESETS: Record<RoomId, RoomPreset> = Object.fromEntries(
   ROOM_PRESET_LIST.map((preset) => [preset.id, preset]),
 );
 
-/** 런에서 방 1, 방 2는 고정이고 방 3만 Director가 고른다. */
+/**
+ * 방 1·방 2는 고정이고, 방 3은 Director가 고른다.
+ * 방 2는 이 `room_2` 프리셋으로 시작하지만, 1웨이브를 클리어하면
+ * `SOFT_COUNTER_ROOM_2_BY_STYLE`(directorRules.ts)이 2·3웨이브 구성을 다시 정한다. (DEC-016)
+ */
 export const FIXED_ROOM_SEQUENCE: RoomId[] = ["room_1", "room_2"];
 
 export const getRoomPreset = (id: RoomId): RoomPreset => {

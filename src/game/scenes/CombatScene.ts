@@ -3,8 +3,8 @@
  *
  * 이 씬은 흐름만 관리한다. 전투 자체는 Player와 적 클래스가 담당한다.
  *
- *   방 시작 → 전투 → 클리어 → 분석 → (강화) → 다음 방
- *   방 3 클리어 후에는 역기만 판정을 거쳐 보스로 넘어간다.
+ *   방 시작 → 전투 → 클리어 → 분석 → 강화 → 다음 방
+ *   방 3 클리어 후에는 역기만 판정 → 강화(3회차) → 보스로 넘어간다. (OQ-016 RESOLVED, DEC-015)
  *
  * 분석 팝업과 강화 선택 UI는 React에 있다. (DEC-006)
  * 이 씬은 이벤트를 쏘고 `ui:continue` / `upgrade:select` 응답을 기다린다.
@@ -16,7 +16,8 @@ import Phaser from "phaser";
 import { eventBus, type GameEventMap } from "../EventBus";
 import { TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
-import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
+import { SOFT_COUNTER_ROOM_2_BY_STYLE } from "../data/directorRules";
+import { FIXED_ROOM_SEQUENCE, getRoomPreset } from "../data/rooms";
 import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
 import { NPC_EVENT } from "../data/npcEvents";
 import { SHOP } from "../data/shop";
@@ -154,6 +155,8 @@ export class CombatScene extends Phaser.Scene {
       enableHazards: (preset) => this.enableHazards(preset),
       getRemainingHp: () => this.player.hp,
       onRoomClear: (telemetry) => this.handleRoomClear(telemetry),
+      resolveWaveOverride: (telemetrySoFar, waveIndex) =>
+        this.resolveWaveOverride(telemetrySoFar, waveIndex),
     });
 
     this.player.spawn(this.arena.bounds.width * 0.15, this.arena.bounds.floorY - 80);
@@ -1022,14 +1025,14 @@ export class CombatScene extends Phaser.Scene {
 
       if (this.roomId === FIXED_ROOM_SEQUENCE[0]) {
         // 튜토리얼은 전투 데이터가 없어 분석이 의미 없다(전부 0). 곧장 강화로 넘어간다.
-        this.offerUpgrade();
+        this.offerUpgrade(() => this.goToNextRoom());
         return;
       }
 
       runState.setPhase("ANALYSIS");
       runState.attachAnalysis(analyze(telemetry, runState.previousTelemetry));
       // 분석 팝업을 닫으면 강화 선택으로 넘어간다.
-      this.once("ui:continue", () => this.offerUpgrade());
+      this.once("ui:continue", () => this.offerUpgrade(() => this.goToNextRoom()));
     });
   }
 
@@ -1038,21 +1041,60 @@ export class CombatScene extends Phaser.Scene {
     this.portalCallback = onReached;
   }
 
-  /** OQ-016 미결정 — 지금은 방 1·방 2 클리어 후 두 번만 지급한다. */
-  private offerUpgrade(): void {
+  /**
+   * 방 2의 2·3웨이브 구성을 1웨이브 텔레메트리로 정한다. (OQ-010 RESOLVED, DEC-016)
+   *
+   * 방 1이 무전투로 바뀌면서(팀원 리디자인) "방 1 분석 → 방 2 반영"이라는 원래 설계의
+   * 전제가 사라졌다. 방 2 자체가 이제 3웨이브라, 1웨이브를 관찰용으로 쓰고 2·3웨이브를
+   * 그 결과로 조정하는 것으로 개념을 옮겼다. 방 2 외 다른 방(카운터 방 등)은 건드리지 않는다
+   * — `RoomController`가 `waveIndex`를 캐시해 두므로 여기서는 2웨이브 진입 시 한 번만
+   * 계산하면 3웨이브에도 그대로 재사용된다.
+   */
+  private resolveWaveOverride(
+    telemetrySoFar: CombatTelemetry,
+    waveIndex: number,
+  ): RoomPreset | undefined {
+    if (this.roomId !== FIXED_ROOM_SEQUENCE[1] || waveIndex !== 2) return undefined;
+    const style = classify(telemetrySoFar).style;
+    return getRoomPreset(SOFT_COUNTER_ROOM_2_BY_STYLE[style]);
+  }
+
+  /**
+   * 강화 3회 지급(방 1·방 2·방 3 클리어 후). (OQ-016 RESOLVED, DEC-015)
+   *
+   * `onSelected`가 다음 단계를 결정한다 — 방 1·방 2 후에는 다음 방으로,
+   * 방 3 후에는 보스로 넘어간다. 보스 진입은 `scene.restart`가 아니라 `scene.start`라
+   * `room:start`가 발생하지 않는다 — React 쪽은 그 대신 `phase:change`(→"BOSS")로
+   * 로딩 해제 신호를 받는다(HUDOverlay 참고). 로딩 처리는 두 경로가 같아 여기서
+   * 구분할 필요가 없다. `final`은 오직 UI 표시 문구("마지막으로 주어진 것")를 위한 신호다.
+   */
+  private offerUpgrade(onSelected: () => void, final = false): void {
     runState.setPhase("UPGRADE");
-    eventBus.emit("upgrade:offer", { choices: rollUpgradeChoices(runState.selectedUpgrades) });
+    eventBus.emit("upgrade:offer", {
+      choices: rollUpgradeChoices(runState.selectedUpgrades),
+      final,
+    });
 
     this.once("upgrade:select", ({ upgradeId }) => {
       runState.addUpgrade(upgradeId);
-      this.goToNextRoom();
+      onSelected();
     });
   }
 
+  /**
+   * 방 1·방 2 클리어 후 다음 방으로 넘어간다. `goToNextRoom`은 이 두 경우에만
+   * 호출된다(방 3 클리어는 `resolveDeception`이 별도 처리) — 즉 `nextIndex`는
+   * 항상 2(→방 2) 또는 3(→방 3) 둘 중 하나이고, 그 외 값은 나오지 않는다.
+   *
+   * 방 2는 항상 `room_2`(1웨이브 고정 구성)로 들어간다 — 방 1이 무전투로 바뀌면서
+   * "방 1 분석으로 방 2 자체를 고른다"는 원래 방식(OQ-010 RESOLVED, DEC-016)의 전제가
+   * 사라졌다. 소프트 카운터는 이제 방 2 안에서 1웨이브 텔레메트리로 2·3웨이브 구성을
+   * 바꾸는 방식으로 옮겨졌다 — `resolveWaveOverride` 참고.
+   */
   private goToNextRoom(): void {
     const nextIndex = runState.roomIndex + 1;
 
-    // 방 3은 Director가 고른 카운터 방이다. 그 외에는 고정 순서를 쓴다.
+    // 방 3 — Director가 고른 카운터 방(3기). 그 외(방 2)는 고정 순서를 쓴다. (MVP_PLAN §5)
     const nextRoomId =
       nextIndex >= LAST_COMBAT_ROOM_INDEX
         ? (runState.counterRoomId ?? "counter_mixed")
@@ -1077,10 +1119,13 @@ export class CombatScene extends Phaser.Scene {
     );
     runState.setBossWeights(bossWeightsFor(actualStyle));
 
-    this.once("ui:continue", () => {
-      playSfx(this, AUDIO.portal);
-      portalWipeOut(this, () => this.scene.start("Boss"));
-    });
+    // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-015)
+    this.once("ui:continue", () =>
+      this.offerUpgrade(() => {
+        playSfx(this, AUDIO.portal);
+        portalWipeOut(this, () => this.scene.start("Boss"));
+      }, true),
+    );
   }
 
   /**

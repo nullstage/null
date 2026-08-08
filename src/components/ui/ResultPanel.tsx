@@ -78,7 +78,7 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
             ? result.deception.succeeded
               ? "속였다"
               : "읽혔다"
-            : "보스 전에 끝남"}
+            : "기록이 끊겼다"}
         </span>
       </PanelRow>
 
@@ -86,9 +86,7 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
         <SectionTitle>방마다 어떻게 봤는가</SectionTitle>
         {result.rooms.map((room) => (
           <PanelRow key={room.roomIndex}>
-            <span>
-              {room.roomIndex}번째 방 · {room.roomId}
-            </span>
+            <span>{room.roomIndex}번째 방</span>
             <span>{room.analysis ? STYLE_LABEL[room.analysis.style] : "-"}</span>
           </PanelRow>
         ))}

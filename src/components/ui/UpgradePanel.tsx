@@ -64,12 +64,22 @@ const Choice = styled.button`
   }
 `;
 
+/** 보스 직전 마지막 강화에만 붙는 한 줄. 다른 대사들과 같은 톤을 쓴다. (DEC-011) */
+const Note = styled.p`
+  margin: ${theme.space(5)} 0 0;
+  color: ${theme.color.warning};
+  font-size: 15px;
+  line-height: 1.7;
+`;
+
 export interface UpgradePanelProps {
   choices: UpgradeDefinition[];
   onSelect: (upgradeId: UpgradeId) => void;
+  /** 방 3 클리어 후 보스 진입 직전의 마지막 지급이면 true. (OQ-016, DEC-015) */
+  final?: boolean;
 }
 
-export default function UpgradePanel({ choices, onSelect }: UpgradePanelProps) {
+export default function UpgradePanel({ choices, onSelect, final = false }: UpgradePanelProps) {
   const [locked, setLocked] = useState(false);
 
   const handleSelect = (upgradeId: UpgradeId) => {
@@ -79,7 +89,7 @@ export default function UpgradePanel({ choices, onSelect }: UpgradePanelProps) {
   };
 
   return (
-    <Panel title="「주어진 것」">
+    <Panel title={final ? "「마지막으로 주어진 것」" : "「주어진 것」"}>
       <Choices>
         {choices.map((choice) => (
           <Choice
@@ -93,6 +103,8 @@ export default function UpgradePanel({ choices, onSelect }: UpgradePanelProps) {
           </Choice>
         ))}
       </Choices>
+
+      {final && <Note>“문 너머에 그가 서 있다.”</Note>}
     </Panel>
   );
 }

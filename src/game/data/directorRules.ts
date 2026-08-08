@@ -47,6 +47,22 @@ export const COUNTER_ROOM_BY_STYLE: Record<PlayStyle, RoomId> = {
   MIXED: "counter_mixed",
 };
 
+/**
+ * MVP_PLAN §5 "방 2 소프트 카운터" (OQ-010 RESOLVED, DEC-016).
+ *
+ * 방 2는 이제 3웨이브다. 1웨이브(중립 구성) 텔레메트리로 분류한 스타일에 따라
+ * 2·3웨이브를 축소판(2기) 카운터로 바꾼다 — `CombatScene.resolveWaveOverride` 참고.
+ * 방 1이 무전투로 바뀌면서(팀원 리디자인) "방 1 분석" 전제가 사라져 방 2 자체의
+ * 1웨이브를 관찰용으로 쓰는 방식으로 옮겼다.
+ * MIXED는 기존 중립 구성(`room_2`)을 그대로 쓴다 — 확실한 신호가 없을 때는 건드리지 않는다.
+ */
+export const SOFT_COUNTER_ROOM_2_BY_STYLE: Record<PlayStyle, RoomId> = {
+  RANGED: "room_2_soft_ranged",
+  MELEE: "room_2_soft_melee",
+  MOBILE: "room_2_soft_mobile",
+  MIXED: "room_2",
+};
+
 /** MVP_PLAN §8 보스 패턴 가중치 */
 export const BOSS_WEIGHTS_BY_STYLE: Record<PlayStyle, BossPatternWeights> = {
   MIXED: { slash: 25, dash: 25, projectile: 25, slam: 25 },
