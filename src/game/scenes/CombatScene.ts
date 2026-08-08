@@ -18,6 +18,7 @@ import { TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
+import { NPC_EVENT } from "../data/npcEvents";
 import { SHOP } from "../data/shop";
 import { UPGRADES, UPGRADE_IDS } from "../data/upgrades";
 import { Player, TUNING } from "../entities/Player";
@@ -26,6 +27,7 @@ import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
 import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
 import { RangedEnemy } from "../entities/enemies/RangedEnemy";
 import {
+  ashRise,
   attachAmbientLight,
   attachHitFx,
   damageNumber,
@@ -94,6 +96,9 @@ export class CombatScene extends Phaser.Scene {
   private merchantPrompt: Phaser.GameObjects.Container | null = null;
   /** 이번 방문에 상인이 파는 강화. 방 진입 시 한 번 굴린다 — 열 때마다 바뀌면 고민할 이유가 없다. */
   private shopChoices: UpgradeId[] = [];
+  /** 전투방의 방랑자 NPC. 말을 걸면 우호/적대로 갈리고, 한 번 반응하면 끝이다. */
+  private wanderer: Phaser.GameObjects.Sprite | null = null;
+  private wandererPrompt: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super("Combat");
@@ -196,6 +201,7 @@ export class CombatScene extends Phaser.Scene {
     this.checkPlayerFall();
     if (this.portal) this.updatePortalPrompt();
     if (this.merchant) this.updateMerchantPrompt();
+    if (this.wanderer) this.updateWandererPrompt();
     this.drawMinimap();
 
     // 배경/구름 흐름. 트윈으로 하면 반복마다 원위치로 튀어서(Phaser 상대값 트윈의 특성)
@@ -294,6 +300,11 @@ export class CombatScene extends Phaser.Scene {
         const x = this.groundedSpawnX(Phaser.Math.Between(90, roomWidth - 90));
         // recede=true — 전투방에서는 구조물이 적보다 눈에 띄면 안 된다.
         addDecor(this, decor.key, x, this.arena.bounds.floorY, decor.scale, true);
+      }
+
+      // 방랑자 — 확률로 나타나는 그림자 NPC. 말을 걸지 말지는 플레이어의 선택이다.
+      if (Phaser.Math.FloatBetween(0, 1) < NPC_EVENT.spawnChance) {
+        this.spawnWanderer(roomWidth);
       }
     }
 
@@ -647,11 +658,168 @@ export class CombatScene extends Phaser.Scene {
     // 팀원 담당
   }
 
+  // ────────────────────────────── 방랑자 NPC ──────────────────────────────
+
+  /**
+   * 방랑자 스폰. 상인과 같은 실루엣 기법이되 푸른빛 — 정체를 알 수 없는 존재라는 신호다.
+   * 시작 지점과 게이트 근처는 피해 방 가운데쯤에 세운다.
+   */
+  private spawnWanderer(roomWidth: number): void {
+    const x = this.groundedSpawnX(
+      Phaser.Math.Between(Math.round(roomWidth * 0.3), Math.round(roomWidth * 0.7)),
+    );
+    const floorY = this.arena.bounds.floorY;
+
+    const wanderer = this.add.sprite(x, floorY, PLAYER_SPRITE.key);
+    wanderer.setOrigin(0.5, PLAYER_SPRITE.footY / PLAYER_SPRITE.frameHeight);
+    wanderer.setScale(1.2);
+    wanderer.setDepth(9);
+    wanderer.setTintFill(0x141d2e);
+    wanderer.setAlpha(0.85);
+    wanderer.play(playerAnimKey("idle"));
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      wanderer.postFX.addGlow(0x5f8cff, 2, 0);
+    }
+    // 이따금 흐려졌다 돌아온다 — 이 세계의 존재가 아니라는 낌새.
+    this.tweens.add({
+      targets: wanderer,
+      alpha: 0.55,
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+    });
+
+    this.wanderer = wanderer;
+    this.wandererPrompt = this.buildInteractPrompt("말 걸기");
+  }
+
+  private updateWandererPrompt(): void {
+    const sprite = this.player.sprite;
+    if (!sprite || !this.wanderer || !this.wandererPrompt) return;
+
+    const near = Math.abs(sprite.x - this.wanderer.x) < 80;
+    this.wandererPrompt.setVisible(near);
+    if (near) this.wandererPrompt.setPosition(sprite.x, sprite.y - 70);
+
+    if (near && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.wandererPrompt.destroy();
+      this.wandererPrompt = null;
+      this.resolveWandererEvent();
+    }
+  }
+
+  /** 말을 건 순간 운명이 갈린다. 우호든 적대든 방랑자는 이 방에서 사라진다. */
+  private resolveWandererEvent(): void {
+    const wanderer = this.wanderer;
+    if (!wanderer) return;
+    this.wanderer = null;
+
+    const friendly = Phaser.Math.FloatBetween(0, 1) < NPC_EVENT.friendlyChance;
+    const lines = friendly ? NPC_EVENT.lines.friendly : NPC_EVENT.lines.hostile;
+    this.speak(wanderer.x, wanderer.y - 96, Phaser.Utils.Array.GetRandom([...lines]));
+
+    if (friendly) {
+      // 선물 — 회복 또는 조각, 반반. 준 뒤엔 푸른 재가 되어 흩어진다.
+      const givesHeal = Phaser.Math.FloatBetween(0, 1) < 0.5;
+      this.time.delayedCall(700, () => {
+        if (givesHeal) {
+          this.player.hp = Math.min(this.player.maxHp, this.player.hp + NPC_EVENT.healAmount);
+          runState.hp = this.player.hp;
+          this.player.emitHud();
+          damageNumber(this, wanderer.x, wanderer.y - 60, NPC_EVENT.healAmount);
+        } else {
+          this.dropShardsAt(wanderer.x, wanderer.y - 40, NPC_EVENT.shardGift);
+        }
+        ashRise(this, wanderer.x, wanderer.y - 40, 0x9db8ff);
+        this.tweens.add({
+          targets: wanderer,
+          alpha: 0,
+          duration: 600,
+          ease: "power2.in",
+          onComplete: () => wanderer.destroy(),
+        });
+      });
+      return;
+    }
+
+    // 적대 — 붉게 물드는 예고 후 추격자로 돌변한다. 예고 없이 즉시 덮치지 않는다. (DEC-004)
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: NPC_EVENT.turnDelayMs,
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        wanderer.setTintFill(Phaser.Display.Color.GetColor(20 + t * 160, 29 - t * 20, 46 - t * 30));
+      },
+      onComplete: () => {
+        const { x, y } = wanderer;
+        wanderer.destroy();
+        this.cameras.main.shake(140, 0.008);
+        ashRise(this, x, y - 40, 0xff2a3a);
+
+        // 방 클리어 카운트와 분리된 매복 — RoomController를 거치지 않는 전용 콜백을 쓴다.
+        const ambush = new ChaserEnemy({
+          scene: this,
+          arena: this.arena,
+          getPlayerPosition: () => {
+            const sprite = this.player.sprite;
+            return { x: sprite?.x ?? 0, y: sprite?.y ?? 0 };
+          },
+          onDefeated: (dx: number, dy: number) => {
+            runState.recordKill();
+            this.dropShards(dx, dy);
+            this.player.emitHud();
+          },
+        });
+        ambush.spawn(x, y - 60);
+        this.enemies.push(ambush);
+      },
+    });
+  }
+
+  /** NPC 대사. 머리 위에서 떠올랐다 사라지는 짧은 한 줄 — 패널을 열 만큼의 대화는 아니다. */
+  private speak(x: number, y: number, line: string): void {
+    const text = this.add.text(x, y, line, {
+      fontFamily: "'Pretendard', sans-serif",
+      fontSize: "15px",
+      color: "#dce6ff",
+      stroke: "#0a0d18",
+      strokeThickness: 4,
+      resolution: 2,
+    });
+    text.setOrigin(0.5, 1);
+    text.setDepth(11);
+    text.setAlpha(0);
+    this.tweens.add({
+      targets: text,
+      alpha: 1,
+      y: y - 8,
+      duration: 220,
+      ease: "power2.out",
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          alpha: 0,
+          y: y - 22,
+          delay: 1400,
+          duration: 420,
+          ease: "power1.in",
+          onComplete: () => text.destroy(),
+        });
+      },
+    });
+  }
+
   // ────────────────────────────── 그림자 조각·상인 ──────────────────────────────
 
   /** 처치 보상 — 그림자 조각. 연출이 끝나 몸에 닿는 순간에 실제로 적립된다. */
   private dropShards(x: number, y: number): void {
-    const amount = Phaser.Math.Between(SHOP.dropPerKill.min, SHOP.dropPerKill.max);
+    this.dropShardsAt(x, y, Phaser.Math.Between(SHOP.dropPerKill.min, SHOP.dropPerKill.max));
+  }
+
+  /** 개수를 지정하는 드랍. 방랑자의 선물처럼 정해진 양을 줄 때 쓴다. */
+  private dropShardsAt(x: number, y: number, amount: number): void {
     for (let i = 0; i < amount; i += 1) {
       shardDrop(
         this,
