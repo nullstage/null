@@ -312,10 +312,6 @@ export class CombatScene extends Phaser.Scene {
         addDecor(this, decor.key, x, this.arena.bounds.floorY, decor.scale, true);
       }
 
-      // 방랑자 — 확률로 나타나는 그림자 NPC. 말을 걸지 말지는 플레이어의 선택이다.
-      if (Phaser.Math.FloatBetween(0, 1) < NPC_EVENT.spawnChance) {
-        this.spawnWanderer(roomWidth);
-      }
     }
 
     // 전송 게이트. 방 2·3은 적을 다 처치해야(`handleRoomClear`가 콜백을 채워야) 반응한다.
@@ -347,6 +343,12 @@ export class CombatScene extends Phaser.Scene {
     this.portalPrompt = this.buildInteractPrompt();
 
     this.interactKey = this.input.keyboard?.addKey(KEY_BINDINGS.INTERACT);
+
+    // 방랑자 — 게이트 위치가 정해진 뒤에 세운다. 게이트 옆에 서면 W 프롬프트가
+    // 겹쳐 "들어가기"와 "말 걸기"가 한 자리에서 다투기 때문이다(spawnWanderer가 거리를 벌린다).
+    if (!isTutorialRoom && Phaser.Math.FloatBetween(0, 1) < NPC_EVENT.spawnChance) {
+      this.spawnWanderer(roomWidth);
+    }
 
     // 우상단 미니맵. 카메라에 고정하고(setScrollFactor 0) 매 프레임 다시 그린다.
     this.minimap = this.add.graphics();
@@ -717,9 +719,19 @@ export class CombatScene extends Phaser.Scene {
    * 시작 지점과 게이트 근처는 피해 방 가운데쯤에 세운다.
    */
   private spawnWanderer(roomWidth: number): void {
-    const x = this.groundedSpawnX(
+    let x = this.groundedSpawnX(
       Phaser.Math.Between(Math.round(roomWidth * 0.3), Math.round(roomWidth * 0.7)),
     );
+    // 게이트와 최소 거리를 벌린다 — 겹치면 W 한 번에 "들어가기"와 "말 걸기"가 다툰다.
+    for (
+      let attempt = 0;
+      attempt < 5 && this.portal && Math.abs(x - this.portal.x) < 180;
+      attempt += 1
+    ) {
+      x = this.groundedSpawnX(
+        Phaser.Math.Between(Math.round(roomWidth * 0.3), Math.round(roomWidth * 0.7)),
+      );
+    }
     const floorY = this.arena.bounds.floorY;
 
     const wanderer = this.add.sprite(x, floorY, PLAYER_SPRITE.key);
