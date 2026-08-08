@@ -56,6 +56,7 @@ export class BossScene extends Phaser.Scene {
       arena: this.arena,
       telemetry: this.telemetry,
       upgrades: runState.selectedUpgrades,
+      getShards: () => runState.shards,
       onDamaged: (amount) => runState.damage(amount),
       onDeath: () => this.finish(false),
     });

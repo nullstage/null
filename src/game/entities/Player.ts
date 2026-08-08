@@ -312,6 +312,8 @@ export interface PlayerDeps {
   telemetry: CombatTelemetryRecorder;
   /** 획득한 강화 목록. 효과 적용은 전투 담당이 한다. */
   upgrades: readonly UpgradeId[];
+  /** 그림자 조각 잔액. HUD 표시용 — Player가 RunState를 직접 참조하지 않게 함수로 받는다. */
+  getShards: () => number;
   onDamaged: (amount: number) => void;
   onDeath: () => void;
 }
@@ -1481,6 +1483,7 @@ export class Player {
         ammo: this.ammo,
         magazineSize: this.maxMagazineSize,
         reloading: this.scene.time.now < this.reloadingUntilMs,
+        shards: this.deps.getShards(),
       },
     });
   }

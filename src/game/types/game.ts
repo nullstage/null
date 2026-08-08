@@ -176,4 +176,6 @@ export interface HudState {
   magazineSize: number;
   /** 재장전 중인가. HUD가 "재장전" 표시로 바꾼다. */
   reloading: boolean;
+  /** 그림자 조각 — 적 처치로 모으고 마을 상인에게 쓰는 런 화폐. */
+  shards: number;
 }

@@ -1270,6 +1270,92 @@ export const startBloodRain = (scene: Phaser.Scene, roomWidth: number, floorY: n
 };
 
 /**
+ * 그림자 조각 드랍. 죽은 자리에서 보랏빛 결정이 튀어올랐다가, 잠시 떠 있곤
+ * 플레이어에게 빨려 들어간다. 물리 바디 없이 트윈으로만 움직인다 — 줍는 판정이
+ * 아니라 "자동 획득의 연출"이므로 도착 시점에 `onAbsorbed`를 부르면 충분하다.
+ */
+export const shardDrop = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  /** 흡수 목표(플레이어)의 현재 위치. 매 프레임 다시 읽어 움직임을 따라간다. */
+  getTarget: () => { x: number; y: number } | null,
+  onAbsorbed: () => void,
+): void => {
+  // 마름모 결정 — 어두운 몸통 + 밝은 심, ADD 블렌드로 스스로 빛나는 조각처럼 보인다.
+  const shard = scene.add.graphics();
+  shard.setDepth(VFX.depth + 1);
+  shard.setBlendMode(Phaser.BlendModes.ADD);
+  shard.fillStyle(0x6a3bd8, 0.9);
+  shard.fillPoints(
+    [
+      { x: 0, y: -6 },
+      { x: 4, y: 0 },
+      { x: 0, y: 6 },
+      { x: -4, y: 0 },
+    ],
+    true,
+  );
+  shard.fillStyle(0xd8c2ff, 0.95);
+  shard.fillPoints(
+    [
+      { x: 0, y: -3 },
+      { x: 2, y: 0 },
+      { x: 0, y: 3 },
+      { x: -2, y: 0 },
+    ],
+    true,
+  );
+
+  // 1단계 — 죽은 자리에서 포물선으로 튀어오른다. 조각마다 방향이 달라야 "터져 나왔다"로 읽힌다.
+  const scatterX = x + Phaser.Math.FloatBetween(-34, 34);
+  const scatterY = y - Phaser.Math.FloatBetween(20, 52);
+  shard.setPosition(x, y);
+  scene.tweens.add({
+    targets: shard,
+    x: scatterX,
+    y: scatterY,
+    rotation: Phaser.Math.FloatBetween(-1.2, 1.2),
+    duration: 260,
+    ease: "power2.out",
+    onComplete: () => {
+      // 2단계 — 잠깐 떠서 반짝인 뒤 플레이어에게 빨려 들어간다.
+      const carrier = { t: 0 };
+      scene.tweens.add({
+        targets: carrier,
+        t: 1,
+        delay: Phaser.Math.Between(120, 320),
+        duration: 340,
+        ease: "power2.in",
+        onUpdate: () => {
+          const target = getTarget();
+          if (!target) return;
+          shard.x = Phaser.Math.Linear(scatterX, target.x, carrier.t);
+          shard.y = Phaser.Math.Linear(scatterY, target.y, carrier.t);
+          shard.setScale(1 - carrier.t * 0.4);
+        },
+        onComplete: () => {
+          // 흡수 순간의 작은 섬광 — 몸에 들어왔다는 마침표.
+          const flash = scene.add.circle(shard.x, shard.y, 4, 0xd8c2ff, 0.9);
+          flash.setDepth(VFX.depth + 1);
+          flash.setBlendMode(Phaser.BlendModes.ADD);
+          scene.tweens.add({
+            targets: flash,
+            scale: 2.2,
+            alpha: 0,
+            duration: 160,
+            ease: "power2.out",
+            onComplete: () => flash.destroy(),
+          });
+          shard.destroy();
+          onAbsorbed();
+        },
+      });
+    },
+  });
+};
+
+/**
  * 데미지 숫자. 맞은 자리에서 살짝 떠오르며 곧 사라진다.
  * 좌우로 조금씩 흩어 연타 시 숫자가 겹쳐 안 읽히는 것을 막는다.
  */

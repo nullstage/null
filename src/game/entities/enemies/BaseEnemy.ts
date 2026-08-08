@@ -45,8 +45,9 @@ export interface EnemyDeps {
   arena: CombatArena;
   /** 플레이어의 현재 위치. 추격·조준에 쓴다. 플레이어 객체를 직접 참조하지 않는다. */
   getPlayerPosition: () => { x: number; y: number };
-  /** 사망 시 RoomController에 알린다. 이 호출이 빠지면 방이 끝나지 않는다. */
-  onDefeated: () => void;
+  /** 사망 시 RoomController에 알린다. 이 호출이 빠지면 방이 끝나지 않는다.
+   *  좌표는 죽은 자리 — 씬이 그 자리에 그림자 조각을 떨어뜨린다. */
+  onDefeated: (x: number, y: number) => void;
 }
 
 export abstract class BaseEnemy {
@@ -55,7 +56,7 @@ export abstract class BaseEnemy {
   protected readonly arena: CombatArena;
   /** 플레이어 위치는 이 함수로만 얻는다. Player를 직접 참조하지 않는다. */
   protected readonly getPlayerPosition: () => { x: number; y: number };
-  private readonly onDefeated: () => void;
+  private readonly onDefeated: (x: number, y: number) => void;
 
   /** 본체. 스프라이트가 들어오면 텍스처 키만 바뀐다. */
   sprite: Phaser.Physics.Arcade.Sprite | null = null;
@@ -147,9 +148,12 @@ export abstract class BaseEnemy {
   protected defeat(): void {
     if (this.defeated) return;
     this.defeated = true;
+    // destroy 전에 죽은 자리를 붙잡아 둔다 — 조각 드랍의 기준점이다.
+    const x = this.sprite?.x ?? 0;
+    const y = this.sprite?.y ?? 0;
     this.playDeathEffect();
     this.destroy();
-    this.onDefeated();
+    this.onDefeated(x, y);
   }
 
   get isDefeated(): boolean {

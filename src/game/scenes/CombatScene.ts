@@ -18,6 +18,8 @@ import { TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
+import { SHOP } from "../data/shop";
+import { UPGRADES, UPGRADE_IDS } from "../data/upgrades";
 import { Player, TUNING } from "../entities/Player";
 import { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
@@ -28,6 +30,7 @@ import {
   attachHitFx,
   damageNumber,
   portalWipeOut,
+  shardDrop,
   startAmbientParticles,
   startBloodRain,
   updateAmbientLightCenter,
@@ -38,7 +41,15 @@ import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems
 import { RoomController } from "../systems/RoomController";
 import { rollUpgradeChoices } from "../systems/UpgradeSystem";
 import { runState } from "../systems/RunState";
-import { addDecor, AUDIO, createArena, TEXTURE, type CombatArena } from "../types/combat";
+import {
+  addDecor,
+  AUDIO,
+  createArena,
+  PLAYER_SPRITE,
+  playerAnimKey,
+  TEXTURE,
+  type CombatArena,
+} from "../types/combat";
 import type {
   AttackMode,
   CombatTelemetry,
@@ -47,6 +58,7 @@ import type {
   RoomId,
   RoomPreset,
   UpgradeElement,
+  UpgradeId,
 } from "../types/game";
 
 export interface CombatSceneData {
@@ -77,6 +89,11 @@ export class CombatScene extends Phaser.Scene {
   private interactKey?: Phaser.Input.Keyboard.Key;
   /** 우상단 미니맵. 매 프레임 다시 그린다 — 사각형 몇 개라 비용이 없다. */
   private minimap: Phaser.GameObjects.Graphics | null = null;
+  /** 마을 그림자 상인. 조각을 받고 강화를 판다 — 마을(방 1)에만 선다. */
+  private merchant: Phaser.GameObjects.Sprite | null = null;
+  private merchantPrompt: Phaser.GameObjects.Container | null = null;
+  /** 이번 방문에 상인이 파는 강화. 방 진입 시 한 번 굴린다 — 열 때마다 바뀌면 고민할 이유가 없다. */
+  private shopChoices: UpgradeId[] = [];
 
   constructor() {
     super("Combat");
@@ -106,6 +123,7 @@ export class CombatScene extends Phaser.Scene {
       arena: this.arena,
       telemetry: this.telemetry,
       upgrades: runState.selectedUpgrades,
+      getShards: () => runState.shards,
       onDamaged: (amount) => runState.damage(amount),
       onDeath: () => this.handlePlayerDeath(),
     });
@@ -159,6 +177,11 @@ export class CombatScene extends Phaser.Scene {
 
     // 일시정지 메뉴의 포기하기. 사망과 같은 흐름으로 튜토리얼 방에 되돌아간다.
     this.once("run:giveup", () => this.handlePlayerDeath());
+
+    // 상점 구매. 검증(잔액·품목)은 여기서만 한다 — React는 표시와 입력만 담당한다.
+    this.subscriptions.push(
+      eventBus.on("shop:buy", ({ upgradeId }) => this.handleShopBuy(upgradeId)),
+    );
   }
 
   update(time: number, deltaMs: number): void {
@@ -172,6 +195,7 @@ export class CombatScene extends Phaser.Scene {
     }
     this.checkPlayerFall();
     if (this.portal) this.updatePortalPrompt();
+    if (this.merchant) this.updateMerchantPrompt();
     this.drawMinimap();
 
     // 배경/구름 흐름. 트윈으로 하면 반복마다 원위치로 튀어서(Phaser 상대값 트윈의 특성)
@@ -260,6 +284,7 @@ export class CombatScene extends Phaser.Scene {
       for (const decor of ROOM_ONE_DECOR) {
         addDecor(this, decor.key, decor.x, this.arena.bounds.floorY, decor.scale);
       }
+      this.spawnMerchant();
     } else {
       // 전투방에도 폐허 장식을 몇 개 흩뿌린다. 지형과 함께 매 방 랜덤이라 방마다 표정이 다르다.
       // 낭떠러지 위에 뜨지 않게 바닥 조각 위로만 보정한다.
@@ -312,8 +337,8 @@ export class CombatScene extends Phaser.Scene {
    * 상호작용 안내 프롬프트. [키캡] + "들어가기"를 어두운 알약 위에 얹는다.
    * 컨테이너 원점은 알약의 가운데 아래 — 캐릭터 머리 위에 세울 때의 기준점이다.
    */
-  private buildInteractPrompt(): Phaser.GameObjects.Container {
-    const label = this.add.text(0, 0, "들어가기", {
+  private buildInteractPrompt(labelText = "들어가기"): Phaser.GameObjects.Container {
+    const label = this.add.text(0, 0, labelText, {
       fontFamily: "'Pretendard', sans-serif",
       fontSize: "16px",
       fontStyle: "bold",
@@ -491,7 +516,6 @@ export class CombatScene extends Phaser.Scene {
 
       const damage = (attack.getData("damage") as number) ?? 0;
       enemy.takeDamage(damage);
-      if (enemy.isDefeated) runState.recordKill();
       // 매번 같은 피치면 단조롭다 — 살짝 흔들어 타격마다 다르게 들리게 한다.
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
       const hitTarget = bodyObj as Phaser.GameObjects.Sprite;
@@ -598,7 +622,11 @@ export class CombatScene extends Phaser.Scene {
         const sprite = this.player.sprite as Phaser.GameObjects.Sprite | null;
         return { x: sprite?.x ?? 0, y: sprite?.y ?? 0 };
       },
-      onDefeated: () => {
+      onDefeated: (x: number, y: number) => {
+        // 처치 집계의 유일한 관문 — 직격이든 화상·독 틱이든 낙사든 여길 지난다.
+        // (예전엔 공격 오버랩에서만 세서 틱·낙사 킬이 빠졌다.)
+        runState.recordKill();
+        this.dropShards(x, y);
         this.room.onEnemyDefeated();
         this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
       },
@@ -617,6 +645,142 @@ export class CombatScene extends Phaser.Scene {
   /** 팀원 담당: 지연 폭발 장판 배치. 예고 없이 즉시 폭발시키지 않는다. (DEC-004) */
   private enableHazards(_preset: RoomPreset): void {
     // 팀원 담당
+  }
+
+  // ────────────────────────────── 그림자 조각·상인 ──────────────────────────────
+
+  /** 처치 보상 — 그림자 조각. 연출이 끝나 몸에 닿는 순간에 실제로 적립된다. */
+  private dropShards(x: number, y: number): void {
+    const amount = Phaser.Math.Between(SHOP.dropPerKill.min, SHOP.dropPerKill.max);
+    for (let i = 0; i < amount; i += 1) {
+      shardDrop(
+        this,
+        x,
+        y,
+        () => {
+          const sprite = this.player.sprite;
+          return sprite ? { x: sprite.x, y: sprite.y } : null;
+        },
+        () => {
+          runState.addShards(1);
+          this.player.emitHud();
+        },
+      );
+    }
+  }
+
+  /**
+   * 마을 그림자 상인. 플레이어와 같은 시트를 어둠으로 채워 "그림자"로 세운다 —
+   * 전용 그림 없이도 인간형 실루엣이 나오고, 조각을 먹는 존재라는 톤과도 맞는다.
+   */
+  private spawnMerchant(): void {
+    const x = SHOP.merchantX;
+    const floorY = this.arena.bounds.floorY;
+
+    const merchant = this.add.sprite(x, floorY, PLAYER_SPRITE.key);
+    // 발끝(footY)이 바닥선에 닿게 원점을 잡는다 — 프레임 아래 여백만큼 뜨는 것을 막는다.
+    merchant.setOrigin(0.5, PLAYER_SPRITE.footY / PLAYER_SPRITE.frameHeight);
+    merchant.setScale(1.2);
+    // 입구(왼쪽)에서 걸어오는 플레이어를 바라본다.
+    merchant.setFlipX(true);
+    merchant.setDepth(9);
+    merchant.setTintFill(0x241430);
+    merchant.setAlpha(0.92);
+    merchant.play(playerAnimKey("idle"));
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      merchant.postFX.addGlow(0x8a5cff, 2.5, 0);
+    }
+
+    // 머리 위를 맴도는 보랏빛 결정 — 거래 대상이 조각이라는 말 없는 간판이다.
+    const gemY = floorY - 110;
+    const gem = this.add.graphics({ x, y: gemY });
+    gem.setDepth(9);
+    gem.setBlendMode(Phaser.BlendModes.ADD);
+    gem.fillStyle(0x6a3bd8, 0.9);
+    gem.fillPoints(
+      [
+        { x: 0, y: -7 },
+        { x: 5, y: 0 },
+        { x: 0, y: 7 },
+        { x: -5, y: 0 },
+      ],
+      true,
+    );
+    gem.fillStyle(0xd8c2ff, 0.95);
+    gem.fillPoints(
+      [
+        { x: 0, y: -3.5 },
+        { x: 2.5, y: 0 },
+        { x: 0, y: 3.5 },
+        { x: -2.5, y: 0 },
+      ],
+      true,
+    );
+    this.tweens.add({
+      targets: gem,
+      y: gemY - 9,
+      rotation: 0.35,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+    });
+
+    this.merchant = merchant;
+    this.merchantPrompt = this.buildInteractPrompt("거래하기");
+
+    const pool = UPGRADE_IDS.filter((id) => !runState.selectedUpgrades.includes(id));
+    Phaser.Utils.Array.Shuffle(pool);
+    this.shopChoices = pool.slice(0, SHOP.choiceCount);
+  }
+
+  /** 상인 근처 안내와 상호작용. 게이트 프롬프트와 같은 문법이다. */
+  private updateMerchantPrompt(): void {
+    const sprite = this.player.sprite;
+    if (!sprite || !this.merchant || !this.merchantPrompt) return;
+
+    const near = Math.abs(sprite.x - this.merchant.x) < 80;
+    this.merchantPrompt.setVisible(near);
+    if (near) this.merchantPrompt.setPosition(sprite.x, sprite.y - 70);
+
+    if (near && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.merchantPrompt.setVisible(false);
+      this.openShop();
+    }
+  }
+
+  /** 상점 열기. 대화창과 같은 문법 — 이벤트를 쏘고 스스로 멈춘다. React가 `game:resume`으로 풀어 준다. */
+  private openShop(): void {
+    eventBus.emit("shop:open", {
+      choices: this.shopChoices.map((id) => UPGRADES[id]),
+      shards: runState.shards,
+      price: SHOP.price,
+    });
+    this.scene.pause();
+  }
+
+  /** 구매 확정. 잔액·품목 검증에 실패하면 조용히 무시한다 — React가 이미 버튼을 잠근다. */
+  private handleShopBuy(upgradeId: UpgradeId): void {
+    if (!this.shopChoices.includes(upgradeId)) return;
+    if (!runState.spendShards(SHOP.price)) return;
+    runState.addUpgrade(upgradeId);
+    this.shopChoices = this.shopChoices.filter((id) => id !== upgradeId);
+    this.player.emitHud();
+
+    // 거래 성사의 마침표 — 상인 위에서 결정이 터진다. 씬이 멈춰 있어 재개 직후 보인다.
+    if (this.merchant) {
+      const flash = this.add.circle(this.merchant.x, this.merchant.y - 50, 8, 0xd8c2ff, 0.9);
+      flash.setDepth(10);
+      flash.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: flash,
+        scale: 4,
+        alpha: 0,
+        duration: 300,
+        ease: "power2.out",
+        onComplete: () => flash.destroy(),
+      });
+    }
   }
 
   // ────────────────────────────── 흐름 제어 ──────────────────────────────

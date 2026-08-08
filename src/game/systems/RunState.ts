@@ -57,6 +57,9 @@ export class RunState {
   /** 사망·포기로 튜토리얼에 되돌아온 상태인지. true면 방 1 기록자 대화창을 건너뛴다. */
   skipTutorialIntro = false;
 
+  /** 그림자 조각. 적 처치로 모아 마을 상인에게 쓴다 — selectedUpgrades처럼 부활해도 유지된다. */
+  shards = 0;
+
   /** 이번 시도(런 시작 또는 마지막 부활 이후)에 처치한 적 수. 사망 결과창에 쓴다. */
   kills = 0;
   /** 이번 시도가 시작된 시각. 사망 결과창의 생존 시간 계산 기준. */
@@ -83,6 +86,7 @@ export class RunState {
     this.maxHp = PLAYER.maxHp;
     this.rooms = [];
     this.skipTutorialIntro = false;
+    this.shards = 0;
     this.kills = 0;
     this.attemptStartedAtMs = nowMs;
     this.runStartedAtMs = nowMs;
@@ -119,6 +123,17 @@ export class RunState {
 
   recordKill(): void {
     this.kills += 1;
+  }
+
+  addShards(amount: number): void {
+    this.shards += amount;
+  }
+
+  /** 잔액이 모자라면 아무것도 하지 않고 false. 구매 검증의 유일한 관문이다. */
+  spendShards(amount: number): boolean {
+    if (this.shards < amount) return false;
+    this.shards -= amount;
+    return true;
   }
 
   /** 이번 시도의 생존 시간. 사망 결과창에 쓴다. */

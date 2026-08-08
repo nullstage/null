@@ -41,9 +41,13 @@ export interface GameEventMap {
   "run:result": { result: RunResult };
   /** 사망·포기 직후 검은 결과창에 띄울 이번 시도 요약. `ui:continue`로 닫는다. */
   "respawn:summary": { survivedMs: number; kills: number };
+  /** 마을 그림자 상인과의 거래 시작. 씬은 이걸 쏘고 스스로 멈춘다(대화창과 같은 문법). */
+  "shop:open": { choices: UpgradeDefinition[]; shards: number; price: number };
 
   /** React → Phaser */
   "upgrade:select": { upgradeId: UpgradeId };
+  /** 상점 구매. 검증(잔액)은 Phaser 쪽이 한다 — React는 표시만 담당한다. */
+  "shop:buy": { upgradeId: UpgradeId };
   "ui:continue": Record<string, never>;
   "run:restart": Record<string, never>;
   /** 일시정지 메뉴가 열리고 닫힐 때. 전투 씬의 시간을 멈췄다 되돌린다. */

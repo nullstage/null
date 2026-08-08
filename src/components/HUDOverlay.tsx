@@ -32,6 +32,7 @@ import PrologueText from "./ui/PrologueText";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
 import { setSfxVolume } from "./ui/sfx";
+import ShopPanel from "./ui/ShopPanel";
 import StatusPanel from "./ui/StatusPanel";
 import {
   DEFAULT_AUDIO,
@@ -50,7 +51,7 @@ import UpgradePanel from "./ui/UpgradePanel";
  * 패널이 하나만 뜨도록 여기서 배타적으로 관리한다. 두 개가 겹치면 입력이 이중으로 들어간다.
  */
 
-type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status";
+type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status" | "shop";
 
 
 const Layer = styled.div`
@@ -258,6 +259,13 @@ const AmmoPip = styled.span<{ spent: boolean }>`
   transition: background 0.1s, box-shadow 0.1s;
 `;
 
+/** 그림자 조각 잔액. 적을 잡을 때마다 오르는 게 보여야 모으는 재미가 산다. */
+const ShardTag = styled.span`
+  color: #c9a8ff;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+`;
+
 const reloadBlink = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -283,6 +291,12 @@ export default function HUDOverlay() {
   const [result, setResult] = useState<RunResult | null>(null);
   const [bossWeights, setBossWeights] = useState<BossPatternWeights>(DEFAULT_BOSS_WEIGHTS);
   const [activePanel, setActivePanel] = useState<ActivePanel>("none");
+  /** 마을 그림자 상인의 이번 거래 내용. `shop:open`으로 채워진다. */
+  const [shop, setShop] = useState<{
+    choices: UpgradeDefinition[];
+    shards: number;
+    price: number;
+  } | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
   /** Esc로 연 일시정지 메뉴. 열려 있는 동안 전투 씬은 멈춰 있다. */
   const [paused, setPaused] = useState(false);
@@ -402,6 +416,11 @@ export default function HUDOverlay() {
   });
 
   useGameEvent("respawn:summary", (summary) => setRespawnSummary(summary));
+
+  useGameEvent("shop:open", (offer) => {
+    setShop(offer);
+    setActivePanel("shop");
+  });
 
   // F1 디버그 토글. 브라우저 기본 도움말이 뜨지 않도록 막는다.
   useEffect(() => {
@@ -656,6 +675,7 @@ export default function HUDOverlay() {
             <HpText>
               {hud.hp} / {hud.maxHp}
             </HpText>
+            <ShardTag>◆ {hud.shards}</ShardTag>
             {hud.mode === "RANGED" &&
               (hud.reloading ? (
                 <ReloadTag>재장전</ReloadTag>
@@ -739,6 +759,25 @@ export default function HUDOverlay() {
       )}
 
       {activePanel === "status" && hud && <StatusPanel hud={hud} />}
+
+      {activePanel === "shop" && shop && (
+        <ShopPanel
+          choices={shop.choices}
+          shards={shop.shards}
+          price={shop.price}
+          onBuy={(upgradeId) => {
+            emitGameEvent("shop:buy", { upgradeId });
+            setActivePanel("none");
+            setShop(null);
+            emitGameEvent("game:resume", {});
+          }}
+          onClose={() => {
+            setActivePanel("none");
+            setShop(null);
+            emitGameEvent("game:resume", {});
+          }}
+        />
+      )}
     </Layer>
   );
 }
