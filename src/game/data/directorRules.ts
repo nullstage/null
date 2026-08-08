@@ -48,11 +48,13 @@ export const COUNTER_ROOM_BY_STYLE: Record<PlayStyle, RoomId> = {
 };
 
 /**
- * MVP_PLAN §5 "방 2 소프트 카운터" (OQ-010 RESOLVED, DEC-014).
+ * MVP_PLAN §5 "방 2 소프트 카운터" (OQ-010 RESOLVED, DEC-016).
  *
- * 방 1 텔레메트리만으로 분류한 스타일에 따라 방 2를 축소판(2기) 카운터로 바꾼다.
- * MIXED는 기존 중립 방(`room_2`)을 그대로 쓴다 — 방 2를 억지로 몰면 방 2 텔레메트리가
- * 방 3 분석의 35% 가중치에 되먹임될 위험이 있어, 확실한 신호가 없을 때는 건드리지 않는다.
+ * 방 2는 이제 3웨이브다. 1웨이브(중립 구성) 텔레메트리로 분류한 스타일에 따라
+ * 2·3웨이브를 축소판(2기) 카운터로 바꾼다 — `CombatScene.resolveWaveOverride` 참고.
+ * 방 1이 무전투로 바뀌면서(팀원 리디자인) "방 1 분석" 전제가 사라져 방 2 자체의
+ * 1웨이브를 관찰용으로 쓰는 방식으로 옮겼다.
+ * MIXED는 기존 중립 구성(`room_2`)을 그대로 쓴다 — 확실한 신호가 없을 때는 건드리지 않는다.
  */
 export const SOFT_COUNTER_ROOM_2_BY_STYLE: Record<PlayStyle, RoomId> = {
   RANGED: "room_2_soft_ranged",
@@ -95,20 +97,6 @@ export const DIRECTOR_DIALOGUE: Record<string, string> = {
 };
 
 /**
- * 방 2 소프트 카운터 예고. (DEC-014)
- *
- * 위 `counter_*`는 방 3(하드 카운터) 예고이고, 이건 방 2(축소판) 예고다.
- * 같은 말을 두 번 쓰면 방 2에서 이미 "판결"이 난 것처럼 들려 방 3의 무게가 죽는다.
- * 방 2는 아직 지켜보는 단계라는 게 말에서도 드러나야 한다.
- */
-export const COUNTER_DIALOGUE_SOFT: Record<PlayStyle, string> = {
-  RANGED: "거리를 지우는 자가 하나, 먼저 가 본다.",
-  MELEE: "그 거리를, 하나가 먼저 흔들어 본다.",
-  MOBILE: "지나갈 자리를 눈여겨보는 자가 하나 있다.",
-  MIXED: "아직은 지켜보기만 하겠다.",
-};
-
-/**
  * 플레이 스타일에 붙는 칭호.
  *
  * 「기록」이나 「분석」 같은 말로는 무엇을 봤다는 건지 전해지지 않는다.
@@ -129,14 +117,6 @@ export const COUNTER_SUMMARY: Record<PlayStyle, string> = {
   RANGED: "거리를 지우는 자들이 기다린다",
   MOBILE: "지나갈 자리를 막는 자들이 기다린다",
   MIXED: "아직 정해지지 않았다",
-};
-
-/** 방 2(축소판) 예고용. 방 3(위 `COUNTER_SUMMARY`)보다 규모가 작다는 게 말에서도 느껴져야 한다. */
-export const COUNTER_SUMMARY_SOFT: Record<PlayStyle, string> = {
-  MELEE: "다가서기 조금 불편해질 것이다",
-  RANGED: "거리를 지우려는 기색이 보인다",
-  MOBILE: "지나갈 자리를 슬쩍 살피는 자가 있다",
-  MIXED: "아직 아무것도 정해지지 않았다",
 };
 
 export const analysisDialogueId = (style: PlayStyle): string =>

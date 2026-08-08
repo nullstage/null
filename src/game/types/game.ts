@@ -32,20 +32,44 @@ export type RoomTemplate = "HORIZONTAL" | "PLATFORM";
 /** 방 프리셋 식별자. 카운터 방은 `counter_*` 접두사를 쓴다. */
 export type RoomId = string;
 
-/** MVP_PLAN §2 강화 6종 */
+/** MVP_PLAN §2 강화. 공격(근접·원거리)·기동 8종에 체력 계열과 속성 무기를 더했다. */
 export type UpgradeId =
   | "MELEE_DAMAGE_UP"
   | "MELEE_FINISHER_RANGE_UP"
   /** 검 자체를 벼린다. 수치와 함께 궤적 색이 바뀌어 눈으로 확인된다. */
   | "BLADE_REFORGED"
+  | "MELEE_BLADE_SIZE_UP"
+  /** 화염 속성. 근접 적중 시 짧은 화상 대미지가 따로 들어간다. */
+  | "MELEE_FIRE_EDGE"
+  /** 마무리 타격(3타)에 검기를 함께 날린다 — 특수기술. */
+  | "MELEE_SWORD_WAVE"
   | "RANGED_COOLDOWN_DOWN"
   | "RANGED_PIERCE"
   /** 총 자체를 개조한다. 탄속과 피해가 오르고 탄 궤적이 길고 밝아진다. */
   | "BARREL_REFORGED"
+  | "RANGED_BULLET_SIZE_UP"
+  /** 냉기 속성. 원거리 적중 시 대상이 짧게 느려진다. */
+  | "RANGED_FROST_ROUND"
+  /** 맹독 속성. 원거리 적중 시 길고 약한 독 틱이 들어간다. */
+  | "RANGED_POISON_ROUND"
+  /** 화염 속성 탄. 근접 화염과 같은 화상 틱을 원거리에도 붙인다. */
+  | "RANGED_FIRE_ROUND"
+  /** 탄창 확장. 재장전 없이 쏠 수 있는 발수가 늘어난다. */
+  | "RANGED_MAG_UP"
   | "DASH_CHARGE_UP"
-  | "DASH_FOLLOWUP_DAMAGE_UP";
+  | "DASH_FOLLOWUP_DAMAGE_UP"
+  | "DASH_COOLDOWN_DOWN"
+  | "DASH_INVULN_UP"
+  | "HEALTH_MAX_UP"
+  /** 방을 클리어할 때마다 소량 회복한다. 큰 폭은 아니다. */
+  | "HEALTH_REGEN"
+  /** 받는 피해를 소폭 줄인다(내구력). */
+  | "HEALTH_ARMOR";
 
-export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY";
+export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
+
+/** 무기에 붙는 속성. 지금은 얕은 부가 효과 하나씩만 준다(화상 틱 / 감속 / 독 틱) — 상성표는 없다. */
+export type UpgradeElement = "FIRE" | "FROST" | "POISON";
 
 /** MVP_PLAN §3 전투 텔레메트리. 방 하나마다 하나씩 만든다. */
 export interface CombatTelemetry {
@@ -94,6 +118,8 @@ export interface UpgradeDefinition {
   category: UpgradeCategory;
   name: string;
   description: string;
+  /** 있으면 이 강화는 속성 무기다. UI·이펙트 색 결정에 쓴다. */
+  element?: UpgradeElement;
 }
 
 export interface EnemySpawn {
@@ -110,6 +136,11 @@ export interface RoomPreset {
   spawns: EnemySpawn[];
   /** 지연 폭발 장판 함정 활성화 여부 (MVP_PLAN §2) */
   hazardsEnabled: boolean;
+  /**
+   * `spawns`를 전멸시킨 뒤 몇 번 더 같은 구성으로 다시 스폰할지. 생략하면 0(웨이브 없음).
+   * 방은 이 웨이브를 전부 전멸시켜야 클리어된다 — 포탈은 그때만 열린다.
+   */
+  extraWaves?: number;
 }
 
 /** 결과 리포트에 쓰는 방 단위 기록 */
@@ -138,4 +169,13 @@ export interface HudState {
   mode: AttackMode;
   roomIndex: number;
   enemiesRemaining: number;
+  /** 상태창(E)이 보여줄 보유 아티팩트 목록. */
+  selectedUpgrades: readonly UpgradeId[];
+  /** 남은 탄. 원거리 모드일 때만 HUD에 그린다. */
+  ammo: number;
+  magazineSize: number;
+  /** 재장전 중인가. HUD가 "재장전" 표시로 바꾼다. */
+  reloading: boolean;
+  /** 그림자 조각 — 적 처치로 모으고 마을 상인에게 쓰는 런 화폐. */
+  shards: number;
 }

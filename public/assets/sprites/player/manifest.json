@@ -108,20 +108,39 @@
     },
     "shoot1": {
       "row": 7,
-      "frames": 5,
-      "fps": 26,
+      "frames": 8,
+      "fps": 28,
       "loop": false,
       "durations_ms": [
-        38,
-        38,
-        38,
-        38,
-        38
+        36,
+        36,
+        36,
+        36,
+        36,
+        36,
+        36,
+        36
       ]
     },
     "shoot2": {
       "row": 8,
-      "frames": 5,
+      "frames": 8,
+      "fps": 28,
+      "loop": false,
+      "durations_ms": [
+        36,
+        36,
+        36,
+        36,
+        36,
+        36,
+        36,
+        36
+      ]
+    },
+    "shoot3": {
+      "row": 9,
+      "frames": 8,
       "fps": 26,
       "loop": false,
       "durations_ms": [
@@ -129,21 +148,10 @@
         38,
         38,
         38,
+        38,
+        38,
+        38,
         38
-      ]
-    },
-    "shoot3": {
-      "row": 9,
-      "frames": 6,
-      "fps": 24,
-      "loop": false,
-      "durations_ms": [
-        42,
-        42,
-        42,
-        42,
-        42,
-        42
       ]
     },
     "switch": {

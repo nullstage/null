@@ -57,6 +57,88 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     name: "기습",
     description: "대시 직후 첫 공격의 피해가 증가한다.",
   },
+  DASH_COOLDOWN_DOWN: {
+    id: "DASH_COOLDOWN_DOWN",
+    category: "MOBILITY",
+    name: "가벼운 발놀림",
+    description: "대시 충전 시간이 25% 감소한다.",
+  },
+  DASH_INVULN_UP: {
+    id: "DASH_INVULN_UP",
+    category: "MOBILITY",
+    name: "잔영",
+    description: "대시 중 무적 시간이 늘어난다.",
+  },
+  MELEE_BLADE_SIZE_UP: {
+    id: "MELEE_BLADE_SIZE_UP",
+    category: "MELEE",
+    name: "거대화",
+    description: "검의 판정 범위와 궤적이 커진다.",
+  },
+  MELEE_FIRE_EDGE: {
+    id: "MELEE_FIRE_EDGE",
+    category: "MELEE",
+    name: "화염의 검",
+    element: "FIRE",
+    description: "근접 공격이 화염 속성을 띤다. 적중한 대상이 잠시 불타 추가 피해를 입는다.",
+  },
+  MELEE_SWORD_WAVE: {
+    id: "MELEE_SWORD_WAVE",
+    category: "MELEE",
+    name: "검기",
+    description: "마무리 타격(3타)에 참격을 함께 날려 멀리 있는 적도 벤다.",
+  },
+  RANGED_BULLET_SIZE_UP: {
+    id: "RANGED_BULLET_SIZE_UP",
+    category: "RANGED",
+    name: "확장탄",
+    description: "탄이 커져 판정 범위가 넓어진다.",
+  },
+  RANGED_FROST_ROUND: {
+    id: "RANGED_FROST_ROUND",
+    category: "RANGED",
+    name: "냉기탄",
+    element: "FROST",
+    description: "원거리 공격이 냉기 속성을 띤다. 적중한 대상이 잠시 느려진다.",
+  },
+  RANGED_POISON_ROUND: {
+    id: "RANGED_POISON_ROUND",
+    category: "RANGED",
+    name: "맹독탄",
+    element: "POISON",
+    description: "원거리 공격이 맹독 속성을 띤다. 적중한 대상이 서서히 독 피해를 입는다.",
+  },
+  RANGED_FIRE_ROUND: {
+    id: "RANGED_FIRE_ROUND",
+    category: "RANGED",
+    name: "소이탄",
+    element: "FIRE",
+    description: "원거리 공격이 화염 속성을 띤다. 적중한 대상이 잠시 불타 추가 피해를 입는다.",
+  },
+  RANGED_MAG_UP: {
+    id: "RANGED_MAG_UP",
+    category: "RANGED",
+    name: "확장 탄창",
+    description: "탄창이 3발 늘어난다. 재장전 없이 더 오래 쏠 수 있다.",
+  },
+  HEALTH_MAX_UP: {
+    id: "HEALTH_MAX_UP",
+    category: "HEALTH",
+    name: "튼튼한 몸",
+    description: "최대 체력이 늘어난다. 늘어난 만큼 즉시 회복된다.",
+  },
+  HEALTH_REGEN: {
+    id: "HEALTH_REGEN",
+    category: "HEALTH",
+    name: "회복의 기운",
+    description: "방을 클리어할 때마다 체력을 소량 회복한다.",
+  },
+  HEALTH_ARMOR: {
+    id: "HEALTH_ARMOR",
+    category: "HEALTH",
+    name: "내구",
+    description: "받는 피해가 소폭 감소한다.",
+  },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

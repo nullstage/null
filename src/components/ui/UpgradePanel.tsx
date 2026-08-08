@@ -75,7 +75,7 @@ const Note = styled.p`
 export interface UpgradePanelProps {
   choices: UpgradeDefinition[];
   onSelect: (upgradeId: UpgradeId) => void;
-  /** 방 3 클리어 후 보스 진입 직전의 마지막 지급이면 true. (OQ-016, DEC-013) */
+  /** 방 3 클리어 후 보스 진입 직전의 마지막 지급이면 true. (OQ-016, DEC-015) */
   final?: boolean;
 }
 

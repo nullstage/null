@@ -14,12 +14,17 @@
 // 각도·거리 계산에 Phaser.Math을 쓰므로 타입이 아니라 값으로 가져온다.
 import Phaser from "phaser";
 
+import { attachStingerTrail } from "../../systems/CombatVfx";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
-/** 본체 크기. 셋 중 가장 가늘고 높아 멀리서도 구분된다. */
-const BODY_WIDTH = 30;
-const BODY_HEIGHT = 54;
+/**
+ * 히트박스 월드 크기와 시트 배치. 원본 셀(64px)에서 벌 그림은
+ * 대략 x25~37, 발끝 y≈47에만 있다 — 셀 여백을 빼고 그림 기준으로 잡는다.
+ */
+const BODY_WIDTH = 44;
+const BODY_HEIGHT = 58;
+const SHEET = { scale: 3.0, anchorX: 31, anchorY: 47 };
 
 /** 유지하려는 거리. 이보다 가까우면 물러나고, 멀면 다가온다. */
 const KEEP_DISTANCE_MIN = 280;
@@ -28,19 +33,21 @@ const KEEP_DISTANCE_MAX = 440;
 const FIRE_INTERVAL_MS = 1400;
 /** 이 거리보다 멀면 쏘지 않는다. 화면 밖에서 날아오는 탄을 만들지 않기 위한 것이다. */
 const FIRE_MAX_RANGE = 620;
-/** 투사체 속도. 대시로 피할 수 있어야 하므로 빠르게 하지 않는다. (DEC-004) */
-const PROJECTILE_SPEED = 300;
+/** 투사체 속도. 대시로 피할 수 있는 상한 안에서 긴장감을 위해 올렸다(300→450, 사용자 요청). */
+const PROJECTILE_SPEED = 450;
 const PROJECTILE_SIZE = 14;
 /** 투사체 수명(ms). 화면을 가로지르면 사라진다. */
 const PROJECTILE_LIFE_MS = 2400;
 /** 이 거리 안쪽 벽에 붙으면 몰린 것으로 본다. */
 const CORNER_MARGIN = 90;
+/** 이만큼 앞의 바닥을 미리 살핀다. */
+const LEDGE_LOOKAHEAD = 24;
 /** 몰렸을 때의 투명도. 무방비 상태라는 표시다. */
 const CORNERED_ALPHA = 0.6;
-/** 조준선 두께. */
-const AIM_LINE_HEIGHT = 4;
-const AIM_ALPHA_FROM = 0.2;
-const AIM_ALPHA_TO = 0.7;
+/** 조준선 두께. 얇게 긋고 가산 블렌드로 빛나게 한다 — 굵은 띠보다 레이저처럼 읽힌다. */
+const AIM_LINE_HEIGHT = 1.5;
+const AIM_ALPHA_FROM = 0.3;
+const AIM_ALPHA_TO = 1;
 
 export class RangedEnemy extends BaseEnemy {
   private aiming = false;
@@ -57,7 +64,8 @@ export class RangedEnemy extends BaseEnemy {
   }
 
   spawn(x: number, y: number): void {
-    this.spawnBody(x, y, TEXTURE.ranged, BODY_WIDTH, BODY_HEIGHT);
+    const body = this.spawnBody(x, y, TEXTURE.ranged, BODY_WIDTH, BODY_HEIGHT, SHEET);
+    body.play("rangedIdle");
   }
 
   update(_time: number, deltaMs: number): void {
@@ -66,8 +74,13 @@ export class RangedEnemy extends BaseEnemy {
 
     this.stateMs += deltaMs;
 
+    // 조준 중이든 아니든 플레이어 쪽을 보고 있어야 "겨냥한다"가 읽힌다.
+    const facingTarget = this.getPlayerPosition().x - body.x;
+    if (facingTarget !== 0) body.setFlipX(facingTarget < 0);
+
     if (this.aiming) {
       body.setVelocityX(0);
+      body.anims.play("rangedAttack", true);
       if (this.stateMs >= this.definition.telegraphMs) this.fire();
       return;
     }
@@ -77,19 +90,26 @@ export class RangedEnemy extends BaseEnemy {
     const player = this.getPlayerPosition();
     const dx = player.x - body.x;
     const distance = Math.abs(dx);
-    const speed = this.definition.moveSpeed;
+    const speed = this.definition.moveSpeed * this.speedMultiplier;
 
     if (distance < KEEP_DISTANCE_MIN) {
-      // 플레이어 반대쪽으로 물러난다.
+      // 플레이어 반대쪽으로 물러난다. 낭떠러지도 벽처럼 막힌 것으로 본다 —
+      // 플레이어처럼 점프해서 건널 수 없으니 그 앞에서 멈춰야 한다.
       const away = dx === 0 ? 1 : -Math.sign(dx);
-      this.cornered = this.isAgainstWall(body.x, away);
+      this.cornered =
+        this.isAgainstWall(body.x, away) || !this.hasFloorBelow(body.x + away * LEDGE_LOOKAHEAD);
       body.setVelocityX(this.cornered ? 0 : away * speed);
     } else {
       this.cornered = false;
-      body.setVelocityX(distance > KEEP_DISTANCE_MAX ? Math.sign(dx) * speed : 0);
+      const toward = Math.sign(dx);
+      const wantsToMove = distance > KEEP_DISTANCE_MAX;
+      body.setVelocityX(
+        wantsToMove && this.hasFloorBelow(body.x + toward * LEDGE_LOOKAHEAD) ? toward * speed : 0,
+      );
     }
 
     body.setAlpha(this.cornered ? CORNERED_ALPHA : 1);
+    body.anims.play(body.body?.velocity.x !== 0 ? "rangedWalk" : "rangedIdle", true);
 
     // 몰려 있는 동안에는 쏘지 않는다. 이 빈틈이 "벽에 몰리면 취약"의 실체다.
     if (this.cornered) return;
@@ -119,6 +139,8 @@ export class RangedEnemy extends BaseEnemy {
     line.setDisplaySize(distance, AIM_LINE_HEIGHT);
     line.setRotation(Phaser.Math.Angle.Between(body.x, body.y, player.x, player.y));
     line.setAlpha(AIM_ALPHA_FROM);
+    // 가산 블렌드로 어두운 배경 위에서 빛나는 실선이 된다.
+    line.setBlendMode(Phaser.BlendModes.ADD);
     this.aimLine = line;
 
     this.scene.tweens.add({
@@ -143,8 +165,13 @@ export class RangedEnemy extends BaseEnemy {
       TEXTURE.enemyAttack,
     ) as Phaser.Physics.Arcade.Sprite;
     shot.setDisplaySize(PROJECTILE_SIZE, PROJECTILE_SIZE);
+    // 물리 판정용 사각형은 숨기고 그림은 출렁이는 침 궤적이 대신한다.
+    shot.setAlpha(0);
+    attachStingerTrail(this.scene, shot);
     shot.setData("damage", this.definition.contactDamage);
     shot.setData("consumeOnHit", true);
+    // 패링 반사용 — 이 공격을 누가 냈는지 알아야 씬이 반사 피해를 되돌려줄 수 있다.
+    shot.setData("source", this);
 
     // 조준 시점의 좌표로만 날아간다. 그 사이에 움직였다면 빗나간다.
     const angle = Phaser.Math.Angle.Between(body.x, body.y, this.aimTarget.x, this.aimTarget.y);

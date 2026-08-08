@@ -3,9 +3,7 @@
 import styled from "@emotion/styled";
 
 import {
-  COUNTER_DIALOGUE_SOFT,
   COUNTER_SUMMARY,
-  COUNTER_SUMMARY_SOFT,
   DIRECTOR_DIALOGUE,
   STYLE_TITLE,
   counterDialogueId,
@@ -79,25 +77,10 @@ export interface AnalysisPanelProps {
   analysis: DirectorAnalysis;
   dashCount: number;
   onContinue: () => void;
-  /**
-   * 방 1 클리어 후(→방 2, 축소판)는 "soft", 방 2 클리어 후(→방 3, 하드 카운터)는 "hard"다.
-   * 같은 문구를 두 번 쓰면 방 2에서 이미 판결이 난 것처럼 들려 방 3의 무게가 죽는다. (DEC-014)
-   */
-  counterStrength: "soft" | "hard";
 }
 
-export default function AnalysisPanel({
-  analysis,
-  dashCount,
-  onContinue,
-  counterStrength,
-}: AnalysisPanelProps) {
+export default function AnalysisPanel({ analysis, dashCount, onContinue }: AnalysisPanelProps) {
   const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
-  const soft = counterStrength === "soft";
-  const counterSummary = soft ? COUNTER_SUMMARY_SOFT : COUNTER_SUMMARY;
-  const counterLine = soft
-    ? COUNTER_DIALOGUE_SOFT[analysis.style]
-    : DIRECTOR_DIALOGUE[counterDialogueId(analysis.style)];
 
   return (
     <Panel title="너는 이렇게 싸웠다">
@@ -120,11 +103,11 @@ export default function AnalysisPanel({
       </PanelRow>
 
       {/* 분석보다 이 줄이 중요하다. 다음 방이 왜 달라지는지가 여기서만 전해진다. */}
-      <Counter>다음 방 — {counterSummary[analysis.style]}</Counter>
+      <Counter>다음 방 — {COUNTER_SUMMARY[analysis.style]}</Counter>
 
       <Dialogue>
         “{DIRECTOR_DIALOGUE[analysis.dialogueId]}”
-        <br />“{counterLine}”
+        <br />“{DIRECTOR_DIALOGUE[counterDialogueId(analysis.style)]}”
       </Dialogue>
 
       <PanelActions>

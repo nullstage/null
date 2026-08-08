@@ -15,7 +15,7 @@ import { BootScene } from "./scenes/BootScene";
 import { BossScene } from "./scenes/BossScene";
 import { CombatScene } from "./scenes/CombatScene";
 import { ReadyScene } from "./scenes/ReadyScene";
-import { HitFxPipeline } from "./systems/CombatVfx";
+import { AmbientLightPipeline, HitFxPipeline } from "./systems/CombatVfx";
 import { runState } from "./systems/RunState";
 
 /** 일시정지가 의미 있는 씬. 시작 화면은 멈출 것이 없다. */
@@ -63,7 +63,10 @@ export const createGame = (parent: HTMLElement): Phaser.Game => {
     pixelArt: true,
     scale: {
       mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
+      // 세로는 중앙 정렬하지 않는다. 창 비율이 16:9와 다를 때 남는 여백을 위아래로
+      // 나누면 위쪽에 빈 줄이 생겨 하늘 그림이 잘린 것처럼 보인다. 캔버스를 맨 위에
+      // 붙이면(가로만 중앙 정렬) 남는 여백이 전부 아래로 몰려 배경이 위까지 꽉 찬다.
+      autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
     },
     physics: {
       default: "arcade",
@@ -73,10 +76,20 @@ export const createGame = (parent: HTMLElement): Phaser.Game => {
       },
     },
     // 포스트 파이프라인은 게임 생성 시점에만 등록할 수 있다. 씬에서 나중에 붙이지 못한다.
-    pipeline: { HitFx: HitFxPipeline } as unknown as Phaser.Types.Core.PipelineConfig,
+    pipeline: {
+      HitFx: HitFxPipeline,
+      AmbientLight: AmbientLightPipeline,
+    } as unknown as Phaser.Types.Core.PipelineConfig,
     scene: [BootScene, ReadyScene, CombatScene, BossScene],
   });
 
   wireLifecycle(game);
+
+  // 개발용: 콘솔에서 씬을 직접 조작해 테스트할 수 있게 한다(예: 보스전 즉시 진입).
+  // runState 노출과 같은 패턴이며 프로덕션 빌드에는 포함하지 않는다.
+  if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+    (window as unknown as { phaserGame: Phaser.Game }).phaserGame = game;
+  }
+
   return game;
 };
