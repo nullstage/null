@@ -11,6 +11,7 @@
 import Phaser from "phaser";
 
 import { eventBus } from "../EventBus";
+import { debugFlag } from "../config/gameConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { runState } from "../systems/RunState";
 
@@ -36,6 +37,15 @@ export class ReadyScene extends Phaser.Scene {
 
   private startRun(): void {
     runState.reset(this.time.now);
+
+    // 개발·시연 전용 보스 직행(`?boss=1`). 앞의 방 세 개를 매번 지나지 않고
+    // 보스전만 확인하기 위한 것이다. 성향 가중치는 reset이 넣어둔 기본값을 그대로 쓴다
+    // (분석을 거치지 않았으므로 특정 성향으로 치우치면 안 된다).
+    if (debugFlag("boss")) {
+      this.scene.start("Boss");
+      return;
+    }
+
     this.scene.start("Combat", { roomId: FIXED_ROOM_SEQUENCE[0] });
   }
 

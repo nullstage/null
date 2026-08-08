@@ -3,7 +3,7 @@
 import styled from "@emotion/styled";
 import { useCallback, useEffect, useState } from "react";
 
-import { assetPath } from "@/game/config/gameConfig";
+import { assetPath, debugFlag } from "@/game/config/gameConfig";
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
@@ -305,8 +305,10 @@ export default function HUDOverlay() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNeedsFirstVisit(!hasVisitedBefore());
     setAudio(loadAudioSettings());
-    if (process.env.NODE_ENV !== "production") {
-      setFastStart(new URLSearchParams(window.location.search).has("fast"));
+    // `?boss=1`은 배포본에서도 켠다 — 심사·시연 때 보스전만 바로 보여줄 수 있어야 한다.
+    // 어느 쪽이든 시작 화면과 프롤로그만 건너뛸 뿐, 밸런스에는 관여하지 않는다.
+    if (process.env.NODE_ENV !== "production" || debugFlag("boss")) {
+      setFastStart(debugFlag("fast") || debugFlag("boss"));
     }
     // 씬이 만들어지기 전에 바인딩을 올려둬야 첫 방부터 바뀐 키가 먹는다.
     loadKeyBindings();

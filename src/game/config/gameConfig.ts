@@ -20,3 +20,12 @@ export const ASSET_BASE = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/assets`;
 
 export const assetPath = (relativePath: string): string =>
   `${ASSET_BASE}/${relativePath.replace(/^\//, "")}`;
+
+/**
+ * 개발·시연용 URL 플래그. `?fast=1`, `?boss=1`처럼 쓴다.
+ *
+ * 배포본에서도 주소만 알면 켤 수 있으므로, 흐름을 건너뛰는 용도로만 쓰고
+ * 밸런스나 판정에는 절대 연결하지 않는다. 서버 렌더 시에는 항상 false다.
+ */
+export const debugFlag = (name: string): boolean =>
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has(name);
