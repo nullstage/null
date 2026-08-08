@@ -10,6 +10,7 @@
  * Phaser에 의존하지 않는 순수 구현이라 React 번들이 Phaser를 끌어오지 않는다.
  */
 
+import type { EngravingId, EngravingView } from "./data/engravings";
 import type {
   BossPatternWeights,
   CombatTelemetry,
@@ -43,11 +44,15 @@ export interface GameEventMap {
   "respawn:summary": { survivedMs: number; kills: number };
   /** 마을 그림자 상인과의 거래 시작. 씬은 이걸 쏘고 스스로 멈춘다(대화창과 같은 문법). */
   "shop:open": { choices: UpgradeDefinition[]; shards: number; price: number };
+  /** 기록 제단(각인) 열기. 구매 후에도 같은 이벤트로 갱신 스냅샷을 다시 쏜다 — 패널은 열린 채로. */
+  "engrave:open": { nodes: EngravingView[]; shards: number };
 
   /** React → Phaser */
   "upgrade:select": { upgradeId: UpgradeId };
   /** 상점 구매. 검증(잔액)은 Phaser 쪽이 한다 — React는 표시만 담당한다. */
   "shop:buy": { upgradeId: UpgradeId };
+  /** 각인 새기기. 검증(선행 조건·잔액)은 Phaser 쪽(Engravings)이 한다. */
+  "engrave:buy": { id: EngravingId };
   "ui:continue": Record<string, never>;
   "run:restart": Record<string, never>;
   /** 일시정지 메뉴가 열리고 닫힐 때. 전투 씬의 시간을 멈췄다 되돌린다. */

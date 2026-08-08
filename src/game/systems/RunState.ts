@@ -10,7 +10,9 @@
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
+import { ENGRAVING_EFFECT } from "../data/engravings";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
+import { hasEngraving } from "./Engravings";
 import { TUNING } from "../entities/Player";
 import type {
   BossPattern,
@@ -82,11 +84,12 @@ export class RunState {
     this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
     this.bossPatternUsage = emptyPatternUsage();
     this.deception = null;
-    this.hp = PLAYER.maxHp;
-    this.maxHp = PLAYER.maxHp;
+    // 각인(영구 해금) 보정 — 새 런의 시작값에만 얹는다. (data/engravings.ts)
+    this.maxHp = PLAYER.maxHp + (hasEngraving("VIGOR") ? ENGRAVING_EFFECT.hpBonus : 0);
+    this.hp = this.maxHp;
     this.rooms = [];
     this.skipTutorialIntro = false;
-    this.shards = 0;
+    this.shards = hasEngraving("MEMORY") ? ENGRAVING_EFFECT.startShards : 0;
     this.kills = 0;
     this.attemptStartedAtMs = nowMs;
     this.runStartedAtMs = nowMs;

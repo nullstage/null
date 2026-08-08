@@ -21,12 +21,14 @@ import type {
   UpgradeDefinition,
   UpgradeId,
 } from "@/game/types/game";
+import type { EngravingView } from "@/game/data/engravings";
 import { theme } from "@/styles/theme";
 
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
 import DialogueBox from "./ui/DialogueBox";
+import EngravePanel from "./ui/EngravePanel";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import {
   CycloneIcon,
@@ -62,7 +64,15 @@ import UpgradePanel from "./ui/UpgradePanel";
  * 패널이 하나만 뜨도록 여기서 배타적으로 관리한다. 두 개가 겹치면 입력이 이중으로 들어간다.
  */
 
-type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status" | "shop";
+type ActivePanel =
+  | "none"
+  | "analysis"
+  | "upgrade"
+  | "deception"
+  | "result"
+  | "status"
+  | "shop"
+  | "engrave";
 
 /** 스킬 아이콘 매핑. 새 스킬은 여기에 한 줄 추가한다. */
 const SKILL_ICONS: Partial<Record<UpgradeId, ReactElement>> = {
@@ -374,6 +384,8 @@ export default function HUDOverlay() {
     shards: number;
     price: number;
   } | null>(null);
+  /** 기록 제단(각인)의 현재 스냅샷. `engrave:open`으로 채워지고 구매 후 갱신된다. */
+  const [engrave, setEngrave] = useState<{ nodes: EngravingView[]; shards: number } | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
   /** Esc로 연 일시정지 메뉴. 열려 있는 동안 전투 씬은 멈춰 있다. */
   const [paused, setPaused] = useState(false);
@@ -497,6 +509,11 @@ export default function HUDOverlay() {
   useGameEvent("shop:open", (offer) => {
     setShop(offer);
     setActivePanel("shop");
+  });
+
+  useGameEvent("engrave:open", (payload) => {
+    setEngrave(payload);
+    setActivePanel("engrave");
   });
 
   // F1 디버그 토글. 브라우저 기본 도움말이 뜨지 않도록 막는다.
@@ -859,6 +876,19 @@ export default function HUDOverlay() {
       )}
 
       {activePanel === "status" && hud && <StatusPanel hud={hud} />}
+
+      {activePanel === "engrave" && engrave && (
+        <EngravePanel
+          nodes={engrave.nodes}
+          shards={engrave.shards}
+          onBuy={(id) => emitGameEvent("engrave:buy", { id })}
+          onClose={() => {
+            setActivePanel("none");
+            setEngrave(null);
+            emitGameEvent("game:resume", {});
+          }}
+        />
+      )}
 
       {activePanel === "shop" && shop && (
         <ShopPanel
