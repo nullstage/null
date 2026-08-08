@@ -69,7 +69,7 @@ export class CombatScene extends Phaser.Scene {
   /** 방 1(튜토리얼) 전용 — 전투 대신 이걸 앞에서 INTERACT를 눌러야 다음 방으로 넘어간다. */
   private portal: Phaser.Physics.Arcade.Sprite | null = null;
   /** 게이트 근처일 때만 보이는 안내 문구. */
-  private portalPrompt: Phaser.GameObjects.Text | null = null;
+  private portalPrompt: Phaser.GameObjects.Container | null = null;
   /** 게이트를 상호작용하면 실행할 다음 단계. `awaitPortal`이 채우고 상호작용 시 비운다. */
   private portalCallback: (() => void) | null = null;
   private interactKey?: Phaser.Input.Keyboard.Key;
@@ -265,11 +265,14 @@ export class CombatScene extends Phaser.Scene {
       }
     }
 
-    // 전송 게이트. 모든 일반 전투방(1~3) 끝에 세운다. 방 2·3은 적을 다 처치해야
-    // (`handleRoomClear`가 콜백을 채워야) 실제로 반응한다 — `updatePortalPrompt`가 안내를
-    // 콜백이 있을 때만 보여준다. 가까이 가서 INTERACT를 눌러야 넘어간다.
-    // 원본이 커서(426×542) 캐릭터 대비 지나치게 크지 않도록 축소한다.
-    const gateX = roomWidth - (isWideRoom ? 260 : 120);
+    // 전송 게이트. 방 2·3은 적을 다 처치해야(`handleRoomClear`가 콜백을 채워야) 반응한다.
+    // 가까이 가서 INTERACT를 눌러야 넘어간다. 원본이 커서(426×542) 축소해 세운다.
+    // 위치도 지형처럼 랜덤 — 단 시작 지점 근처는 피하고, 낭떠러지 위로는 못 가게 보정한다.
+    const gateX = isTutorialRoom
+      ? roomWidth - 260
+      : this.groundedSpawnX(
+          Phaser.Math.Between(Math.round(roomWidth * 0.4), Math.round(roomWidth * 0.92)),
+        );
     const portal = this.physics.add.staticSprite(gateX, this.arena.bounds.floorY, TEXTURE.gate);
     portal.setOrigin(0.5, 1);
     portal.setScale(0.6);
@@ -287,18 +290,8 @@ export class CombatScene extends Phaser.Scene {
     this.portal = portal;
 
     // 게이트 근처 + 실제로 반응할 준비가 됐을 때만 캐릭터 머리 위에 뜨는 안내. 기본은 숨김.
-    this.portalPrompt = this.add.text(gateX, 0, `[${KEY_BINDINGS.INTERACT}] 진입`, {
-      fontFamily: "monospace",
-      fontSize: "16px",
-      color: "#f5ece0",
-      backgroundColor: "#241a1fcc",
-      padding: { x: 6, y: 3 },
-      // 캔버스(1280×720)가 창 크기로 확대되며 글자가 뭉개진다 — 2배 해상도로 그린다.
-      resolution: 2,
-    });
-    this.portalPrompt.setOrigin(0.5, 1);
-    this.portalPrompt.setDepth(11);
-    this.portalPrompt.setVisible(false);
+    // 어두운 알약형 배경 + 주황 키캡 + 라벨 — 참고 스크린샷의 콘솔 게임식 프롬프트 문법.
+    this.portalPrompt = this.buildInteractPrompt();
 
     this.interactKey = this.input.keyboard?.addKey(KEY_BINDINGS.INTERACT);
 
@@ -306,6 +299,57 @@ export class CombatScene extends Phaser.Scene {
     this.minimap = this.add.graphics();
     this.minimap.setScrollFactor(0);
     this.minimap.setDepth(900);
+  }
+
+  /**
+   * 상호작용 안내 프롬프트. [키캡] + "들어가기"를 어두운 알약 위에 얹는다.
+   * 컨테이너 원점은 알약의 가운데 아래 — 캐릭터 머리 위에 세울 때의 기준점이다.
+   */
+  private buildInteractPrompt(): Phaser.GameObjects.Container {
+    const label = this.add.text(0, 0, "들어가기", {
+      fontFamily: "'Pretendard', sans-serif",
+      fontSize: "16px",
+      fontStyle: "bold",
+      color: "#f5ece0",
+      resolution: 2,
+    });
+    label.setOrigin(0, 0.5);
+
+    const keyLabel = this.add.text(0, 0, KEY_BINDINGS.INTERACT, {
+      fontFamily: "'Pretendard', sans-serif",
+      fontSize: "13px",
+      fontStyle: "bold",
+      color: "#4a2408",
+      resolution: 2,
+    });
+    keyLabel.setOrigin(0.5, 0.5);
+
+    // 배치 계산: [키캡 22px] [간격 8px] [라벨] 좌우 여백 12px.
+    const KEYCAP = 22;
+    const pillWidth = 12 + KEYCAP + 8 + label.width + 12;
+    const pillHeight = 34;
+
+    const graphics = this.add.graphics();
+    // 알약 배경 — 짙은 바탕에 옅은 테두리.
+    graphics.fillStyle(0x10150f, 0.88);
+    graphics.fillRoundedRect(-pillWidth / 2, -pillHeight, pillWidth, pillHeight, pillHeight / 2);
+    graphics.lineStyle(1, 0xffffff, 0.12);
+    graphics.strokeRoundedRect(-pillWidth / 2, -pillHeight, pillWidth, pillHeight, pillHeight / 2);
+    // 주황 키캡 — 아래로 살짝 어두운 두 겹으로 눌린 입체감.
+    const keyX = -pillWidth / 2 + 12;
+    const keyY = -pillHeight / 2 - KEYCAP / 2;
+    graphics.fillStyle(0xa85511, 1);
+    graphics.fillRoundedRect(keyX, keyY + 2, KEYCAP, KEYCAP, 6);
+    graphics.fillStyle(0xe8912c, 1);
+    graphics.fillRoundedRect(keyX, keyY, KEYCAP, KEYCAP, 6);
+
+    keyLabel.setPosition(keyX + KEYCAP / 2, keyY + KEYCAP / 2);
+    label.setPosition(keyX + KEYCAP + 8, -pillHeight / 2);
+
+    const container = this.add.container(0, 0, [graphics, keyLabel, label]);
+    container.setDepth(11);
+    container.setVisible(false);
+    return container;
   }
 
   /**
