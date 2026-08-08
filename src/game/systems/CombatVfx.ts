@@ -20,6 +20,15 @@ import Phaser from "phaser";
 /** 연출용 도트 한 칸. 이 배수로만 좌표를 찍어야 스프라이트 격자와 어긋나지 않는다. */
 const PIXEL = 4;
 
+/** 두 색을 t(0~1)만큼 섞는다. 연사 단계별로 크기뿐 아니라 색까지 바뀌어야 "다른 발"로 읽힌다. */
+const lerpColor = (a: number, b: number, t: number): number =>
+  Phaser.Display.Color.Interpolate.ColorWithColor(
+    Phaser.Display.Color.ValueToColor(a),
+    Phaser.Display.Color.ValueToColor(b),
+    100,
+    Math.round(Phaser.Math.Clamp(t, 0, 1) * 100),
+  ).color;
+
 const VFX = {
   slash: {
     /** 짧을수록 날카롭다. 길게 남으면 휘두른 것이 아니라 걸어둔 것처럼 보인다. */
@@ -643,6 +652,10 @@ export const beamLine = (
   power = 1,
 ): void => {
   const { beam } = VFX;
+  // 굵기뿐 아니라 색도 단계마다 바꾼다 — 마무리로 갈수록 겉겹이 뜨거운 주황으로 옮겨간다.
+  const heat = Phaser.Math.Clamp((power - 0.75) / 1.35, 0, 1);
+  const glowColor = lerpColor(beam.glow, 0xff5320, heat);
+
   const graphics = scene.add.graphics();
   graphics.setDepth(VFX.depth);
   graphics.setBlendMode(Phaser.BlendModes.ADD);
@@ -651,7 +664,7 @@ export const beamLine = (
     graphics.clear();
     const right = current;
     // 흐릿한 바깥 겹 + 얇은 안쪽 심. 두 겹 다 옅어야 "레이저사이트"로 읽힌다 — 진하면 광선이 된다.
-    graphics.lineStyle(beam.thickness * beam.glowScale * power, beam.glow, beam.glowAlpha);
+    graphics.lineStyle(beam.thickness * beam.glowScale * power, glowColor, beam.glowAlpha);
     graphics.lineBetween(0, 0, right, 0);
     graphics.lineStyle(beam.thickness * power, beam.core, beam.coreAlpha);
     graphics.lineBetween(0, 0, right, 0);
@@ -712,19 +725,24 @@ export const muzzleFlash = (
   power = 1,
 ): void => {
   const { muzzle } = VFX;
+  // 0(약함)~1(마무리)로 정규화. 크기만 커지면 "같은 총이 세게 나간다"로 보이지만,
+  // 색까지 살구색 → 뜨거운 주황으로 옮겨가야 "다른 발"로 읽힌다.
+  const heat = Phaser.Math.Clamp((power - 0.75) / 1.35, 0, 1);
+  const sparkColor = lerpColor(muzzle.spark, 0xff5320, heat);
+
   const graphics = scene.add.graphics({ x, y });
   graphics.setDepth(VFX.depth + 1);
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
-  graphics.fillStyle(muzzle.spark, 0.9);
+  graphics.fillStyle(sparkColor, 0.9);
   graphics.fillCircle(0, 0, muzzle.coreRadius * 1.6 * power);
   graphics.fillStyle(muzzle.core, 1);
   graphics.fillCircle(0, 0, muzzle.coreRadius * power);
 
   // 총구 방향(전방 반원)으로만 불꽃 가닥을 뻗는다. 뒤로 뻗으면 반동처럼 보여 어색하다.
-  // power가 클수록 가닥도 늘어난다 — 마무리 발이 더 터지는 느낌을 준다.
-  const rays = power > 1.2 ? muzzle.rays + 3 : muzzle.rays;
-  graphics.lineStyle(2, muzzle.spark, 0.85);
+  // heat가 클수록 가닥도 늘어난다 — 마무리 발이 확실히 더 터지는 인상을 준다.
+  const rays = Math.round(muzzle.rays + heat * 5);
+  graphics.lineStyle(2, sparkColor, 0.85);
   for (let i = 0; i < rays; i += 1) {
     const spread = Phaser.Math.FloatBetween(-0.5, 0.5);
     const rayX = facing * muzzle.rayLength * power * (0.7 + Phaser.Math.FloatBetween(0, 0.4));
@@ -732,20 +750,54 @@ export const muzzleFlash = (
     graphics.lineBetween(0, 0, rayX, rayY);
   }
 
-  // 마무리 발만 얇은 충격 링을 한 번 더 얹는다 — 총구가 확실히 "쾅" 터지는 인상.
-  if (power > 1.2) {
-    graphics.lineStyle(1.5, muzzle.core, 0.7);
-    graphics.strokeCircle(0, 0, muzzle.coreRadius * 1.2);
-  }
-
   scene.tweens.add({
     targets: graphics,
     alpha: 0,
-    scale: power > 1.2 ? 1.9 : 1.4,
-    duration: muzzle.lifeMs * (power > 1.2 ? 1.4 : 1),
+    scale: 1.3 + heat * 0.8,
+    duration: muzzle.lifeMs * (1 + heat * 0.6),
     ease: "power2.out",
     onComplete: () => graphics.destroy(),
   });
+
+  // 세지는 발일수록 튀는 불티 조각과 확장하는 충격 링을 더 얹는다.
+  if (heat > 0.3) {
+    const sparkCount = Math.round(2 + heat * 5);
+    for (let i = 0; i < sparkCount; i += 1) {
+      const angle =
+        facing > 0
+          ? Phaser.Math.FloatBetween(-0.7, 0.7)
+          : Math.PI + Phaser.Math.FloatBetween(-0.7, 0.7);
+      const dist = (10 + heat * 26) * Phaser.Math.FloatBetween(0.6, 1);
+      const dot = scene.add.graphics({ x, y });
+      dot.setDepth(VFX.depth + 1);
+      dot.setBlendMode(Phaser.BlendModes.ADD);
+      dot.fillStyle(sparkColor, 1);
+      dot.fillCircle(0, 0, 1.5);
+      scene.tweens.add({
+        targets: dot,
+        x: x + Math.cos(angle) * dist,
+        y: y + Math.sin(angle) * dist,
+        alpha: 0,
+        duration: 130 + heat * 90,
+        ease: "power2.out",
+        onComplete: () => dot.destroy(),
+      });
+    }
+
+    const ring = scene.add.graphics({ x, y });
+    ring.setDepth(VFX.depth + 1);
+    ring.setBlendMode(Phaser.BlendModes.ADD);
+    ring.lineStyle(1.5, muzzle.core, 0.75);
+    ring.strokeCircle(0, 0, muzzle.coreRadius);
+    scene.tweens.add({
+      targets: ring,
+      scale: 1 + heat * 2.6,
+      alpha: 0,
+      duration: 150 + heat * 90,
+      ease: "power2.out",
+      onComplete: () => ring.destroy(),
+    });
+  }
 };
 
 /**

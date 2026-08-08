@@ -68,7 +68,13 @@ const INTRO_MS = 900;
  * 1·2발은 가볍게 흘리고, 마무리(3발째)만 확실히 크게 — 매번 똑같이 나가면
  * "3연사"가 아니라 "같은 총알 세 번"으로 읽힌다는 지적을 반영했다.
  */
-const RANGED_POWER_BY_STEP = [0.8, 1, 1.7] as const;
+const RANGED_POWER_BY_STEP = [0.75, 1.15, 2.1] as const;
+
+/** 연사 단계별 피치(센트). 서서히 낮아져 마무리로 갈수록 무거워지는 느낌을 준다. */
+const RANGED_DETUNE_BY_STEP = [550, 260, 0] as const;
+
+/** 반동 직후 이동 입력이 속도를 덮어쓰지 않는 시간(ms). 근접 돌진 판정과 같은 방식. */
+const RANGED_RECOIL_WINDOW_MS = 110;
 
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
 const RANGED_MODE_TINT = 0xffc9d4;
@@ -812,23 +818,30 @@ export class Player {
 
       // 예고가 끝나고 실제로 나가는 "팡" — 총구 섬광은 발사 순간에만 터진다.
       muzzleFlash(this.scene, projectile.x, projectile.y, facing, power);
-      // 1·2발째는 피치를 올려 연사가 급해지는 느낌을 준다. 마무리(3발째)는 원래 피치로 무게를 싣는다.
-      playSfx(this.scene, AUDIO.gunShot, { detune: this.rangedStep < 3 ? 400 : 0 });
+      // 3발이 각각 다른 총처럼 들리게 단계마다 피치를 확실히 갈라둔다. 1발째가 가장
+      // 날카롭고(급하게 튀어나가는 느낌), 3발째(마무리)는 원래 피치로 묵직하게.
+      playSfx(this.scene, AUDIO.gunShot, { detune: RANGED_DETUNE_BY_STEP[this.rangedStep - 1] });
       // 탄피 소리는 총성과 겹치지 않게 그 텀에 낸다.
       playSfx(this.scene, AUDIO.shellDrop, { delay: 180 });
 
-      // 반동으로 뒤로 밀린다 — 마무리 발은 더 세게 밀려야 무게가 실린다.
+      /**
+       * 반동. 예전엔 velocity에 한 번 더해주기만 했는데, 접지 중 매 프레임 이동 로직이
+       * `body.setVelocityX(방향키 * moveSpeed)`로 그 즉시 덮어써서(움직이지 않고
+       * 서서 쏘면 다음 프레임 곧바로 0) 체감이 안 됐다. 근접 돌진 판정과 같은 방식
+       * (`lungeUntilMs` 동안은 덮어쓰지 않고 감쇠만 시킨다)을 재사용해 짧게 버티게 한다.
+       */
       const playerBody = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
-      playerBody?.setVelocityX(playerBody.velocity.x - facing * ranged.recoil * power);
+      if (playerBody) {
+        playerBody.setVelocityX(playerBody.velocity.x - facing * ranged.recoil * power);
+        if (this.isGrounded) this.lungeUntilMs = this.scene.time.now + RANGED_RECOIL_WINDOW_MS;
+      }
 
       const punchScale = isFinisher
         ? TUNING.feedback.punchScale * 1.4
         : TUNING.feedback.punchScale;
       this.punch(1 / punchScale, punchScale);
-      // 마무리 발만 화면이 살짝 흔들린다 — 검 3타(finisher)와 같은 급의 무게감.
-      if (isFinisher) {
-        this.scene.cameras.main.shake(70, 0.0035);
-      }
+      // 화면 흔들림은 매 발 준다 — 세기가 단계별로 다르니 반동이 쌓이는 게 느껴진다.
+      this.scene.cameras.main.shake(40 + 40 * power, 0.0012 * power);
     });
 
     return true;
@@ -1011,11 +1024,22 @@ export class Player {
     const sprite = this.sprite;
     if (!sprite || this.isDashing) return;
 
+    /**
+     * Arcade Body는 매 프레임 무조건 `Body.preUpdate → updateFromGameObject`를 돌려
+     * scaleY로 충돌 박스의 높이와 y 위치를 다시 계산한다(Phaser 소스로 확인함).
+     * 접지 중에 세로로 크게 스쿼시하면(특히 총 3발째처럼 배율을 키운 경우) 그 순간
+     * 박스가 바닥과 크게 어긋났다가 다음 프레임에 다 못 따라잡아 바닥에 파묻히거나
+     * 뜬 것처럼 보인다 — 착지·대시 때 겪은 것과 같은 원인이다.
+     * 접지 중에는 세로를 건드리지 않고 가로만 스쿼시한다. 공중에서는 바닥 충돌이
+     * 없으니 그대로 세로까지 쓴다.
+     */
+    const effectiveScaleY = this.isGrounded ? 1 : scaleY;
+
     this.punchTween?.remove();
     this.punchTween = this.scene.tweens.add({
       targets: sprite,
       scaleX: this.baseScale.x * scaleX,
-      scaleY: this.baseScale.y * scaleY,
+      scaleY: this.baseScale.y * effectiveScaleY,
       duration: TUNING.feedback.punchMs,
       yoyo: true,
       // 겹쳐 들어와도 원래 크기로 확실히 돌아오게 한다.
