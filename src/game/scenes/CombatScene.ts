@@ -413,43 +413,85 @@ export class CombatScene extends Phaser.Scene {
   }
 
   /**
-   * 랜덤 지형 굴리기. 로그라이크답게 들어갈 때마다 조금씩 다른 방이 나온다.
+   * 절차적 지형 생성. (DEC-014 #5)
    *
-   * 규칙:
-   * - 낭떠러지 1~2개. 점프(약 190px)로 건널 수 있는 폭(110~150px)만 뚫는다.
-   *   시작 지점(왼쪽 22%)과 게이트 앞(오른쪽 20%)은 피한다.
-   * - 발판 2~3개. 1층은 점프 한 번(최대 도약 약 97px)에 닿는 높이, 2층은 1층에서 다시 점프.
+   * 로그라이크답게 들어갈 때마다 다른 방 — 바닥 틈과 3층 발판을 열(column) 단위로
+   * 굴려 수직으로 얽힌 미로형 경로를 만든다. 규칙으로 도달 가능성을 보장한다:
+   * - 좁은 틈(110~150px)은 점프(약 190px)로 건넌다.
+   * - 넓은 틈(170~230px)은 점프로 못 건넌다 — 반드시 그 위에 다리 발판을 놓는다.
+   * - 2·3층은 바로 아래층 발판 위에서 점프로 닿는 수평 거리 안에만 세운다.
+   *   닿을 수 없는 장식 발판을 만들지 않기 위한 규칙이다.
+   *
+   * ponytail: 아레나가 바닥+원웨이 발판만 지원해 "벽이 있는 진짜 미로"는 아직 못
+   * 만든다 — createArena에 벽 지원을 넣은 뒤의 일이다. (OpenQuestions 등록)
    */
   private rollLayout(roomWidth: number): {
     gaps: { x: number; width: number }[];
     platforms: { x: number; y: number; width: number }[];
   } {
     const floorY = VIEWPORT.height - 48;
+    // 1층은 점프 한 번(최대 도약 약 97px), 2·3층은 아래층에서 다시 점프.
+    const TIER_Y = [floorY - 80, floorY - 160, floorY - 235] as const;
+
     const gaps: { x: number; width: number }[] = [];
-    const gapCount = Phaser.Math.Between(1, 2);
-    const zoneStart = roomWidth * 0.22;
+    const platforms: { x: number; y: number; width: number }[] = [];
+
+    // 1) 바닥 틈 — 시작 지점(왼쪽 20%)과 게이트 앞(오른쪽 20%)은 피한다.
+    const gapCount = Phaser.Math.Between(2, 3);
+    const zoneStart = roomWidth * 0.2;
     const zoneEnd = roomWidth * 0.8;
     const zoneWidth = (zoneEnd - zoneStart) / gapCount;
     for (let i = 0; i < gapCount; i += 1) {
-      const gapWidth = Phaser.Math.Between(110, 150);
+      const wide = Phaser.Math.FloatBetween(0, 1) < 0.4;
+      const gapWidth = wide ? Phaser.Math.Between(170, 230) : Phaser.Math.Between(110, 150);
       // 각 구획 안에서만 굴려 틈끼리 붙지 않게 한다.
       const x = Phaser.Math.Between(
         Math.round(zoneStart + i * zoneWidth),
         Math.round(zoneStart + (i + 1) * zoneWidth - gapWidth - 60),
       );
       gaps.push({ x, width: gapWidth });
+
+      if (wide) {
+        const bridgeWidth = Phaser.Math.Between(120, 170);
+        platforms.push({
+          x: Math.round(x + gapWidth / 2 - bridgeWidth / 2),
+          y: TIER_Y[0],
+          width: bridgeWidth,
+        });
+      }
     }
 
-    const platforms: { x: number; y: number; width: number }[] = [];
-    const platformCount = Phaser.Math.Between(2, 3);
-    for (let i = 0; i < platformCount; i += 1) {
-      const width = Phaser.Math.Between(140, 230);
-      const tier = i === 2 ? 2 : 1;
-      platforms.push({
-        x: Phaser.Math.Between(Math.round(roomWidth * 0.12), Math.round(roomWidth * 0.82 - width)),
-        y: floorY - (tier === 1 ? 80 : 160),
-        width,
-      });
+    // 2) 층층 발판 — 열마다 1층을 굴리고, 선 자리 위로만 2·3층을 계단처럼 쌓는다.
+    const COLUMN = 260;
+    const columns = Math.max(1, Math.floor((roomWidth * 0.72) / COLUMN));
+    for (let c = 0; c < columns; c += 1) {
+      if (Phaser.Math.FloatBetween(0, 1) >= 0.65) continue;
+
+      const baseX = roomWidth * 0.14 + c * COLUMN;
+      const width = Phaser.Math.Between(130, 210);
+      const x = Math.round(baseX + Phaser.Math.Between(0, Math.max(0, COLUMN - width)));
+      platforms.push({ x, y: TIER_Y[0], width });
+
+      if (Phaser.Math.FloatBetween(0, 1) < 0.5) {
+        const upperWidth = Phaser.Math.Between(110, 170);
+        const upperX = Phaser.Math.Clamp(
+          x + Phaser.Math.Between(-70, 70),
+          40,
+          roomWidth - upperWidth - 40,
+        );
+        platforms.push({ x: upperX, y: TIER_Y[1], width: upperWidth });
+
+        // 드물게 3층 — 방의 꼭대기. 올라가 보는 재미와 원거리 견제 위치를 만든다.
+        if (Phaser.Math.FloatBetween(0, 1) < 0.35) {
+          const topWidth = Phaser.Math.Between(100, 140);
+          const topX = Phaser.Math.Clamp(
+            upperX + Phaser.Math.Between(-60, 60),
+            40,
+            roomWidth - topWidth - 40,
+          );
+          platforms.push({ x: topX, y: TIER_Y[2], width: topWidth });
+        }
+      }
     }
 
     return { gaps, platforms };
