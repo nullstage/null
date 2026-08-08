@@ -214,7 +214,12 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
             <small>{focused.description}</small>
           </>
         ) : (
-          <small>각인 위에 손을 얹어 보아라. 침식이 삼키지 못하는 유일한 기록이다.</small>
+          // 안내는 설명식으로, 플레이버 한 줄만 남긴다. (사용자 결정)
+          <small>
+            각인에 마우스를 올리면 설명이 표시됩니다. 해금 가능한 각인은 눌러서 새깁니다.
+            <br />
+            <em>— 침식이 삼키지 못하는, 유일한 기록이다.</em>
+          </small>
         )}
       </Info>
 

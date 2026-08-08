@@ -321,9 +321,9 @@ export default function StatusPanel({ hud }: StatusPanelProps) {
             </>
           ) : (
             <Empty>
-              아직 아무것도 얻지 못했다.
+              획득한 스킬과 아티팩트가 여기에 표시됩니다.
               <br />
-              그림자를 베고, 조각을 모아라.
+              슬롯을 선택하면 자세한 설명을 볼 수 있습니다.
             </Empty>
           )}
         </Detail>
