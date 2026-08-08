@@ -120,6 +120,43 @@ const HealthBar = styled.div`
   }
 `;
 
+/**
+ * HP 프레임 왼쪽 문장(나침반 장식) 위에 얹는 모드 아이콘.
+ * 따로 떠 있던 슬롯이 "붕 뜬다"는 피드백 — 프레임 안으로 들여보낸다.
+ */
+const ModeEmblem = styled.span<{ accent: string }>`
+  position: absolute;
+  left: 3.6%;
+  top: 16%;
+  width: 15.5%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ accent }) => accent};
+  filter: drop-shadow(0 0 6px currentColor);
+
+  svg {
+    width: 58%;
+    height: 58%;
+  }
+`;
+
+/** 게이지 오른쪽 끝에 겹쳐 앉는 체력 수치 — 바 밖에 떠 있지 않게 한다. */
+const HpInBar = styled.span`
+  position: absolute;
+  right: 7.5%;
+  top: 29.65%;
+  height: 21.77%;
+  display: flex;
+  align-items: center;
+  font-family: ${theme.font.mono};
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 245, 240, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+`;
+
 /** 프레임의 게이지 창 영역. 잘라낸 프레임 기준 픽셀 좌표(251~1256, 94~162)를 비율로 환산했다. */
 const HealthWindow = styled.div`
   position: absolute;
@@ -270,10 +307,6 @@ const KeyBadge = styled.em`
   font-size: 9px;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.75);
-`;
-
-const HpText = styled.span`
-  color: rgba(255, 255, 255, 0.72);
 `;
 
 /** 남은 탄. 총 모드에서만 보인다 — 탄피 모양 칸이 쏠 때마다 꺼진다. */
@@ -636,7 +669,8 @@ export default function HUDOverlay() {
 
   // 전투 중에만 HUD를 띄운다. 시작 화면과 결과 화면에 이전 런의 값이 남으면 안 된다.
   const inCombat = phase === "COMBAT" || phase === "BOSS";
-  const showCombatHud = hud !== null && inCombat && activePanel === "none";
+  // 대사가 열려 있는 동안엔 HUD를 통째로 숨긴다 — 첫 만남의 서사 위에 게이지가 떠 있으면 깬다.
+  const showCombatHud = hud !== null && inCombat && activePanel === "none" && !dialogueOpen;
 
   // 로딩 화면에서 시작해 시작 화면까지 흐르고, 전투로 넘어가는 순간 꺼진다.
   // 첫 방문 안내가 떠 있는 동안은 어차피 브라우저가 소리를 막으므로 켜지 않는다.
@@ -712,19 +746,19 @@ export default function HUDOverlay() {
             {/* 정적 내보내기라 next/image 최적화가 안 붙는다. 픽셀아트 프레임 한 장이라 img로 충분하다. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={assetPath("ui/hp-frame.png")} alt="" />
-          </HealthBar>
-
-          <StatusRow>
-            <IconSlot
-              accent={hud.mode === "MELEE" ? "#e05055" : "#c99ab8"}
+            {/* 모드 아이콘과 체력 수치는 프레임 안에 앉힌다 — 밖에 떠 있으면 붕 뜬다(사용자 피드백). */}
+            <ModeEmblem
+              accent={hud.mode === "MELEE" ? "#ffb9bc" : "#e8c8dd"}
               title={hud.mode === "MELEE" ? "검 — K로 전환" : "총 — K로 전환"}
             >
               {hud.mode === "MELEE" ? <SwordIcon /> : <GunIcon />}
-              <KeyBadge>K</KeyBadge>
-            </IconSlot>
-            <HpText>
+            </ModeEmblem>
+            <HpInBar>
               {hud.hp} / {hud.maxHp}
-            </HpText>
+            </HpInBar>
+          </HealthBar>
+
+          <StatusRow>
             <ShardChip title="그림자 조각">
               <ShardIcon />
               {hud.shards}
