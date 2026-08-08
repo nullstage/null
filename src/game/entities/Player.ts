@@ -40,6 +40,7 @@ import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import {
   AUDIO,
   MELEE_ANIM_BY_STEP,
+  PLAYER_INTRO_ANIM,
   PLAYER_SPRITE,
   RANGED_ANIM_BY_STEP,
   SILHOUETTE,
@@ -58,6 +59,9 @@ import type { AttackMode, UpgradeId } from "../types/game";
  * 이전 시트(48px 셀·캐릭터 40px·1.6배)와 같은 크기라 방 배치를 다시 잡지 않아도 된다.
  */
 const SPRITE_SCALE = 1.2;
+
+/** 기상 인트로 길이(ms). 4프레임 × 5fps = 800ms에 여유를 더한 값. */
+const INTRO_MS = 900;
 
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
 const RANGED_MODE_TINT = 0xffc9d4;
@@ -268,6 +272,8 @@ export class Player {
   /** 달리는 동안만 재생되는 루프 발소리. 멈추거나 죽으면 정지한다. */
   private footsteps: Phaser.Sound.BaseSound | null = null;
   private nextRunDustAtMs = 0;
+  /** 기상 인트로가 끝나는 시각. 그때까지는 입력을 받지 않는다. */
+  private introUntilMs = 0;
 
   private keys: Partial<Record<PlayerAction, Phaser.Input.Keyboard.Key>> = {};
   private facing: 1 | -1 = 1;
@@ -370,6 +376,22 @@ export class Player {
     this.emitHud();
   }
 
+  /**
+   * 기상 인트로. 앉아 있다가 일어나는 4프레임을 한 번 재생하고 idle로 넘긴다.
+   * 재생 중에는 조작을 막는다 — 연출 도중에 걸어 나가면 일어나다 만 모양이 된다.
+   */
+  playIntro(): void {
+    const sprite = this.sprite;
+    if (!sprite) return;
+
+    this.introUntilMs = this.scene.time.now + INTRO_MS;
+    sprite.play(PLAYER_INTRO_ANIM);
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.introUntilMs = 0;
+      this.playAnim("idle", true);
+    });
+  }
+
   /** 씬의 update에서 매 프레임 호출된다. */
   update(time: number, _deltaMs: number): void {
     const sprite = this.sprite;
@@ -381,6 +403,12 @@ export class Player {
     this.updateShadow(sprite, body);
     this.cullProjectiles(time);
     if (this.isDead) return;
+
+    // 기상 연출 중에는 조작도 애니메이션 갱신도 하지 않는다.
+    if (time < this.introUntilMs) {
+      body.setVelocityX(0);
+      return;
+    }
 
     // 공중이었다가 막 닿은 프레임만 착지다. 서 있는 동안 매 프레임 걸리면 안 된다.
     if (!wasGrounded && this.isGrounded) this.onLand(sprite, body);

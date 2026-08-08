@@ -18,7 +18,7 @@ import type Phaser from "phaser";
 import { BOSS, PLAYER } from "../config/gameBalance";
 import { deathBurst } from "../systems/CombatVfx";
 import { pickBossPattern } from "../systems/DirectorPolicy";
-import { SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
+import { BOSS_FRAME, SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
 import type { BossPattern, BossPatternWeights } from "../types/game";
 
 /**
@@ -97,6 +97,12 @@ const HP_BAR = { widthRatio: 0.52, height: 14, topMargin: 26 } as const;
 const DEPTH = { telegraph: 1, attack: 5, boss: 10, hud: 100 } as const;
 
 /**
+ * 보스 그림 배율. 224px 셀 안의 실제 그림이 대략 200px이라, 화면에서 약 190px 높이가 된다 —
+ * 플레이어(약 62px)의 세 배쯤이라 "보스"로 읽힌다. 충돌 박스는 BODY 값(72×108)을 그대로 쓴다.
+ */
+const BOSS_SPRITE_SCALE = 0.85;
+
+/**
  * 모든 보스 패턴의 피해량.
  * 보스 전용 피해량이 아직 미정이라(OQ-007) 플레이어 기본 피격량을 그대로 쓴다.
  * 값을 나누고 싶어지면 `BOSS.patternDamage`로 옮긴다.
@@ -162,10 +168,13 @@ export class Boss {
 
   /** 전달받은 x만 쓰고 y는 바닥에 맞춘다. 보스는 중력을 직접 다루기 때문이다. */
   spawn(x: number, _y: number): void {
+    // 224px 셀 안에서 실제 그림은 여백을 두고 그려져 있다. setDisplaySize로 셀을 통째로
+    // 눌러 맞추면 보스가 작아 보이므로, 그림은 스케일로 키우고 충돌 박스만 따로 잡는다.
     const sprite = this.scene.physics.add
-      .sprite(x, this.groundY, TEXTURE.boss)
-      .setDisplaySize(BODY.width, BODY.height)
+      .sprite(x, this.groundY, TEXTURE.boss, BOSS_FRAME.idle)
+      .setScale(BOSS_SPRITE_SCALE)
       .setDepth(DEPTH.boss);
+    sprite.body?.setSize(BODY.width / BOSS_SPRITE_SCALE, BODY.height / BOSS_SPRITE_SCALE);
 
     // 씬이 보스방에 바닥 collider를 걸어주지 않고, slam 궤적도 직접 제어해야 한다.
     // 중력을 끄고 바닥 높이를 매 프레임 스냅하는 편이 예측 가능하다.
@@ -200,6 +209,20 @@ export class Boss {
 
     if (time < this.nextPatternAtMs) return;
     this.runPattern(this.selectPattern());
+  }
+
+  /**
+   * 포즈 교체. 보스는 애니메이션 없이 패턴별 정지 포즈만 골라 쓴다.
+   * 예고 포즈를 먼저 보여주고 타격 순간에 바꿔야 "무엇을 하려는지"가 읽힌다. (DEC-004)
+   */
+  private setPose(frame: number): void {
+    this.sprite?.setFrame(frame);
+  }
+
+  /** 타격 포즈를 잠깐 보여준 뒤 idle로 돌아온다. */
+  private strikePose(frame: number, holdMs: number): void {
+    this.setPose(frame);
+    this.after(holdMs, () => this.setPose(BOSS_FRAME.idle));
   }
 
   private get groundY(): number {
@@ -282,9 +305,11 @@ export class Boss {
     const x = sprite.x + this.facing * (BODY.width / 2 + SLASH.reach / 2);
     const y = sprite.y;
     this.showTelegraph(x, y, SLASH.reach, SLASH.height, SLASH.telegraphMs);
+    this.setPose(BOSS_FRAME.slashTelegraph);
 
     this.after(SLASH.telegraphMs, () => {
       this.punch(sprite);
+      this.strikePose(BOSS_FRAME.slashStrike, SLASH.activeMs + SLASH.recoveryMs);
       this.spawnHitbox(x, y, SLASH.reach, SLASH.height, SLASH.activeMs);
       this.after(SLASH.activeMs + SLASH.recoveryMs, () => this.finishPattern());
     });
@@ -307,8 +332,10 @@ export class Boss {
       BODY.height,
       DASH.telegraphMs,
     );
+    this.setPose(BOSS_FRAME.dashTelegraph);
 
     this.after(DASH.telegraphMs, () => {
+      this.strikePose(BOSS_FRAME.dashStrike, DASH.durationMs + DASH.recoveryMs);
       sprite.setVelocityX(dir * DASH.speed);
       this.followHitbox = this.spawnHitbox(
         sprite.x,
@@ -350,12 +377,14 @@ export class Boss {
       PROJECTILE.size * 2,
       PROJECTILE.telegraphMs,
     );
+    this.setPose(BOSS_FRAME.projectileTelegraph);
 
     this.after(PROJECTILE.telegraphMs, () => {
+      const volleyMs = (PROJECTILE.count - 1) * PROJECTILE.intervalMs;
+      this.strikePose(BOSS_FRAME.projectileStrike, volleyMs + PROJECTILE.recoveryMs);
       for (let i = 0; i < PROJECTILE.count; i += 1) {
         this.after(i * PROJECTILE.intervalMs, () => this.fireProjectile(muzzleX, sprite.y));
       }
-      const volleyMs = (PROJECTILE.count - 1) * PROJECTILE.intervalMs;
       this.after(volleyMs + PROJECTILE.recoveryMs, () => this.finishPattern());
     });
   }
@@ -411,6 +440,7 @@ export class Boss {
             SLAM.shockwaveHeight,
             SLAM.telegraphMs,
           );
+          this.setPose(BOSS_FRAME.slamTelegraph);
           this.after(SLAM.telegraphMs, () => this.dropSlam(sprite, targetX, impactY));
         },
       }),
@@ -431,6 +461,7 @@ export class Boss {
         onComplete: () => {
           this.airborne = false;
           this.punch(sprite);
+          this.strikePose(BOSS_FRAME.slamStrike, SLAM.activeMs + SLAM.recoveryMs);
           this.scene.cameras.main.shake(SLAM.shakeMs, SLAM.shakeIntensity);
           this.spawnHitbox(
             targetX,
@@ -453,6 +484,8 @@ export class Boss {
     this.hp = Math.max(0, this.hp - amount);
     this.refreshHpBar();
     this.flash();
+    // 패턴 중이면 그 포즈를 지키게 둔다 — 예고 자세가 피격으로 지워지면 뭘 준비했는지 놓친다.
+    if (!this.busy) this.strikePose(BOSS_FRAME.hit, 160);
 
     if (this.hp <= 0) this.die();
   }

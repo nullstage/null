@@ -79,6 +79,25 @@ export const TEXTURE = {
   gate: "tex_decor_gate",
   /** (실험) 배경 위에 얹는 흐르는 구름 띠. 배경 그림 속 구름은 정적이라 따로 얹어 흐르게 한다. */
   clouds: "tex_clouds",
+  /** 시작·부활 시 앉았다 일어나는 인트로 4프레임. */
+  playerIntro: "player_intro_sheet",
+} as const;
+
+/**
+ * 보스 스프라이트시트의 프레임 번호. 224px 정사각 셀 10칸(가로 한 줄).
+ * 패턴마다 예고(telegraph)와 타격(strike) 두 포즈를 쓴다. (public/assets/sprites/boss/manifest.json)
+ */
+export const BOSS_FRAME = {
+  idle: 0,
+  slashTelegraph: 1,
+  slashStrike: 2,
+  dashTelegraph: 3,
+  dashStrike: 4,
+  projectileTelegraph: 5,
+  projectileStrike: 6,
+  slamTelegraph: 7,
+  slamStrike: 8,
+  hit: 9,
 } as const;
 
 /** 전투 효과음·BGM 키. Phaser 내장 사운드로 재생한다 — UI 효과음(`sfx.ts`)과는 별도 경로다. */
@@ -199,6 +218,9 @@ export const comboAnim = (
 
 /** 애니메이션 키. 씬과 엔티티가 같은 문자열을 쓰도록 한 곳에서 만든다. */
 export const playerAnimKey = (state: PlayerAnimState): string => `player-${state}`;
+
+/** 기상 인트로 애니메이션 키. 시작·부활 때 한 번만 재생한다. */
+export const PLAYER_INTRO_ANIM = "player-intro";
 
 /**
  * 적 애니메이션. 제공된 스프라이트시트에서 프레임 구간만 골라 쓴다.

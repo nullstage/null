@@ -15,6 +15,7 @@ import { runState } from "../systems/RunState";
 import {
   AUDIO,
   ENEMY_ANIM,
+  PLAYER_INTRO_ANIM,
   PLAYER_SPRITE,
   SILHOUETTE,
   TEXTURE,
@@ -41,6 +42,16 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet(TEXTURE.chaser, assetPath("sprites/enemies/chaser.png"), {
       frameWidth: 64,
       frameHeight: 64,
+    });
+    // 보스 — 패턴별 예고/타격 포즈 10칸. 애니메이션이 아니라 프레임을 골라 쓴다.
+    this.load.spritesheet(TEXTURE.boss, assetPath("sprites/boss/boss.png"), {
+      frameWidth: 224,
+      frameHeight: 224,
+    });
+    // 시작·부활 시 앉았다 일어나는 인트로 4프레임.
+    this.load.spritesheet(TEXTURE.playerIntro, assetPath("sprites/player/player-intro.png"), {
+      frameWidth: PLAYER_SPRITE.frameWidth,
+      frameHeight: PLAYER_SPRITE.frameHeight,
     });
     // (실험) 방 2·3 배경. 보스방은 아직 이 텍스처를 쓰지 않는다.
     this.load.image(TEXTURE.background, assetPath("backgrounds/ruins-dusk.png"));
@@ -70,6 +81,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.registerPlayerAnimations();
+    this.registerIntroAnimation();
     this.registerEnemyAnimations();
     runState.reset(this.time.now);
     runState.setPhase("READY");
@@ -111,6 +123,18 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
+  /** 시작·부활 시 한 번 재생하는 기상 애니메이션. 마지막 프레임이 idle 0번과 같아 자연히 이어진다. */
+  private registerIntroAnimation(): void {
+    if (this.anims.exists(PLAYER_INTRO_ANIM)) return;
+    this.anims.create({
+      key: PLAYER_INTRO_ANIM,
+      frames: this.anims.generateFrameNumbers(TEXTURE.playerIntro, { start: 0, end: 3 }),
+      // 일어나는 동작이라 뒤로 갈수록 빨라지는 편이 자연스럽다.
+      frameRate: 5,
+      repeat: 0,
+    });
+  }
+
   /** 적1(원거리)·적2(근접) 스프라이트의 idle·walk·attack 애니메이션을 등록한다. */
   private registerEnemyAnimations(): void {
     for (const [key, spec] of Object.entries(ENEMY_ANIM)) {
@@ -137,7 +161,6 @@ export class BootScene extends Phaser.Scene {
       [TEXTURE.player]: SILHOUETTE.player,
       [TEXTURE.playerAttack]: SILHOUETTE.playerAttack,
       [TEXTURE.mobility]: SILHOUETTE.mobility,
-      [TEXTURE.boss]: SILHOUETTE.boss,
       [TEXTURE.enemyAttack]: SILHOUETTE.enemyAttack,
       [TEXTURE.telegraph]: SILHOUETTE.telegraph,
       [TEXTURE.hazard]: SILHOUETTE.hazard,

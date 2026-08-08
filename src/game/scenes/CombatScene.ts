@@ -121,6 +121,8 @@ export class CombatScene extends Phaser.Scene {
     });
 
     this.player.spawn(this.arena.bounds.width * 0.15, this.arena.bounds.floorY - 80);
+    // 마을(방 1)에 들어설 때만 기상 연출 — 처음 시작이든 부활이든 "깨어난다"로 시작한다.
+    if (this.roomId === FIXED_ROOM_SEQUENCE[0]) this.player.playIntro();
     // 충돌 연결은 플레이어 스프라이트가 생긴 뒤에 건다.
     this.wireCollisions();
 

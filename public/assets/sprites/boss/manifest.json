@@ -1,0 +1,51 @@
+{
+  "cellWidth": 224,
+  "cellHeight": 224,
+  "columns": 10,
+  "rows": 1,
+  "frameCount": 10,
+  "source": "Agis.png 원본 1프레임을 참조로 codex 이미지 생성 → 마젠타 키잉 → 균일 셀 정규화",
+  "note": "각 프레임은 셀 중앙 정렬. 보스는 공중에 뜨므로 발끝 기준 정렬을 쓰지 않는다.",
+  "frames": [
+    {
+      "index": 0,
+      "name": "idle"
+    },
+    {
+      "index": 1,
+      "name": "slashTelegraph"
+    },
+    {
+      "index": 2,
+      "name": "slashStrike"
+    },
+    {
+      "index": 3,
+      "name": "dashTelegraph"
+    },
+    {
+      "index": 4,
+      "name": "dashStrike"
+    },
+    {
+      "index": 5,
+      "name": "projectileTelegraph"
+    },
+    {
+      "index": 6,
+      "name": "projectileStrike"
+    },
+    {
+      "index": 7,
+      "name": "slamTelegraph"
+    },
+    {
+      "index": 8,
+      "name": "slamStrike"
+    },
+    {
+      "index": 9,
+      "name": "hit"
+    }
+  ]
+}
