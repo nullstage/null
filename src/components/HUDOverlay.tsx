@@ -80,13 +80,14 @@ const CombatHud = styled.div`
 `;
 
 /**
- * 제공받은 장식 프레임(체력ui.png → ui/hp-frame.png, 1479x320). 마젠타 배경과
- * 흰 게이지 창은 투명 처리했고, 창 위치는 원본에서 측정한 비율로 아래 HealthWindow가 잡는다.
+ * 제공받은 장식 프레임(체력바.png → ui/hp-frame.png, 1341x317).
+ * 배경도 게이지 창도 이미 투명으로 뚫려 있어 키잉 없이 내용 bbox만 잘라 쓴다.
+ * 창 위치는 프레임 안쪽 구멍의 실제 픽셀 좌표에서 환산했다(아래 HealthWindow).
  */
 const HealthBar = styled.div`
   position: relative;
   width: 440px;
-  aspect-ratio: 1479 / 320;
+  aspect-ratio: 1341 / 317;
 
   img {
     position: absolute;
@@ -98,13 +99,13 @@ const HealthBar = styled.div`
   }
 `;
 
-/** 프레임의 게이지 창 영역. 원본 픽셀 좌표(394~1393, 96~158)를 비율로 환산한 값이다. */
+/** 프레임의 게이지 창 영역. 잘라낸 프레임 기준 픽셀 좌표(251~1256, 94~162)를 비율로 환산했다. */
 const HealthWindow = styled.div`
   position: absolute;
-  left: 26.64%;
-  top: 30%;
-  width: 67.61%;
-  height: 19.69%;
+  left: 18.72%;
+  top: 29.65%;
+  width: 75.02%;
+  height: 21.77%;
   background: rgba(8, 6, 7, 0.78);
   overflow: hidden;
 `;
