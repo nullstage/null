@@ -1317,12 +1317,30 @@ export const enemySlash = (
  * 검기(마무리 타격 특수기술) 궤적. 벌 침 궤적과 달리 출렁이지 않는다 —
  * 칼날이 날아가는 것이므로 얇고 곧은 빛의 조각을 남기며 지나가야 한다.
  */
+/** 칼날 실루엣 한 장. 앞은 뾰족하고 몸통이 부풀었다가 꼬리로 가늘어진다 — 사각형 조각 대신 진짜 칼날처럼 보이게. */
+const swordWaveWing = (len: number, width: number): { x: number; y: number }[] => [
+  { x: len, y: 0 },
+  { x: len * 0.32, y: -width },
+  { x: -len * 0.75, y: -width * 0.32 },
+  { x: -len, y: 0 },
+  { x: -len * 0.75, y: width * 0.32 },
+  { x: len * 0.32, y: width },
+];
+
+/**
+ * 검기(마무리 타격 특수기술) 궤적.
+ *
+ * 이전엔 얇은 사각형 두 장을 찍기만 해서 "선"으로 보였다. `slashArc`와 같은
+ * 겹쳐진 광채 레이어 + 이따금 튀는 불티로 바꿔, 날아가는 동안에도 스킬 이펙트처럼
+ * 화려하게 읽히게 한다. 투사체 물리는 그대로 직선으로 날고, 그림만 얹는다.
+ */
 export const swordWaveTrail = (
   scene: Phaser.Scene,
   // physics.add.image()로 만든 투사체를 그대로 받는다 — Sprite가 아니라 Image다.
   projectile: Phaser.GameObjects.Image,
   facing: 1 | -1,
 ): void => {
+  let tick = 0;
   const event = scene.time.addEvent({
     delay: 24,
     loop: true,
@@ -1331,23 +1349,49 @@ export const swordWaveTrail = (
         event.remove(false);
         return;
       }
-      // 진행 방향으로 얇고 긴 조각을 하나씩 찍는다 — 쌓이면서 광선 같은 잔상이 된다.
-      const sliver = scene.add.graphics({ x: projectile.x, y: projectile.y });
-      sliver.setDepth(VFX.depth);
-      sliver.setBlendMode(Phaser.BlendModes.ADD);
-      sliver.setScale(facing, 1);
-      sliver.fillStyle(0xcfeeff, 0.85);
-      sliver.fillRect(-14, -2, 28, 4);
-      sliver.fillStyle(0xffffff, 1);
-      sliver.fillRect(-6, -1, 12, 2);
+      tick += 1;
+
+      const blade = scene.add.graphics({ x: projectile.x, y: projectile.y });
+      blade.setDepth(VFX.depth);
+      blade.setBlendMode(Phaser.BlendModes.ADD);
+      blade.setScale(facing, 1);
+
+      // 바깥 옅은 광채 → 안쪽 진한 광채 → 밝은 심, slashArc와 같은 3겹 구성.
+      blade.fillStyle(0x8fd7ff, 0.2);
+      blade.fillPoints(swordWaveWing(34, 15), true);
+      blade.fillStyle(0xcfeeff, 0.55);
+      blade.fillPoints(swordWaveWing(26, 8), true);
+      blade.fillStyle(0xffffff, 0.95);
+      blade.fillPoints(swordWaveWing(17, 3), true);
+
       scene.tweens.add({
-        targets: sliver,
+        targets: blade,
         alpha: 0,
-        scaleY: 2.2,
+        scaleY: 2.4,
         duration: 220,
         ease: "power2.out",
-        onComplete: () => sliver.destroy(),
+        onComplete: () => blade.destroy(),
       });
+
+      // 매 틱 찍으면 빽빽해져 뭉개진다 — 세 틱에 한 번만 불티를 흩뿌린다.
+      if (tick % 3 === 0) {
+        for (let i = 0; i < 2; i += 1) {
+          const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+          const dist = Phaser.Math.FloatBetween(8, 20);
+          const spark = scene.add.circle(projectile.x, projectile.y, 1.3, 0xcfeeff, 1);
+          spark.setDepth(VFX.depth + 1);
+          spark.setBlendMode(Phaser.BlendModes.ADD);
+          scene.tweens.add({
+            targets: spark,
+            x: projectile.x + Math.cos(angle) * dist,
+            y: projectile.y + Math.sin(angle) * dist,
+            alpha: 0,
+            duration: Phaser.Math.Between(140, 220),
+            ease: "power2.out",
+            onComplete: () => spark.destroy(),
+          });
+        }
+      }
     },
   });
 };

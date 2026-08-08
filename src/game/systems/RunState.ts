@@ -230,3 +230,9 @@ export class RunState {
 
 /** 런타임 전역 인스턴스. 게임을 파괴하고 다시 만들 때도 같은 객체를 reset해서 쓴다. */
 export const runState = new RunState();
+
+// 개발용: 브라우저 콘솔에서 `runState.addUpgrade("MELEE_FIRE_EDGE")`처럼 강화를 즉시
+// 부여해 테스트할 수 있게 한다. 프로덕션 빌드에는 포함하지 않는다.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+  (window as unknown as { runState: RunState }).runState = runState;
+}

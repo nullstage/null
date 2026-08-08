@@ -1401,6 +1401,7 @@ export class Player {
         mode: this.mode,
         roomIndex: this.lastRoomIndex,
         enemiesRemaining: this.lastEnemiesRemaining,
+        selectedUpgrades: this.deps.upgrades,
       },
     });
   }

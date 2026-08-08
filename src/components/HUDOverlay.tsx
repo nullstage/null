@@ -31,6 +31,7 @@ import PrologueText from "./ui/PrologueText";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
 import { setSfxVolume } from "./ui/sfx";
+import StatusPanel from "./ui/StatusPanel";
 import {
   DEFAULT_AUDIO,
   loadAudioSettings,
@@ -48,7 +49,7 @@ import UpgradePanel from "./ui/UpgradePanel";
  * 패널이 하나만 뜨도록 여기서 배타적으로 관리한다. 두 개가 겹치면 입력이 이중으로 들어간다.
  */
 
-type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result";
+type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status";
 
 
 const Layer = styled.div`
@@ -410,6 +411,39 @@ export default function HUDOverlay() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activePanel, dialogueOpen, phase, respawnSummary, roomLoading, transition]);
 
+  /**
+   * E 상태창(가진 것). ESC 일시정지와 같은 조건에서 열리지만 별도 상태다 —
+   * 아티팩트만 빠르게 확인할 땐 정지 메뉴까지 띄우지 않아도 되게 한다.
+   */
+  useEffect(() => {
+    const pausable = phase === "COMBAT" || phase === "BOSS";
+    const isStatusOpen = activePanel === "status";
+    if (
+      !pausable ||
+      paused ||
+      transition !== "none" ||
+      roomLoading ||
+      dialogueOpen ||
+      respawnSummary !== null ||
+      (activePanel !== "none" && !isStatusOpen)
+    )
+      return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "e" && event.key !== "E") return;
+      event.preventDefault();
+      if (isStatusOpen) {
+        setActivePanel("none");
+        emitGameEvent("game:resume", {});
+      } else {
+        setActivePanel("status");
+        emitGameEvent("game:pause", {});
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePanel, dialogueOpen, paused, phase, respawnSummary, roomLoading, transition]);
+
   /** 사망 결과창. Enter로 닫으면 튜토리얼 부활이 이어진다. */
   const dismissRespawnSummary = useCallback(() => {
     setRespawnSummary(null);
@@ -659,6 +693,8 @@ export default function HUDOverlay() {
       {activePanel === "result" && result && (
         <ResultPanel result={result} onRestart={restartRun} />
       )}
+
+      {activePanel === "status" && hud && <StatusPanel hud={hud} />}
     </Layer>
   );
 }

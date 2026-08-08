@@ -163,4 +163,6 @@ export interface HudState {
   mode: AttackMode;
   roomIndex: number;
   enemiesRemaining: number;
+  /** 상태창(E)이 보여줄 보유 아티팩트 목록. */
+  selectedUpgrades: readonly UpgradeId[];
 }
