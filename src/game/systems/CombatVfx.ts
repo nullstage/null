@@ -884,9 +884,184 @@ export const createBulletTrail = (
   return graphics;
 };
 
+/**
+ * 가시 폭발(스컬풍). 부드러운 광채 대신 — 어두운 실루엣 가시 위에 밝은 심을 겹친
+ * 2톤의 길쭉한 가시들이 사방으로 확 뻗었다가 사그라들고, 검은 파편이 흩어지고,
+ * 흰 코어가 한 프레임 번쩍이고, 교차 섬광선이 X로 긋고 지나간다.
+ * 타격·처치·패링·충격파가 전부 이 문법을 공유한다 — "쾅"의 공용 언어.
+ */
+export const spikeBurst = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  opts: {
+    /** 전체 크기 배율. 잔타격 0.5 ~ 보스 사망 1.6쯤. */
+    scale?: number;
+    spikes?: number;
+    /** 바깥 실루엣 색(어둡게). */
+    dark?: number;
+    /** 중간 심 색 — 이 이펙트의 주인공 색. */
+    mid?: number;
+    /** 가장 안쪽 밝은 심. */
+    bright?: number;
+    /** 교차 섬광선을 그릴지. 잔타격에서는 꺼서 화면을 아낀다. */
+    slashLines?: boolean;
+    /** 가시가 뻗는 각도 범위(라디안). 생략하면 전방위. 지면 충격파는 위쪽 반원만. */
+    angleRange?: { from: number; to: number };
+  } = {},
+): void => {
+  const scale = opts.scale ?? 1;
+  const spikes = opts.spikes ?? 9;
+  const dark = opts.dark ?? 0x1c0f33;
+  const mid = opts.mid ?? 0x7a2ee0;
+  const bright = opts.bright ?? 0xd98aff;
+  const from = opts.angleRange?.from ?? 0;
+  const to = opts.angleRange?.to ?? Math.PI * 2;
+
+  /** 길쭉한 카이트(가시) 한 장. +x 방향으로 눕혀 그리고 회전으로 방향을 준다. */
+  const kite = (len: number, w: number): { x: number; y: number }[] => [
+    { x: -len * 0.12, y: 0 },
+    { x: 0, y: -w / 2 },
+    { x: len * 0.35, y: -w * 0.28 },
+    { x: len, y: 0 },
+    { x: len * 0.35, y: w * 0.28 },
+    { x: 0, y: w / 2 },
+  ];
+
+  for (let i = 0; i < spikes; i += 1) {
+    const angle =
+      from + ((i + 0.5) / spikes) * (to - from) + Phaser.Math.FloatBetween(-0.22, 0.22);
+    const len = Phaser.Math.FloatBetween(40, 88) * scale;
+    const width = Phaser.Math.FloatBetween(8, 15) * scale;
+
+    const spike = scene.add.graphics({ x, y });
+    spike.setDepth(VFX.depth + 1);
+    spike.setRotation(angle);
+    spike.fillStyle(dark, 0.95);
+    spike.fillPoints(kite(len, width), true);
+    spike.fillStyle(mid, 0.9);
+    spike.fillPoints(kite(len * 0.82, width * 0.55), true);
+    spike.fillStyle(bright, 0.85);
+    spike.fillPoints(kite(len * 0.55, width * 0.26), true);
+
+    // 작게 시작해 확 뻗는다 — 이 리빌이 "터져 나온다"의 전부다.
+    spike.setScale(0.15);
+    scene.tweens.add({
+      targets: spike,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 90,
+      ease: "back.out",
+    });
+    scene.tweens.add({
+      targets: spike,
+      alpha: 0,
+      delay: 130 + Phaser.Math.Between(0, 90),
+      duration: 170,
+      ease: "power2.in",
+      onComplete: () => spike.destroy(),
+    });
+  }
+
+  // 검은 파편 — 예리한 삼각 조각이 회전하며 흩어진다. 가시의 잔해다.
+  const shardCount = Math.round(8 * scale);
+  for (let i = 0; i < shardCount; i += 1) {
+    const angle = from + Phaser.Math.FloatBetween(0, 1) * (to - from);
+    const dist = Phaser.Math.FloatBetween(34, 78) * scale;
+    const size = Phaser.Math.FloatBetween(3, 6.5) * scale;
+    const shard = scene.add.graphics({ x, y });
+    shard.setDepth(VFX.depth);
+    shard.fillStyle(0x0d0714, 0.95);
+    shard.fillPoints(
+      [
+        { x: size * 1.6, y: 0 },
+        { x: -size * 0.6, y: -size * 0.55 },
+        { x: -size * 0.6, y: size * 0.55 },
+      ],
+      true,
+    );
+    shard.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
+    const spin = Phaser.Math.FloatBetween(-0.3, 0.3);
+    const carrier = { t: 0 };
+    scene.tweens.add({
+      targets: carrier,
+      t: 1,
+      duration: Phaser.Math.Between(240, 420),
+      ease: "power2.out",
+      onUpdate: () => {
+        shard.x = x + Math.cos(angle) * dist * carrier.t;
+        // 살짝 가라앉는다 — 무게가 있어야 잔해로 읽힌다.
+        shard.y = y + Math.sin(angle) * dist * carrier.t + 14 * scale * carrier.t * carrier.t;
+        shard.rotation += spin;
+        shard.setAlpha(1 - carrier.t);
+      },
+      onComplete: () => shard.destroy(),
+    });
+  }
+
+  // 흰 코어 — 한 프레임짜리 "쾅".
+  const core = scene.add.circle(x, y, 7 * scale, 0xffffff, 1);
+  core.setDepth(VFX.depth + 2);
+  core.setBlendMode(Phaser.BlendModes.ADD);
+  scene.tweens.add({
+    targets: core,
+    scale: 3,
+    alpha: 0,
+    duration: 110,
+    ease: "power3.out",
+    onComplete: () => core.destroy(),
+  });
+
+  // 교차 섬광선 — 밝은 선 두 줄이 X로 긋고 사라진다.
+  if (opts.slashLines !== false) {
+    for (let i = 0; i < 2; i += 1) {
+      const lineAngle = Phaser.Math.FloatBetween(0, Math.PI);
+      const lineLen = 95 * scale;
+      const line = scene.add.graphics({ x, y });
+      line.setDepth(VFX.depth + 2);
+      line.setBlendMode(Phaser.BlendModes.ADD);
+      line.setRotation(lineAngle + (i * Math.PI) / 2);
+      line.fillStyle(0xff5fa8, 0.9);
+      line.fillPoints(
+        [
+          { x: -lineLen, y: 0 },
+          { x: 0, y: -2.6 * scale },
+          { x: lineLen, y: 0 },
+          { x: 0, y: 2.6 * scale },
+        ],
+        true,
+      );
+      line.setScale(0.2, 1);
+      scene.tweens.add({
+        targets: line,
+        scaleX: 1,
+        duration: 70,
+        ease: "power3.out",
+      });
+      scene.tweens.add({
+        targets: line,
+        alpha: 0,
+        delay: 80,
+        duration: 110,
+        onComplete: () => line.destroy(),
+      });
+    }
+  }
+};
+
 /** 적중 지점에서 튀는 도트 파편. 사각형만 써야 스프라이트와 같은 결로 보인다. */
 export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
   const { burst } = VFX;
+
+  // 스컬풍 가시 — 잔타격이라 작게, 섬광선 없이. 붉은 계열로 맞았다는 신호를 겸한다.
+  spikeBurst(scene, x, y, {
+    scale: 0.5,
+    spikes: 6,
+    dark: 0x2a0c18,
+    mid: 0xe0304a,
+    bright: 0xffb894,
+    slashLines: false,
+  });
 
   // 링보다도 먼저, 아주 짧게 켜졌다 꺼지는 흰 섬광 — "팡" 하고 터지는 인상은
   // 파편이 아니라 이 한 프레임짜리 밝은 점에서 온다. 카메라 플래시처럼 순간적이어야 한다.
@@ -1086,6 +1261,15 @@ export const ashRise = (scene: Phaser.Scene, x: number, y: number, color: number
 
 export const deathBurst = (scene: Phaser.Scene, x: number, y: number, color: number): void => {
   const { death } = VFX;
+
+  // 스컬풍 가시 폭발 — 죽음은 이 게임에서 가장 큰 "쾅"이다. 실루엣은 그 적의 색을 따른다.
+  spikeBurst(scene, x, y, {
+    scale: 1,
+    spikes: 10,
+    dark: lerpColor(color, 0x000000, 0.75),
+    mid: color,
+    bright: lerpColor(color, 0xffffff, 0.6),
+  });
 
   for (let i = 0; i < death.shards; i += 1) {
     const shard = scene.add.rectangle(x, y, PIXEL, PIXEL, color);
@@ -1366,6 +1550,14 @@ export const bossTelegraphZone = (
  * 튀는 돌 파편. 흙먼지(groundDust)는 호출부가 따로 얹는다.
  */
 export const bossShockwave = (scene: Phaser.Scene, x: number, y: number, width: number): void => {
+  // 스컬풍 가시 — 지면에서 위쪽 반원으로만 치솟는다. 착지의 "쾅"이 하늘로 뻗는다.
+  spikeBurst(scene, x, y, {
+    scale: 1.25,
+    spikes: 8,
+    slashLines: false,
+    angleRange: { from: -Math.PI * 0.9, to: -Math.PI * 0.1 },
+  });
+
   const ring = scene.add.graphics({ x, y });
   ring.setDepth(VFX.depth);
   ring.setBlendMode(Phaser.BlendModes.ADD);
@@ -1919,6 +2111,15 @@ export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.C
  * 원형 방패 실루엣이 빠르게 부풀었다 갈라지고, 조각과 스파크가 sin/cos로 흩어진다.
  */
 export const perfectParryBurst = (scene: Phaser.Scene, x: number, y: number): void => {
+  // 스컬풍 금빛 가시 — 완벽하게 받아쳤다는 쾌감은 가장 날카로운 폭발로 돌려준다.
+  spikeBurst(scene, x, y, {
+    scale: 0.9,
+    spikes: 9,
+    dark: 0x33240a,
+    mid: 0xffca4a,
+    bright: 0xfff6c8,
+  });
+
   // 방패 본체 — 확 부풀었다 갈라지듯 사라진다.
   const shield = scene.add.graphics({ x, y });
   shield.setDepth(VFX.depth + 2);
