@@ -837,6 +837,37 @@
 
 ---
 
+### 야간 일괄 작업 — 탄창·속성탄·조각 경제·NPC 이벤트·절차 지형·연출 강화 (P-027~P-032, AI-009)
+
+- 상태: DONE
+- 관련 계획: P-027, P-028, P-029, P-030, P-031, P-032
+- 관련 결정: DEC-014
+- 관련 AI 로그: AI-009
+
+#### 작업
+- **탄창/재장전/사거리 (P-030)**: `TUNING.ranged`에 `magazineSize(6)·reloadMs(1100)·maxRangePx(560)` 추가. `attackRanged`가 탄을 소모하고 소진 시 `startReload()`. 조준선(`beamLine`)과 탄 소멸(`cullProjectiles`)이 같은 사거리를 공유. `HudState`에 `ammo/magazineSize/reloading` 추가, HUD에 탄피 핍·재장전 깜빡임.
+- **속성탄·확장 탄창 (P-031)**: `UpgradeElement`에 `POISON` 추가, 강화 `RANGED_POISON_ROUND`·`RANGED_FIRE_ROUND`·`RANGED_MAG_UP` 신설. 두 씬 `applyElement`에 독 틱(2×6회, 450ms) 분기. 속성탄은 불>독>냉기 우선순위로 한 발에 하나.
+- **그림자 조각·상인 (P-027)**: `RunState.shards`(+`addShards`/`spendShards`, 부활 유지·리셋 초기화). `BaseEnemy.defeat()`가 죽은 좌표를 `onDefeated(x,y)`로 전달 → 씬이 `shardDrop` 연출(튀어오름→흡수→적립). 마을에 플레이어 시트 실루엣 상인 + 머리 위 결정, `shop:open`/`shop:buy` 이벤트와 `ShopPanel`(가격 6, 품목 3, 잔액 부족 시 버튼 비활성).
+- **방랑자 NPC (P-028)**: 전투방 50% 확률 스폰. 우호(60%)=대사 후 회복 12 또는 조각 4 선물 후 소멸, 적대=붉은 예고 700ms 후 추격자 돌변(방 카운트와 분리된 커스텀 onDefeated).
+- **절차 지형 (P-029, 축소)**: `rollLayout` 재작업 — 틈 2~3개(넓은 틈은 다리 발판 강제), 열 단위 1층 + 그 위로만 2·3층. 벽 미로는 OQ-030으로 미룸.
+- **연출 (P-032)**: 검기를 3타 초승달 참격+잔상 비행으로 재작업, 패링 가드를 룬 고리+궤도 검 조각 4개로 교체, 퍼펙트 패링에 히트스톱·줌 펀치(×1.07)·금빛 섬광, `ashRise` 수명 950~1500ms(기존 500~780), `startBloodRain`(비스듬한 핏빛 비+바닥 튐)을 전투방·보스방에 배선.
+- **버그 수정**: 처치 집계를 공격 오버랩에서 `onDefeated`로 이원화 해소 — 화상·독 틱, 낙사 킬이 `runState.kills`에 안 세지던 문제의 근본 수정.
+
+#### 오류 및 원인
+- `as const`인 `TUNING.ranged.magazineSize`로 초기화한 `ammo` 필드가 리터럴 타입 `6`으로 좁혀져 빌드 실패 → `private ammo: number`로 명시.
+- `npm run build`가 `out/` 정리 중 `ENOTEMPTY`로 1회 실패(간헐 FS 문제) → `out/` 삭제 후 재빌드로 해결.
+
+#### 검증
+- `npm run build`, `npm run lint` 통과(커밋 4개 각각).
+- 실브라우저(Chrome, localhost:3000): 타이틀→프롤로그→마을 진입, 상인 실루엣·결정·"W 거래하기" 프롬프트 표시, 잔액 0일 때 품목 비활성, 조각 7개 상태에서 검기 구매 성공(7→1, `selectedUpgrades` 반영), HUD에 ◆ 잔액·탄피 핍·모드 전환 표시, 사망→마을 부활 시 강화·maxHp(120)·조각 유지, 콘솔 오류 0(기존 favicon 404 제외).
+- 자동 조작 한계로 적 처치 드랍·방랑자 이벤트·검기 비행 궤적은 화면 미확인 — 실플레이 확인 필요.
+
+#### 남은 작업
+- 실플레이: 조각 드랍 흡수 연출, 방랑자 우호/적대, 핏빛 비 체감, 검기 궤적, 퍼펙트 패링 카메라 임팩트.
+- 밸런스: 조각 가격(6)·드랍량(1~2)·방랑자 확률(50/60%)은 임시값.
+
+---
+
 ## 기록 템플릿
 
 ```md
