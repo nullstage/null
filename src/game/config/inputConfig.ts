@@ -16,6 +16,7 @@ export type GameAction =
   | "DASH"
   | "ATTACK"
   | "SWITCH_MODE"
+  | "PARRY"
   | "INTERACT"
   | "CONFIRM"
   | "TOGGLE_DEBUG"
@@ -29,6 +30,7 @@ export const DEFAULT_KEY_BINDINGS: Readonly<Record<GameAction, string>> = {
   DASH: "SHIFT",
   ATTACK: "J",
   SWITCH_MODE: "K",
+  PARRY: "S",
   /** 전송 게이트 같은 월드 상호작용 지점 전용. 이동·전투 키와 겹치지 않는 W를 쓴다. */
   INTERACT: "W",
   CONFIRM: "ENTER",
@@ -54,6 +56,7 @@ export const REBINDABLE_ACTIONS: readonly GameAction[] = [
   "DASH",
   "ATTACK",
   "SWITCH_MODE",
+  "PARRY",
   "CONFIRM",
 ];
 

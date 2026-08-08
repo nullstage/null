@@ -507,7 +507,13 @@ export class CombatScene extends Phaser.Scene {
     // 적 공격체 → 플레이어
     this.physics.add.overlap(arena.enemyAttacks, playerBody, (attackObj) => {
       const attack = attackObj as Phaser.GameObjects.GameObject;
-      this.player.takeDamage((attack.getData("damage") as number) ?? undefined);
+      const damage = (attack.getData("damage") as number) ?? undefined;
+      const result = this.player.takeDamage(damage);
+      // 퍼펙트 패링 — 공격을 낸 쪽에게 같은 피해를 그대로 되돌린다.
+      if (result.perfect) {
+        const source = attack.getData("source") as { takeDamage: (amount: number) => void } | undefined;
+        source?.takeDamage(damage ?? 0);
+      }
       if (attack.getData("consumeOnHit")) attack.destroy();
     });
 
@@ -517,7 +523,8 @@ export class CombatScene extends Phaser.Scene {
         | BaseEnemy
         | undefined;
       if (!enemy || enemy.isDefeated) return;
-      this.player.takeDamage(enemy.definition.contactDamage);
+      const result = this.player.takeDamage(enemy.definition.contactDamage);
+      if (result.perfect) enemy.takeDamage(enemy.definition.contactDamage);
     });
 
     // 게이트는 충돌·오버랩이 아니라 `update()`의 거리 판정 + INTERACT 키로 반응한다

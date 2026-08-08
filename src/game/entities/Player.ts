@@ -24,12 +24,15 @@ import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
 import {
   BEAM_WINDUP_MS,
   beamLine,
+  clearParryGuard,
   createBulletTrail,
   deathBurst,
   groundDust,
   hitBurst,
   hitStop,
   muzzleFlash,
+  parryGuard,
+  perfectParryBurst,
   pulseHitFx,
   rangedSpark,
   slashArc,
@@ -75,6 +78,17 @@ const RANGED_DETUNE_BY_STEP = [550, 260, 0] as const;
 
 /** 반동 직후 이동 입력이 속도를 덮어쓰지 않는 시간(ms). 근접 돌진 판정과 같은 방식. */
 const RANGED_RECOIL_WINDOW_MS = 110;
+
+/**
+ * 패링. S를 누른 순간부터 `PARRY_PERFECT_MS` 안에 맞으면 완전 무효화 + 반사,
+ * 그 뒤 `PARRY_ACTIVE_MS`까지는 일반 막기(피해만 크게 깎는다)로 넘어간다.
+ * 완전 무효화 구간을 짧게 잡아야 "아무 때나 누르면 다 막힌다"가 되지 않는다.
+ */
+const PARRY_PERFECT_MS = 160;
+const PARRY_ACTIVE_MS = 340;
+const PARRY_COOLDOWN_MS = 900;
+/** 퍼펙트를 놓치고 일반 막기로만 받아냈을 때 남는 피해 비율. */
+const PARRY_BLOCK_DAMAGE_RATIO = 0.25;
 
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
 const RANGED_MODE_TINT = 0xffc9d4;
@@ -248,6 +262,7 @@ const MOVE_ACTIONS = [
   "DASH",
   "ATTACK",
   "SWITCH_MODE",
+  "PARRY",
 ] as const satisfies readonly GameAction[];
 
 type PlayerAction = (typeof MOVE_ACTIONS)[number];
@@ -322,6 +337,13 @@ export class Player {
   /** 이 시각을 넘기면 이동 입력으로 공격 그림을 끊을 수 있다. */
   private animCancelAtMs = 0;
   private invulnerableUntilMs = 0;
+
+  /** 지금 방어 자세인지. 방어 창(perfect+normal) 동안 true. */
+  private parrying = false;
+  private parryStartedAtMs = 0;
+  private parryEndsAtMs = 0;
+  private parryCooldownUntilMs = 0;
+  private parryGuardFx: Phaser.GameObjects.Graphics | null = null;
   private blinkTween: Phaser.Tweens.Tween | null = null;
 
   /**
@@ -476,6 +498,12 @@ export class Player {
     if (this.justPressed("DASH")) this.dash();
     if (this.justPressed("ATTACK")) this.attack();
     if (this.justPressed("SWITCH_MODE")) this.switchMode();
+    if (this.justPressed("PARRY")) this.parry();
+
+    if (this.parrying) {
+      if (time >= this.parryEndsAtMs) this.endParry();
+      else this.parryGuardFx?.setPosition(sprite.x, sprite.y).setScale(this.facing, 1);
+    }
 
     this.syncAnim();
   }
@@ -483,6 +511,8 @@ export class Player {
   destroy(): void {
     if (this.footsteps) stopFootsteps(this.footsteps);
     this.footsteps = null;
+    this.parryGuardFx?.destroy();
+    this.parryGuardFx = null;
     this.blinkTween?.remove();
     this.blinkTween = null;
     for (const { body, trail } of this.projectiles) {
@@ -599,6 +629,32 @@ export class Player {
     // 양쪽 모두 기본값으로 되돌린다.
     body.setAllowGravity(true);
     body.setGravityY(0);
+  }
+
+  // ────────────────────────────── 패링 ──────────────────────────────
+
+  private parry(): void {
+    const sprite = this.sprite;
+    const now = this.scene.time.now;
+    if (!sprite || this.isDead || this.isDashing) return;
+    if (now < this.parryCooldownUntilMs) return;
+
+    this.parrying = true;
+    this.parryStartedAtMs = now;
+    this.parryEndsAtMs = now + PARRY_ACTIVE_MS;
+    this.parryCooldownUntilMs = now + PARRY_COOLDOWN_MS;
+
+    playSfx(this.scene, AUDIO.parry);
+    this.parryGuardFx?.destroy();
+    this.parryGuardFx = parryGuard(this.scene, sprite.x, sprite.y, this.facing);
+  }
+
+  private endParry(): void {
+    this.parrying = false;
+    if (this.parryGuardFx) {
+      clearParryGuard(this.scene, this.parryGuardFx);
+      this.parryGuardFx = null;
+    }
   }
 
   // ────────────────────────────── 공격 ──────────────────────────────
@@ -916,12 +972,32 @@ export class Player {
 
   // ────────────────────────────── 피격과 사망 ──────────────────────────────
 
-  takeDamage(amount: number = PLAYER.damagePerHit): void {
-    if (this.isDashing) return;
+  /**
+   * @returns `perfect`가 true면 호출한 쪽(CombatScene/BossScene)이 피해원에게
+   * 반사 피해를 넣어야 한다 — Player는 적을 직접 참조하지 않으므로(DEC-011)
+   * 반사 자체는 씬이 처리한다.
+   */
+  takeDamage(amount: number = PLAYER.damagePerHit): { parried: boolean; perfect: boolean } {
+    if (this.isDashing) return { parried: false, perfect: false };
 
     const now = this.scene.time.now;
     // 적 본체와 겹쳐 있는 동안 매 프레임 호출된다. 무적 시간이 없으면 즉사한다.
-    if (this.isDead || now < this.invulnerableUntilMs) return;
+    if (this.isDead || now < this.invulnerableUntilMs) return { parried: false, perfect: false };
+
+    if (this.parrying) {
+      const elapsed = now - this.parryStartedAtMs;
+      if (elapsed <= PARRY_PERFECT_MS) {
+        // 퍼펙트 — 완전 무효화. 반사는 씬이 처리한다.
+        this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
+        this.endParry();
+        this.scene.cameras.main.shake(90, 0.006);
+        if (this.sprite) perfectParryBurst(this.scene, this.sprite.x, this.sprite.y);
+        return { parried: true, perfect: true };
+      }
+      // 늦은 막기 — 피해를 크게 깎는다. 창은 계속 열어 둔다(연속 공격도 받아낼 수 있게).
+      amount = Math.round(amount * PARRY_BLOCK_DAMAGE_RATIO);
+    }
+
     this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
 
     this.telemetry.recordDamageTaken();
@@ -944,9 +1020,10 @@ export class Player {
 
     if (this.hp <= 0) {
       this.die();
-      return;
+      return { parried: this.parrying, perfect: false };
     }
     this.blink();
+    return { parried: this.parrying, perfect: false };
   }
 
   private die(): void {

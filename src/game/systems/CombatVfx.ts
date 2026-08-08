@@ -162,9 +162,9 @@ const VFX = {
     reforged: { length: 70, headHeight: 8, core: 0xffffff, glow: 0xffb9c2 },
   },
   burst: {
-    count: 14,
+    count: 20,
     lifeMs: 260,
-    speed: { min: 160, max: 420 },
+    speed: { min: 180, max: 520 },
     size: PIXEL,
     color: 0xff8a94,
     /** 파편보다 먼저, 아주 짧게 터지는 작은 충격 링. 순간의 무게를 더한다. */
@@ -542,6 +542,33 @@ export const slashArc = (
       redraw();
     },
     onComplete: () => {
+      // 다 그어진 순간, 칼날 가장자리를 따라 작은 불티가 튄다 — 면만 채워서는
+      // 밋밋했던 부분을 스컬류 슬래시처럼 잔불이 흩날리는 느낌으로 채운다.
+      const edge = outerEdge(look.crescentThickness * 0.55);
+      const sparkPoints = [edge[Math.round(edge.length * 0.35)], edge[Math.round(edge.length * 0.65)]];
+      for (const local of sparkPoints) {
+        if (!local) continue;
+        // graphics는 setScale(facing,1)로 뒤집혀 있다 — 로컬 좌표를 월드 좌표로 직접 환산한다.
+        const worldX = x + facing * local.x;
+        const worldY = y + local.y;
+        for (let i = 0; i < 3; i += 1) {
+          const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+          const dist = Phaser.Math.FloatBetween(10, 26);
+          const spark = scene.add.circle(worldX, worldY, 1.4, look.core, 1);
+          spark.setDepth(VFX.depth + 1);
+          spark.setBlendMode(Phaser.BlendModes.ADD);
+          scene.tweens.add({
+            targets: spark,
+            x: worldX + Math.cos(angle) * dist,
+            y: worldY + Math.sin(angle) * dist,
+            alpha: 0,
+            duration: Phaser.Math.Between(120, 200),
+            ease: "power2.out",
+            onComplete: () => spark.destroy(),
+          });
+        }
+      }
+
       scene.tweens.add({
         targets: graphics,
         alpha: 0,
@@ -861,6 +888,20 @@ export const createBulletTrail = (
 export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
   const { burst } = VFX;
 
+  // 링보다도 먼저, 아주 짧게 켜졌다 꺼지는 흰 섬광 — "팡" 하고 터지는 인상은
+  // 파편이 아니라 이 한 프레임짜리 밝은 점에서 온다. 카메라 플래시처럼 순간적이어야 한다.
+  const flash = scene.add.circle(x, y, burst.size * 2.2, 0xffffff, 1);
+  flash.setDepth(VFX.depth + 1);
+  flash.setBlendMode(Phaser.BlendModes.ADD);
+  scene.tweens.add({
+    targets: flash,
+    scale: 2.4,
+    alpha: 0,
+    duration: 90,
+    ease: "power3.out",
+    onComplete: () => flash.destroy(),
+  });
+
   // 파편보다 먼저 아주 짧게 터지는 작은 링. 파편은 흩어지는 잔해고, 링은 충격 그 자체다.
   const ring = scene.add.graphics({ x, y });
   ring.setDepth(VFX.depth);
@@ -877,7 +918,8 @@ export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
   }
   scene.tweens.add({
     targets: ring,
-    scale: burst.ring.growTo,
+    // 팽창 폭을 키워 링이 확실히 화면을 가로지르며 "펑" 퍼지는 인상을 준다.
+    scale: burst.ring.growTo * 1.5,
     alpha: 0,
     duration: burst.ring.lifeMs,
     ease: "power2.out",
@@ -1272,6 +1314,92 @@ export const attachStingerTrail = (
       graphics.fillCircle(projectile.x, projectile.y, 4);
     },
   });
+};
+
+/**
+ * 패링 방어 자세. S를 누른 순간부터 방어 창이 끝날 때까지 몸 앞에 얇은 호를 띄운다.
+ * 퍼펙트 성공 시 `perfectParryBurst`로 교체되므로, 호출한 쪽이 반환된 오브젝트를
+ * 들고 있다가 직접 지워야 한다(자동으로 사라지지 않음 — 방어 창 길이가 상황마다 다르다).
+ */
+export const parryGuard = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+): Phaser.GameObjects.Graphics => {
+  const graphics = scene.add.graphics();
+  graphics.setDepth(VFX.depth + 1);
+  graphics.setPosition(x, y);
+  graphics.setScale(facing, 1);
+  graphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  graphics.lineStyle(2.5, 0xffe066, 0.9);
+  graphics.beginPath();
+  graphics.arc(0, -4, 28, Phaser.Math.DegToRad(-65), Phaser.Math.DegToRad(65));
+  graphics.strokePath();
+  graphics.lineStyle(1, 0xfff6c8, 0.5);
+  graphics.beginPath();
+  graphics.arc(0, -4, 23, Phaser.Math.DegToRad(-60), Phaser.Math.DegToRad(60));
+  graphics.strokePath();
+
+  // 숨쉬듯 깜빡여야 "지금 막는 중"이라는 상태가 눈에 들어온다.
+  scene.tweens.add({
+    targets: graphics,
+    alpha: { from: 0.55, to: 1 },
+    duration: 180,
+    yoyo: true,
+    repeat: -1,
+  });
+
+  return graphics;
+};
+
+/** 방어 창이 그냥 끝났을 때(퍼펙트 실패) 호를 걷어낸다. */
+export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.Graphics): void => {
+  scene.tweens.killTweensOf(guard);
+  scene.tweens.add({
+    targets: guard,
+    alpha: 0,
+    duration: 90,
+    onComplete: () => guard.destroy(),
+  });
+};
+
+/**
+ * 퍼펙트 패링 성공. 방어 호 대신 터지는 금빛 섬광 + 방사형 스파크로 확실히 구분한다 —
+ * 그냥 막았을 때와 같은 그림이면 "반사가 됐다"는 게 안 읽힌다.
+ */
+export const perfectParryBurst = (scene: Phaser.Scene, x: number, y: number): void => {
+  const flash = scene.add.circle(x, y, 6, 0xfff6c8, 1);
+  flash.setDepth(VFX.depth + 2);
+  flash.setBlendMode(Phaser.BlendModes.ADD);
+  scene.tweens.add({
+    targets: flash,
+    scale: 5,
+    alpha: 0,
+    duration: 200,
+    ease: "power3.out",
+    onComplete: () => flash.destroy(),
+  });
+
+  const sparkCount = 10;
+  for (let i = 0; i < sparkCount; i += 1) {
+    const angle = (i / sparkCount) * Math.PI * 2;
+    const spark = scene.add.graphics({ x, y });
+    spark.setDepth(VFX.depth + 2);
+    spark.setBlendMode(Phaser.BlendModes.ADD);
+    spark.lineStyle(2, 0xffe066, 0.9);
+    spark.lineBetween(0, 0, Math.cos(angle) * 5, Math.sin(angle) * 5);
+    scene.tweens.add({
+      targets: spark,
+      x: x + Math.cos(angle) * 46,
+      y: y + Math.sin(angle) * 46,
+      alpha: 0,
+      duration: 240,
+      ease: "power2.out",
+      onComplete: () => spark.destroy(),
+    });
+  }
 };
 
 /**

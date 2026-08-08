@@ -590,6 +590,8 @@ export class Boss {
       .setDepth(DEPTH.attack);
 
     this.arena.enemyAttacks.add(box);
+    // 패링 반사용 — 이 공격을 누가 냈는지 알아야 씬이 반사 피해를 되돌려줄 수 있다.
+    box.setData("source", this);
     box.setData("damage", PATTERN_DAMAGE);
     if (consumeOnHit) box.setData("consumeOnHit", true);
     (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);

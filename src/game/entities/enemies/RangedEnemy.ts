@@ -40,6 +40,8 @@ const PROJECTILE_SIZE = 14;
 const PROJECTILE_LIFE_MS = 2400;
 /** 이 거리 안쪽 벽에 붙으면 몰린 것으로 본다. */
 const CORNER_MARGIN = 90;
+/** 이만큼 앞의 바닥을 미리 살핀다. */
+const LEDGE_LOOKAHEAD = 24;
 /** 몰렸을 때의 투명도. 무방비 상태라는 표시다. */
 const CORNERED_ALPHA = 0.6;
 /** 조준선 두께. 얇게 긋고 가산 블렌드로 빛나게 한다 — 굵은 띠보다 레이저처럼 읽힌다. */
@@ -91,13 +93,19 @@ export class RangedEnemy extends BaseEnemy {
     const speed = this.definition.moveSpeed;
 
     if (distance < KEEP_DISTANCE_MIN) {
-      // 플레이어 반대쪽으로 물러난다.
+      // 플레이어 반대쪽으로 물러난다. 낭떠러지도 벽처럼 막힌 것으로 본다 —
+      // 플레이어처럼 점프해서 건널 수 없으니 그 앞에서 멈춰야 한다.
       const away = dx === 0 ? 1 : -Math.sign(dx);
-      this.cornered = this.isAgainstWall(body.x, away);
+      this.cornered =
+        this.isAgainstWall(body.x, away) || !this.hasFloorBelow(body.x + away * LEDGE_LOOKAHEAD);
       body.setVelocityX(this.cornered ? 0 : away * speed);
     } else {
       this.cornered = false;
-      body.setVelocityX(distance > KEEP_DISTANCE_MAX ? Math.sign(dx) * speed : 0);
+      const toward = Math.sign(dx);
+      const wantsToMove = distance > KEEP_DISTANCE_MAX;
+      body.setVelocityX(
+        wantsToMove && this.hasFloorBelow(body.x + toward * LEDGE_LOOKAHEAD) ? toward * speed : 0,
+      );
     }
 
     body.setAlpha(this.cornered ? CORNERED_ALPHA : 1);
@@ -162,6 +170,8 @@ export class RangedEnemy extends BaseEnemy {
     attachStingerTrail(this.scene, shot);
     shot.setData("damage", this.definition.contactDamage);
     shot.setData("consumeOnHit", true);
+    // 패링 반사용 — 이 공격을 누가 냈는지 알아야 씬이 반사 피해를 되돌려줄 수 있다.
+    shot.setData("source", this);
 
     // 조준 시점의 좌표로만 날아간다. 그 사이에 움직였다면 빗나간다.
     const angle = Phaser.Math.Angle.Between(body.x, body.y, this.aimTarget.x, this.aimTarget.y);

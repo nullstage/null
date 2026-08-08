@@ -131,7 +131,10 @@ export class BossScene extends Phaser.Scene {
 
     this.physics.add.overlap(arena.enemyAttacks, playerBody, (attackObj) => {
       const attack = attackObj as Phaser.GameObjects.GameObject;
-      this.player.takeDamage((attack.getData("damage") as number) ?? undefined);
+      const damage = (attack.getData("damage") as number) ?? undefined;
+      const result = this.player.takeDamage(damage);
+      // 퍼펙트 패링 — 보스에게도 같은 방식으로 반사된다.
+      if (result.perfect) this.boss.takeDamage(damage ?? 0);
       if (attack.getData("consumeOnHit")) attack.destroy();
     });
   }

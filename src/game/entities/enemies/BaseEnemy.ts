@@ -156,6 +156,15 @@ export abstract class BaseEnemy {
     return this.defeated;
   }
 
+  /**
+   * 이 x좌표 아래에 바닥 조각이 있는지. 없으면 낭떠러지 위다.
+   * 랜덤 지형(낭떠러지) 도입 이후 적이 앞뒤 안 보고 쫓아오다 스스로 빠지는 것을
+   * 막는 데 쓴다 — 플레이어처럼 점프해서 건너지 못하니 아예 멈춰야 한다.
+   */
+  protected hasFloorBelow(x: number): boolean {
+    return this.arena.floorSegments.some((segment) => x >= segment.x && x <= segment.x + segment.width);
+  }
+
   destroy(): void {
     this.sprite?.destroy();
     this.sprite = null;
