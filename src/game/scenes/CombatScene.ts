@@ -242,11 +242,15 @@ export class CombatScene extends Phaser.Scene {
    * `onSelected`가 다음 단계를 결정한다 — 방 1·방 2 후에는 다음 방으로,
    * 방 3 후에는 보스로 넘어간다. 보스 진입은 `scene.restart`가 아니라 `scene.start`라
    * `room:start`가 발생하지 않는다 — React 쪽은 그 대신 `phase:change`(→"BOSS")로
-   * 로딩 해제 신호를 받는다(HUDOverlay 참고). 여기서는 두 경로를 구분할 필요가 없다.
+   * 로딩 해제 신호를 받는다(HUDOverlay 참고). 로딩 처리는 두 경로가 같아 여기서
+   * 구분할 필요가 없다. `final`은 오직 UI 표시 문구("마지막으로 주어진 것")를 위한 신호다.
    */
-  private offerUpgrade(onSelected: () => void): void {
+  private offerUpgrade(onSelected: () => void, final = false): void {
     runState.setPhase("UPGRADE");
-    eventBus.emit("upgrade:offer", { choices: rollUpgradeChoices(runState.selectedUpgrades) });
+    eventBus.emit("upgrade:offer", {
+      choices: rollUpgradeChoices(runState.selectedUpgrades),
+      final,
+    });
 
     this.once("upgrade:select", ({ upgradeId }) => {
       runState.addUpgrade(upgradeId);
@@ -291,7 +295,7 @@ export class CombatScene extends Phaser.Scene {
     runState.setBossWeights(bossWeightsFor(actualStyle));
 
     // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-013)
-    this.once("ui:continue", () => this.offerUpgrade(() => this.scene.start("Boss")));
+    this.once("ui:continue", () => this.offerUpgrade(() => this.scene.start("Boss"), true));
   }
 
   private handlePlayerDeath(): void {

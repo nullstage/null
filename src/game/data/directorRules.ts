@@ -95,6 +95,20 @@ export const DIRECTOR_DIALOGUE: Record<string, string> = {
 };
 
 /**
+ * 방 2 소프트 카운터 예고. (DEC-014)
+ *
+ * 위 `counter_*`는 방 3(하드 카운터) 예고이고, 이건 방 2(축소판) 예고다.
+ * 같은 말을 두 번 쓰면 방 2에서 이미 "판결"이 난 것처럼 들려 방 3의 무게가 죽는다.
+ * 방 2는 아직 지켜보는 단계라는 게 말에서도 드러나야 한다.
+ */
+export const COUNTER_DIALOGUE_SOFT: Record<PlayStyle, string> = {
+  RANGED: "거리를 지우는 자가 하나, 먼저 가 본다.",
+  MELEE: "그 거리를, 하나가 먼저 흔들어 본다.",
+  MOBILE: "지나갈 자리를 눈여겨보는 자가 하나 있다.",
+  MIXED: "아직은 지켜보기만 하겠다.",
+};
+
+/**
  * 플레이 스타일에 붙는 칭호.
  *
  * 「기록」이나 「분석」 같은 말로는 무엇을 봤다는 건지 전해지지 않는다.
@@ -115,6 +129,14 @@ export const COUNTER_SUMMARY: Record<PlayStyle, string> = {
   RANGED: "거리를 지우는 자들이 기다린다",
   MOBILE: "지나갈 자리를 막는 자들이 기다린다",
   MIXED: "아직 정해지지 않았다",
+};
+
+/** 방 2(축소판) 예고용. 방 3(위 `COUNTER_SUMMARY`)보다 규모가 작다는 게 말에서도 느껴져야 한다. */
+export const COUNTER_SUMMARY_SOFT: Record<PlayStyle, string> = {
+  MELEE: "다가서기 조금 불편해질 것이다",
+  RANGED: "거리를 지우려는 기색이 보인다",
+  MOBILE: "지나갈 자리를 슬쩍 살피는 자가 있다",
+  MIXED: "아직 아무것도 정해지지 않았다",
 };
 
 export const analysisDialogueId = (style: PlayStyle): string =>

@@ -158,6 +158,8 @@ export default function HUDOverlay() {
   const [telemetry, setTelemetry] = useState<CombatTelemetry | null>(null);
   const [analysis, setAnalysis] = useState<DirectorAnalysis | null>(null);
   const [choices, setChoices] = useState<UpgradeDefinition[]>([]);
+  /** 방 3 클리어 후 보스 진입 직전 지급되는 마지막 강화인지 — 표시 문구용. */
+  const [finalUpgrade, setFinalUpgrade] = useState(false);
   const [deception, setDeception] = useState<DeceptionResult | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
   const [bossWeights, setBossWeights] = useState<BossPatternWeights>(DEFAULT_BOSS_WEIGHTS);
@@ -248,8 +250,9 @@ export default function HUDOverlay() {
     setActivePanel("analysis");
   });
 
-  useGameEvent("upgrade:offer", ({ choices: next }) => {
+  useGameEvent("upgrade:offer", ({ choices: next, final }) => {
     setChoices(next);
+    setFinalUpgrade(!!final);
     setActivePanel("upgrade");
   });
 
@@ -341,6 +344,7 @@ export default function HUDOverlay() {
     setTelemetry(null);
     setDeception(null);
     setResult(null);
+    setFinalUpgrade(false);
     setBossWeights(DEFAULT_BOSS_WEIGHTS);
     // 방 전환 도중에 죽거나 나가면 흰 로딩이 그대로 남는다.
     setRoomLoading(false);
@@ -470,12 +474,15 @@ export default function HUDOverlay() {
           analysis={analysis}
           dashCount={telemetry?.dashCount ?? 0}
           onContinue={continueFromPanel}
+          // 방 1 클리어 후(hud.roomIndex===1)는 방 2 축소판 예고, 방 2 클리어 후는 방 3 예고다.
+          counterStrength={hud?.roomIndex === 1 ? "soft" : "hard"}
         />
       )}
 
       {activePanel === "upgrade" && (
         <UpgradePanel
           choices={choices}
+          final={finalUpgrade}
           onSelect={(upgradeId) => {
             setActivePanel("none");
             // 로딩을 먼저 덮고 나서 다음 화면(방 또는 보스전)으로 넘어간다.
