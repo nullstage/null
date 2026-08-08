@@ -167,13 +167,18 @@ export class Boss {
       .setDisplaySize(BODY.width, BODY.height)
       .setDepth(DEPTH.boss);
 
-    // 씬이 보스방에 바닥 collider를 걸어주지 않고, slam 궤적도 직접 제어해야 한다.
-    // 중력을 끄고 바닥 높이를 매 프레임 스냅하는 편이 예측 가능하다.
-    (sprite.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
-
     this.arena.enemyBodies.add(sprite);
     sprite.setData("enemy", this);
     this.sprite = sprite;
+
+    // 씬이 보스방에 바닥 collider를 걸어주지 않고, slam 궤적도 직접 제어해야 한다.
+    // 중력을 끄고 바닥 높이를 매 프레임 스냅하는 편이 예측 가능하다.
+    //
+    // `enemyBodies`는 중력을 받는 일반 적을 위한 그룹이라 기본값이 중력 켜짐이다.
+    // `group.add()`가 그 기본값을 다시 적용하므로, 끄는 순서가 add보다 앞이면
+    // 도로 켜진다 — 반드시 add 다음에 꺼야 한다. slam 중 airborne로 접지 스냅이
+    // 풀리는 순간 그동안 숨어서 쌓인 낙하 속도가 화면 밖까지 떨어뜨렸던 원인이 이것이다.
+    (sprite.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
 
     this.createHpBar();
 
@@ -209,7 +214,13 @@ export class Boss {
   private clampToArena(sprite: Phaser.Physics.Arcade.Sprite): void {
     const half = BODY.width / 2;
     sprite.x = Math.min(Math.max(sprite.x, half), this.arena.bounds.width - half);
-    if (!this.airborne) sprite.y = this.groundY;
+    if (!this.airborne) {
+      sprite.y = this.groundY;
+      // 중력이 꺼져 있어야 정상이지만, 혹시라도 다시 켜지면(그룹 재배정 등)
+      // 접지 상태에서 티 안 나게 속도만 쌓인다. slam 이륙 순간 그 속도가 그대로
+      // 터져 화면 밖으로 떨어지므로, 바닥에 붙어 있는 동안은 항상 0으로 눌러 둔다.
+      sprite.setVelocityY(0);
+    }
   }
 
   private facePlayer(sprite: Phaser.Physics.Arcade.Sprite): void {

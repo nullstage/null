@@ -240,15 +240,13 @@ export class CombatScene extends Phaser.Scene {
    * 강화 3회 지급(방 1·방 2·방 3 클리어 후). (OQ-016 RESOLVED, DEC-013)
    *
    * `onSelected`가 다음 단계를 결정한다 — 방 1·방 2 후에는 다음 방으로,
-   * 방 3 후에는 보스로 넘어간다. `final`은 UI에 방 전환 로딩을 건너뛰라고 알리는 신호다.
-   * 보스전은 씬 재시작이 아니라 `scene.start`라 `room:start`가 발생하지 않기 때문이다.
+   * 방 3 후에는 보스로 넘어간다. 보스 진입은 `scene.restart`가 아니라 `scene.start`라
+   * `room:start`가 발생하지 않는다 — React 쪽은 그 대신 `phase:change`(→"BOSS")로
+   * 로딩 해제 신호를 받는다(HUDOverlay 참고). 여기서는 두 경로를 구분할 필요가 없다.
    */
-  private offerUpgrade(onSelected: () => void, final = false): void {
+  private offerUpgrade(onSelected: () => void): void {
     runState.setPhase("UPGRADE");
-    eventBus.emit("upgrade:offer", {
-      choices: rollUpgradeChoices(runState.selectedUpgrades),
-      final,
-    });
+    eventBus.emit("upgrade:offer", { choices: rollUpgradeChoices(runState.selectedUpgrades) });
 
     this.once("upgrade:select", ({ upgradeId }) => {
       runState.addUpgrade(upgradeId);
@@ -256,30 +254,25 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * 방 1·방 2 클리어 후 다음 방으로 넘어간다. `goToNextRoom`은 이 두 경우에만
+   * 호출된다(방 3 클리어는 `resolveDeception`이 별도 처리) — 즉 `nextIndex`는
+   * 항상 2(→방 2) 또는 3(→방 3) 둘 중 하나이고, 그 외 값은 나오지 않는다.
+   */
   private goToNextRoom(): void {
     const nextIndex = runState.roomIndex + 1;
 
-    const nextRoomId = this.resolveRoomId(nextIndex);
-    this.scene.restart({ roomId: nextRoomId });
-  }
+    const nextRoomId =
+      nextIndex >= LAST_COMBAT_ROOM_INDEX
+        ? // 방 3 — Director가 고른 카운터 방(3기). (MVP_PLAN §5)
+          (runState.counterRoomId ?? "counter_mixed")
+        : // 방 2 — 방 1 텔레메트리만으로 분류한 스타일에 따른 축소판(2기) 소프트 카운터.
+          // (OQ-010 RESOLVED, DEC-014) 이 시점의 `predictedStyle`은 방 1 클리어 직후
+          // `analyze()`가 세팅한 값 그대로다 — 방 2가 아직 시작 전이라 65/35 가중
+          // 평균에 쓰일 방 2 자신의 데이터가 없으므로 방 1 단독 분류가 곧 "방 1 결과"다.
+          SOFT_COUNTER_ROOM_2_BY_STYLE[runState.predictedStyle ?? "MIXED"];
 
-  /**
-   * 방 1은 고정, 방 3은 Director가 고른 카운터 방(3기)이다.
-   *
-   * 방 2는 방 1 텔레메트리만으로 분류한 스타일에 따라 축소판(2기) 소프트 카운터를 쓴다.
-   * (OQ-010 RESOLVED, DEC-014) 이 시점의 `runState.predictedStyle`은 방 1 클리어 직후
-   * `analyze()`가 세팅한 값 그대로다 — 방 2가 아직 시작 전이라 65/35 가중 평균에 쓰일
-   * 방 2 자신의 데이터가 없으므로 방 1 단독 분류가 곧 "방 1 결과"다.
-   */
-  private resolveRoomId(nextIndex: number): RoomId {
-    if (nextIndex >= LAST_COMBAT_ROOM_INDEX) {
-      return runState.counterRoomId ?? "counter_mixed";
-    }
-    if (nextIndex === 2) {
-      const style = runState.predictedStyle ?? "MIXED";
-      return SOFT_COUNTER_ROOM_2_BY_STYLE[style];
-    }
-    return FIXED_ROOM_SEQUENCE[nextIndex - 1];
+    this.scene.restart({ roomId: nextRoomId });
   }
 
   /**
@@ -298,7 +291,7 @@ export class CombatScene extends Phaser.Scene {
     runState.setBossWeights(bossWeightsFor(actualStyle));
 
     // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-013)
-    this.once("ui:continue", () => this.offerUpgrade(() => this.scene.start("Boss"), true));
+    this.once("ui:continue", () => this.offerUpgrade(() => this.scene.start("Boss")));
   }
 
   private handlePlayerDeath(): void {
