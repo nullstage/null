@@ -13,15 +13,22 @@
 
 import type Phaser from "phaser";
 
+import { enemySlash } from "../../systems/CombatVfx";
 import { SILHOUETTE, TEXTURE } from "../../types/combat";
 import { BaseEnemy, type EnemyDeps } from "./BaseEnemy";
 
-/** 본체 크기. 셋 중 가장 날렵한 실루엣이라 좁고 낮다. */
-const BODY_WIDTH = 34;
-const BODY_HEIGHT = 46;
+/**
+ * 히트박스 월드 크기와 시트 배치. 원본 셀(64px)에서 고블린 그림은
+ * 대략 x22~43, 발끝 y≈44에만 있다 — 셀 여백을 빼고 그림 기준으로 잡는다.
+ */
+const BODY_WIDTH = 42;
+const BODY_HEIGHT = 48;
+const SHEET = { scale: 3.2, anchorX: 32.5, anchorY: 44 };
 
 /** 이 거리 안으로 들어오면 돌진을 준비한다. */
 const LUNGE_RANGE = 230;
+/** 이만큼 앞의 바닥을 미리 살핀다. 발 앞이 아니라 살짝 앞서 봐야 급정거가 자연스럽다. */
+const LEDGE_LOOKAHEAD = 24;
 /** 돌진 속도. 추격 속도보다 확실히 빨라야 "덤벼든다"로 읽힌다. */
 const LUNGE_SPEED = 540;
 /** 돌진 지속 시간(ms). */
@@ -54,7 +61,8 @@ export class ChaserEnemy extends BaseEnemy {
   }
 
   spawn(x: number, y: number): void {
-    this.spawnBody(x, y, TEXTURE.chaser, BODY_WIDTH, BODY_HEIGHT);
+    const body = this.spawnBody(x, y, TEXTURE.chaser, BODY_WIDTH, BODY_HEIGHT, SHEET);
+    body.play("chaserIdle");
   }
 
   update(_time: number, deltaMs: number): void {
@@ -65,11 +73,21 @@ export class ChaserEnemy extends BaseEnemy {
     const dx = this.getPlayerPosition().x - body.x;
 
     switch (this.state) {
-      case "CHASE":
+      case "CHASE": {
         this.facing = dx === 0 ? this.facing : Math.sign(dx);
-        body.setVelocityX(this.facing * this.definition.moveSpeed);
+        body.setFlipX(this.facing < 0);
+        // 낭떠러지 앞이면 멈춘다 — 플레이어처럼 점프해서 건너지 못한다.
+        const aheadX = body.x + this.facing * LEDGE_LOOKAHEAD;
+        if (this.hasFloorBelow(aheadX)) {
+          body.setVelocityX(this.facing * this.definition.moveSpeed * this.speedMultiplier);
+          body.anims.play("chaserWalk", true);
+        } else {
+          body.setVelocityX(0);
+          body.anims.play("chaserIdle", true);
+        }
         if (Math.abs(dx) <= LUNGE_RANGE) this.beginWindup();
         break;
+      }
 
       case "WINDUP":
         // 예고 중에는 멈춘다. 쫓아오면서 예고하면 피할 자리가 없다.
@@ -92,6 +110,7 @@ export class ChaserEnemy extends BaseEnemy {
       case "RECOVER":
       case "STAGGER":
         body.setVelocityX(0);
+        body.anims.play("chaserIdle", true);
         if (this.stateMs >= (this.state === "RECOVER" ? RECOVER_MS : STAGGER_MS)) {
           this.setStateTint(null);
           this.enter("CHASE");
@@ -155,7 +174,29 @@ export class ChaserEnemy extends BaseEnemy {
     this.setStateTint(null);
     this.afterimageMs = 0;
     this.enter("LUNGE");
-    this.sprite?.setVelocityX(this.facing * LUNGE_SPEED);
+    const body = this.sprite;
+    if (!body) return;
+    body.setVelocityX(this.facing * LUNGE_SPEED);
+    body.anims.play("chaserAttack", true);
+
+    // 단검 베기 이펙트 + 실제 판정. 본체 접촉에만 의존하면 스치듯 지나갈 때
+    // 데미지가 안 들어가는 것처럼 느껴진다 — 돌진 구간 동안 앞쪽에 판정을 함께 실어 보낸다.
+    enemySlash(this.scene, body.x + this.facing * 20, body.y, this.facing as 1 | -1, 42);
+    const hitbox = this.scene.physics.add.image(
+      body.x + this.facing * 28,
+      body.y,
+      TEXTURE.enemyAttack,
+    );
+    hitbox.setDisplaySize(46, 40);
+    hitbox.setAlpha(0);
+    this.arena.enemyAttacks.add(hitbox);
+    (hitbox.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    (hitbox.body as Phaser.Physics.Arcade.Body).setVelocityX(this.facing * LUNGE_SPEED);
+    hitbox.setData("damage", this.definition.contactDamage);
+    hitbox.setData("consumeOnHit", true);
+    // 패링 반사용 — 이 공격을 누가 냈는지 알아야 씬이 반사 피해를 되돌려줄 수 있다.
+    hitbox.setData("source", this);
+    this.scene.time.delayedCall(LUNGE_MS, () => hitbox.destroy());
   }
 
   private clearTelegraph(): void {

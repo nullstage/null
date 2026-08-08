@@ -1,8 +1,10 @@
 "use client";
 
+import { keyframes } from "@emotion/react";
 import styled from "@emotion/styled";
 import { useCallback, useEffect, useState } from "react";
 
+import { assetPath, debugFlag } from "@/game/config/gameConfig";
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
@@ -22,6 +24,7 @@ import { theme } from "@/styles/theme";
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
+import DialogueBox from "./ui/DialogueBox";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import LoadingScreen from "./ui/LoadingScreen";
 import PauseMenu from "./ui/PauseMenu";
@@ -29,6 +32,8 @@ import PrologueText from "./ui/PrologueText";
 import ResultPanel from "./ui/ResultPanel";
 import ScreenFade from "./ui/ScreenFade";
 import { setSfxVolume } from "./ui/sfx";
+import ShopPanel from "./ui/ShopPanel";
+import StatusPanel from "./ui/StatusPanel";
 import {
   DEFAULT_AUDIO,
   loadAudioSettings,
@@ -46,7 +51,7 @@ import UpgradePanel from "./ui/UpgradePanel";
  * 패널이 하나만 뜨도록 여기서 배타적으로 관리한다. 두 개가 겹치면 입력이 이중으로 들어간다.
  */
 
-type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result";
+type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status" | "shop";
 
 
 const Layer = styled.div`
@@ -77,14 +82,34 @@ const CombatHud = styled.div`
   pointer-events: none;
 `;
 
+/**
+ * 제공받은 장식 프레임(체력바.png → ui/hp-frame.png, 1341x317).
+ * 배경도 게이지 창도 이미 투명으로 뚫려 있어 키잉 없이 내용 bbox만 잘라 쓴다.
+ * 창 위치는 프레임 안쪽 구멍의 실제 픽셀 좌표에서 환산했다(아래 HealthWindow).
+ */
 const HealthBar = styled.div`
   position: relative;
-  width: 268px;
-  height: 14px;
-  /* 도트 화면이라 모서리를 깎지 않는다. 안쪽 그림자로 판 위에 얹힌 금속처럼 보이게 한다. */
-  border: 1px solid rgba(200, 56, 60, 0.45);
-  background: rgba(8, 6, 7, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  width: 440px;
+  aspect-ratio: 1341 / 317;
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+`;
+
+/** 프레임의 게이지 창 영역. 잘라낸 프레임 기준 픽셀 좌표(251~1256, 94~162)를 비율로 환산했다. */
+const HealthWindow = styled.div`
+  position: absolute;
+  left: 18.72%;
+  top: 29.65%;
+  width: 75.02%;
+  height: 21.77%;
+  background: rgba(8, 6, 7, 0.78);
   overflow: hidden;
 `;
 
@@ -100,26 +125,90 @@ const HealthGhost = styled.div<{ ratio: number }>`
   transition: width 0.55s ease 0.12s;
 `;
 
+/**
+ * 체력 게이지. 위 하이라이트 → 중간 본색 → 아래 어두운 그림자로 흐르는 세로
+ * 그라데이션에 가로 광택을 겹쳐 금속 프레임과 톤을 맞춘다. 눈금은 프레임이
+ * 장식적이라 오히려 지저분해 보여 없앴다(사용자 요청).
+ */
 const HealthFill = styled.div<{ ratio: number }>`
   position: absolute;
   inset: 0;
   width: ${({ ratio }) => Math.max(0, Math.min(1, ratio)) * 100}%;
   background: ${({ ratio }) =>
     ratio > 0.3
-      ? "linear-gradient(180deg, #e05055 0%, #a3242a 100%)"
-      : "linear-gradient(180deg, #ff8a3d 0%, #c8383c 100%)"};
+      ? `linear-gradient(180deg, #ff9297 0%, #e05055 28%, #a3242a 70%, #5e1216 100%)`
+      : `linear-gradient(180deg, #ffc48a 0%, #ff8a3d 30%, #c8383c 72%, #6e1c14 100%)`};
   transition: width 0.18s ease;
+
+  /* 게이지 표면을 지나는 은은한 광택 — 단색 띠보다 액체처럼 차 있어 보인다. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.18) 45%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
 `;
 
-/** 체력바 위를 지나는 눈금. 남은 칸 수를 셀 수 있어야 위험한 순간이 읽힌다. */
-const HealthTicks = styled.div`
+/** 사망·포기 직후의 검은 결과창. 일시정지 메뉴와 같은 톤(중앙 붉은 그라데이션)을 쓴다. */
+const RespawnScreen = styled.div`
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0) 0 24px,
-    rgba(0, 0, 0, 0.55) 24px 26px
-  );
+  z-index: ${theme.z.prompt};
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(90% 70% at 50% 0%, rgba(112, 34, 35, 0.35) 0%, rgba(6, 5, 6, 0) 72%),
+    rgba(3, 2, 3, 0.94);
+`;
+
+const RespawnPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  font-family: ${theme.font.ui};
+  color: #fff;
+
+  h1 {
+    margin: 0;
+    font-weight: 200;
+    font-size: 40px;
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+    color: #e05055;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 8px 22px;
+    margin: 10px 0 0;
+    font-weight: 300;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+  }
+
+  dt {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  p {
+    margin: 22px 0 0;
+    font-family: ${theme.font.mono};
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.4);
+  }
 `;
 
 const StatusRow = styled.div`
@@ -151,6 +240,46 @@ const HpText = styled.span`
   color: rgba(255, 255, 255, 0.72);
 `;
 
+/** 남은 탄. 총 모드에서만 보인다 — 탄피 모양 칸이 쏠 때마다 꺼진다. */
+const AmmoRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 3px;
+`;
+
+const AmmoPip = styled.span<{ spent: boolean }>`
+  width: 5px;
+  height: 13px;
+  border-radius: 1px;
+  background: ${({ spent }) =>
+    spent
+      ? "rgba(255, 255, 255, 0.12)"
+      : "linear-gradient(180deg, #ffe2b8 0%, #e0965a 100%)"};
+  box-shadow: ${({ spent }) => (spent ? "none" : "0 0 5px rgba(255, 190, 120, 0.5)")};
+  transition: background 0.1s, box-shadow 0.1s;
+`;
+
+/** 그림자 조각 잔액. 적을 잡을 때마다 오르는 게 보여야 모으는 재미가 산다. */
+const ShardTag = styled.span`
+  color: #c9a8ff;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+`;
+
+const reloadBlink = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+`;
+
+const ReloadTag = styled.span`
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: #ffd9a8;
+  animation: ${reloadBlink} 0.45s ease-in-out infinite;
+`;
+
 export default function HUDOverlay() {
   const [phase, setPhase] = useState<GamePhase>("BOOT");
   const [hud, setHud] = useState<HudState | null>(null);
@@ -162,6 +291,12 @@ export default function HUDOverlay() {
   const [result, setResult] = useState<RunResult | null>(null);
   const [bossWeights, setBossWeights] = useState<BossPatternWeights>(DEFAULT_BOSS_WEIGHTS);
   const [activePanel, setActivePanel] = useState<ActivePanel>("none");
+  /** 마을 그림자 상인의 이번 거래 내용. `shop:open`으로 채워진다. */
+  const [shop, setShop] = useState<{
+    choices: UpgradeDefinition[];
+    shards: number;
+    price: number;
+  } | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
   /** Esc로 연 일시정지 메뉴. 열려 있는 동안 전투 씬은 멈춰 있다. */
   const [paused, setPaused] = useState(false);
@@ -171,7 +306,20 @@ export default function HUDOverlay() {
    * 두 값을 나눈 이유는 로딩 화면이 "떠 있는가"와 "걷혀도 되는가"가 다른 시점이기 때문이다.
    */
   const [roomLoading, setRoomLoading] = useState(false);
+
+  /**
+   * 방 1 진입 시 뜨는 기록자 대화창.
+   * `CombatScene`이 방 1에서는 스스로를 멈춰 두므로, 여기서 열지 말지만 정하면 된다.
+   * 이미 봤으면 열지 않고 곧바로 씬을 풀어 준다.
+   */
+  const [dialogueOpen, setDialogueOpen] = useState(false);
   const [roomReady, setRoomReady] = useState(false);
+
+  /** 사망·포기 직후 뜨는 이번 시도 요약. 닫으면 튜토리얼 부활이 이어진다. */
+  const [respawnSummary, setRespawnSummary] = useState<{
+    survivedMs: number;
+    kills: number;
+  } | null>(null);
 
   /** 시작 화면 에셋 프리로드 완료 여부. 로딩 화면이 걷히기 시작할 때 켠다. */
   const [assetsReady, setAssetsReady] = useState(false);
@@ -207,8 +355,10 @@ export default function HUDOverlay() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNeedsFirstVisit(!hasVisitedBefore());
     setAudio(loadAudioSettings());
-    if (process.env.NODE_ENV !== "production") {
-      setFastStart(new URLSearchParams(window.location.search).has("fast"));
+    // `?boss=1`은 배포본에서도 켠다 — 심사·시연 때 보스전만 바로 보여줄 수 있어야 한다.
+    // 어느 쪽이든 시작 화면과 프롤로그만 건너뛸 뿐, 밸런스에는 관여하지 않는다.
+    if (process.env.NODE_ENV !== "production" || debugFlag("boss")) {
+      setFastStart(debugFlag("fast") || debugFlag("boss"));
     }
     // 씬이 만들어지기 전에 바인딩을 올려둬야 첫 방부터 바뀐 키가 먹는다.
     loadKeyBindings();
@@ -222,6 +372,7 @@ export default function HUDOverlay() {
   const changeAudio = useCallback((next: AudioSettings) => {
     setAudio(next);
     saveAudioSettings(next);
+    emitGameEvent("audio:change", next);
   }, []);
 
   const confirmFirstVisit = useCallback(() => setNeedsFirstVisit(false), []);
@@ -229,11 +380,15 @@ export default function HUDOverlay() {
   useGameEvent("phase:change", ({ phase: next }) => setPhase(next));
   useGameEvent("hud:update", ({ hud: next }) => setHud(next));
 
-  useGameEvent("room:start", ({ roomId: next }) => {
+  useGameEvent("room:start", ({ roomId: next, showIntro }) => {
     setRoomId(next);
     setActivePanel("none");
     // 다음 방이 실제로 시작됐다. 이제 로딩을 걷어도 아래가 비지 않는다.
     setRoomReady(true);
+
+    // 방 1 기록자 대화창. 새 런의 첫 진입에만 연다 — 사망·포기 복귀에는 씬도
+    // 멈추지 않고(RunState.skipTutorialIntro) 대화창도 열지 않는다.
+    if (showIntro) setDialogueOpen(true);
   });
 
   useGameEvent("room:clear", ({ telemetry: next }) => setTelemetry(next));
@@ -260,6 +415,13 @@ export default function HUDOverlay() {
     setActivePanel("result");
   });
 
+  useGameEvent("respawn:summary", (summary) => setRespawnSummary(summary));
+
+  useGameEvent("shop:open", (offer) => {
+    setShop(offer);
+    setActivePanel("shop");
+  });
+
   // F1 디버그 토글. 브라우저 기본 도움말이 뜨지 않도록 막는다.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -280,7 +442,15 @@ export default function HUDOverlay() {
    */
   useEffect(() => {
     const pausable = phase === "COMBAT" || phase === "BOSS";
-    if (!pausable || activePanel !== "none" || transition !== "none" || roomLoading) return;
+    if (
+      !pausable ||
+      activePanel !== "none" ||
+      transition !== "none" ||
+      roomLoading ||
+      dialogueOpen ||
+      respawnSummary !== null
+    )
+      return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -292,7 +462,57 @@ export default function HUDOverlay() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePanel, phase, roomLoading, transition]);
+  }, [activePanel, dialogueOpen, phase, respawnSummary, roomLoading, transition]);
+
+  /**
+   * E 상태창(가진 것). ESC 일시정지와 같은 조건에서 열리지만 별도 상태다 —
+   * 아티팩트만 빠르게 확인할 땐 정지 메뉴까지 띄우지 않아도 되게 한다.
+   */
+  useEffect(() => {
+    const pausable = phase === "COMBAT" || phase === "BOSS";
+    const isStatusOpen = activePanel === "status";
+    if (
+      !pausable ||
+      paused ||
+      transition !== "none" ||
+      roomLoading ||
+      dialogueOpen ||
+      respawnSummary !== null ||
+      (activePanel !== "none" && !isStatusOpen)
+    )
+      return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "e" && event.key !== "E") return;
+      event.preventDefault();
+      if (isStatusOpen) {
+        setActivePanel("none");
+        emitGameEvent("game:resume", {});
+      } else {
+        setActivePanel("status");
+        emitGameEvent("game:pause", {});
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePanel, dialogueOpen, paused, phase, respawnSummary, roomLoading, transition]);
+
+  /** 사망 결과창. Enter로 닫으면 튜토리얼 부활이 이어진다. */
+  const dismissRespawnSummary = useCallback(() => {
+    setRespawnSummary(null);
+    emitGameEvent("ui:continue", {});
+  }, []);
+
+  useEffect(() => {
+    if (!respawnSummary) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      dismissRespawnSummary();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dismissRespawnSummary, respawnSummary]);
 
   /**
    * READY가 되면 바로 넘긴다.
@@ -340,6 +560,7 @@ export default function HUDOverlay() {
     // 방 전환 도중에 죽거나 나가면 흰 로딩이 그대로 남는다.
     setRoomLoading(false);
     setRoomReady(false);
+    setDialogueOpen(false);
   }, []);
 
   const restartRun = useCallback(() => {
@@ -359,6 +580,15 @@ export default function HUDOverlay() {
     setTransition("none");
     emitGameEvent("run:abort", {});
   }, [clearRunState]);
+
+  /** 포기하기. 사망과 같은 흐름 — 런을 유지한 채 튜토리얼 마을로 되돌아간다. */
+  const giveUpRun = useCallback(() => {
+    setPaused(false);
+    setActivePanel("none");
+    // 메뉴가 씬을 멈춰 뒀다. 먼저 풀어야 전환 연출(트윈)이 돌아간다.
+    emitGameEvent("game:resume", {});
+    emitGameEvent("run:giveup", {});
+  }, []);
 
   // 전투 중에만 HUD를 띄운다. 시작 화면과 결과 화면에 이전 런의 값이 남으면 안 된다.
   const inCombat = phase === "COMBAT" || phase === "BOSS";
@@ -400,6 +630,19 @@ export default function HUDOverlay() {
       {transition === "prologue" && <PrologueText onDone={endTransition} />}
 
       {/*
+        방 1 진입 시 뜨는 기록자 대화창. 씬은 이미 멈춰 있다(CombatScene 자체 일시정지).
+        대화가 끝나야 씬을 풀어 준다. 재방문 여부는 기록하지 않는다 — 매번 새로 튼다.
+      */}
+      {dialogueOpen && (
+        <DialogueBox
+          onDone={() => {
+            setDialogueOpen(false);
+            emitGameEvent("game:resume", {});
+          }}
+        />
+      )}
+
+      {/*
         방 사이 로딩. 강화를 고른 순간부터 다음 방이 시작될 때까지 덮는다.
         직전 판정을 한 줄로 다시 보여 주는 자리이기도 하다.
         씬 재시작이 한 프레임에 끝나 화면이 툭 바뀌던 것을 이걸로 이어 준다.
@@ -417,10 +660,14 @@ export default function HUDOverlay() {
       {showCombatHud && (
         <CombatHud>
           <HealthBar>
-            {/* 흰 층이 먼저 남고 붉은 층이 앞서 줄어든다. 순서가 바뀌면 깎인 양이 안 보인다. */}
-            <HealthGhost ratio={hud.hp / hud.maxHp} />
-            <HealthFill ratio={hud.hp / hud.maxHp} />
-            <HealthTicks />
+            <HealthWindow>
+              {/* 흰 층이 먼저 남고 붉은 층이 앞서 줄어든다. 순서가 바뀌면 깎인 양이 안 보인다. */}
+              <HealthGhost ratio={hud.hp / hud.maxHp} />
+              <HealthFill ratio={hud.hp / hud.maxHp} />
+            </HealthWindow>
+            {/* 정적 내보내기라 next/image 최적화가 안 붙는다. 픽셀아트 프레임 한 장이라 img로 충분하다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={assetPath("ui/hp-frame.png")} alt="" />
           </HealthBar>
 
           <StatusRow>
@@ -428,16 +675,37 @@ export default function HUDOverlay() {
             <HpText>
               {hud.hp} / {hud.maxHp}
             </HpText>
-            {phase === "BOSS" ? (
-              <span>BOSS</span>
-            ) : (
-              <>
-                <span>ROOM {hud.roomIndex}</span>
-                <span>남은 적 {hud.enemiesRemaining}</span>
-              </>
-            )}
+            <ShardTag>◆ {hud.shards}</ShardTag>
+            {hud.mode === "RANGED" &&
+              (hud.reloading ? (
+                <ReloadTag>재장전</ReloadTag>
+              ) : (
+                <AmmoRow>
+                  {Array.from({ length: hud.magazineSize }, (_, i) => (
+                    <AmmoPip key={i} spent={i >= hud.ammo} />
+                  ))}
+                </AmmoRow>
+              ))}
           </StatusRow>
         </CombatHud>
+      )}
+
+      {respawnSummary && (
+        <RespawnScreen onPointerDown={dismissRespawnSummary}>
+          <RespawnPanel>
+            <h1>쓰러졌다</h1>
+            <dl>
+              <dt>생존 시간</dt>
+              <dd>
+                {Math.floor(respawnSummary.survivedMs / 60000)}분{" "}
+                {Math.floor((respawnSummary.survivedMs % 60000) / 1000)}초
+              </dd>
+              <dt>처치한 적</dt>
+              <dd>{respawnSummary.kills}</dd>
+            </dl>
+            <p>ENTER — 마을에서 다시 일어난다</p>
+          </RespawnPanel>
+        </RespawnScreen>
       )}
 
       {paused && (
@@ -445,6 +713,7 @@ export default function HUDOverlay() {
           audio={audio}
           onAudioChange={changeAudio}
           onResume={resumeGame}
+          onGiveUp={giveUpRun}
           onExit={exitToTitle}
         />
       )}
@@ -487,6 +756,27 @@ export default function HUDOverlay() {
 
       {activePanel === "result" && result && (
         <ResultPanel result={result} onRestart={restartRun} />
+      )}
+
+      {activePanel === "status" && hud && <StatusPanel hud={hud} />}
+
+      {activePanel === "shop" && shop && (
+        <ShopPanel
+          choices={shop.choices}
+          shards={shop.shards}
+          price={shop.price}
+          onBuy={(upgradeId) => {
+            emitGameEvent("shop:buy", { upgradeId });
+            setActivePanel("none");
+            setShop(null);
+            emitGameEvent("game:resume", {});
+          }}
+          onClose={() => {
+            setActivePanel("none");
+            setShop(null);
+            emitGameEvent("game:resume", {});
+          }}
+        />
       )}
     </Layer>
   );

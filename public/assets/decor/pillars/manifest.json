@@ -1,0 +1,98 @@
+[
+  {
+    "file": "pillar_01.png",
+    "region": "pillar",
+    "w": 251,
+    "h": 716
+  },
+  {
+    "file": "pillar_02.png",
+    "region": "pillar",
+    "w": 20,
+    "h": 718
+  },
+  {
+    "file": "pillar_03.png",
+    "region": "pillar",
+    "w": 100,
+    "h": 228
+  },
+  {
+    "file": "pillar_04.png",
+    "region": "pillar",
+    "w": 97,
+    "h": 479
+  },
+  {
+    "file": "pillar_05.png",
+    "region": "pillar",
+    "w": 107,
+    "h": 226
+  },
+  {
+    "file": "pillar_06.png",
+    "region": "pillar",
+    "w": 95,
+    "h": 480
+  },
+  {
+    "file": "pillar_07.png",
+    "region": "pillar",
+    "w": 19,
+    "h": 718
+  },
+  {
+    "file": "pillar_08.png",
+    "region": "pillar",
+    "w": 238,
+    "h": 496
+  },
+  {
+    "file": "pillar_09.png",
+    "region": "pillar",
+    "w": 97,
+    "h": 243
+  },
+  {
+    "file": "pillar_10.png",
+    "region": "pillar",
+    "w": 114,
+    "h": 340
+  },
+  {
+    "file": "pillar_11.png",
+    "region": "pillar",
+    "w": 94,
+    "h": 130
+  },
+  {
+    "file": "pillar_12.png",
+    "region": "pillar",
+    "w": 20,
+    "h": 718
+  },
+  {
+    "file": "pillar_13.png",
+    "region": "pillar",
+    "w": 197,
+    "h": 222
+  },
+  {
+    "file": "pillar_14.png",
+    "region": "pillar",
+    "w": 93,
+    "h": 480
+  },
+  {
+    "file": "pillar_15.png",
+    "region": "pillar",
+    "w": 99,
+    "h": 481
+  },
+  {
+    "file": "pillar_16.png",
+    "region": "pillar",
+    "w": 89,
+    "h": 176
+  }
+]

@@ -132,6 +132,9 @@ export class MobilityCounterEnemy extends BaseEnemy {
     blast.setDisplaySize(HAZARD_WIDTH, HAZARD_HEIGHT);
     blast.setTint(SILHOUETTE.hazard);
     blast.setData("damage", HAZARD.damage);
+    // 패링 반사용. 이미 죽은 뒤 터지는 함정일 수도 있는데, 그건 BaseEnemy.takeDamage가
+    // defeated 가드로 알아서 무시한다.
+    blast.setData("source", this);
 
     this.scene.tweens.add({
       targets: blast,

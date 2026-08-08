@@ -10,6 +10,8 @@
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
+import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
+import { TUNING } from "../entities/Player";
 import type {
   BossPattern,
   BossPatternWeights,
@@ -52,6 +54,17 @@ export class RunState {
   hp: number = PLAYER.maxHp;
   maxHp: number = PLAYER.maxHp;
 
+  /** 사망·포기로 튜토리얼에 되돌아온 상태인지. true면 방 1 기록자 대화창을 건너뛴다. */
+  skipTutorialIntro = false;
+
+  /** 그림자 조각. 적 처치로 모아 마을 상인에게 쓴다 — selectedUpgrades처럼 부활해도 유지된다. */
+  shards = 0;
+
+  /** 이번 시도(런 시작 또는 마지막 부활 이후)에 처치한 적 수. 사망 결과창에 쓴다. */
+  kills = 0;
+  /** 이번 시도가 시작된 시각. 사망 결과창의 생존 시간 계산 기준. */
+  private attemptStartedAtMs = 0;
+
   private rooms: RoomRecord[] = [];
   private runStartedAtMs = 0;
   private runEndedAtMs = 0;
@@ -72,12 +85,60 @@ export class RunState {
     this.hp = PLAYER.maxHp;
     this.maxHp = PLAYER.maxHp;
     this.rooms = [];
+    this.skipTutorialIntro = false;
+    this.shards = 0;
+    this.kills = 0;
+    this.attemptStartedAtMs = nowMs;
     this.runStartedAtMs = nowMs;
     this.runEndedAtMs = 0;
 
     // 필드를 모두 비운 뒤에 알린다. 직접 대입하면 setPhase의 중복 가드에 걸려
     // `phase:change`가 발행되지 않고, React 레이어가 READY 화면을 띄우지 못한다.
     this.setPhase("READY");
+  }
+
+  /**
+   * 사망 시 런을 끝내지 않고 튜토리얼 방으로 되돌린다. (게임 루프 변경 — 사용자 확정)
+   * 강화(`selectedUpgrades`)와 `maxHp`는 그대로 둔다 — 그게 "런을 유지한다"는 뜻이다.
+   * 그 외 방 진행·텔레메트리·분석·보스 가중치는 `reset()`과 동일하게 되돌려야
+   * 방 1부터 다시 겪을 때 이전 시도의 기록과 섞이지 않는다.
+   */
+  respawnAtTutorial(nowMs: number): void {
+    this.roomIndex = 0;
+    this.currentRoomId = "";
+    this.currentTelemetry = null;
+    this.previousTelemetry = null;
+    this.predictedStyle = null;
+    this.counterRoomId = null;
+    this.latestAnalysis = null;
+    this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
+    this.bossPatternUsage = emptyPatternUsage();
+    this.deception = null;
+    this.rooms = [];
+    this.hp = this.maxHp;
+    this.skipTutorialIntro = true;
+    this.kills = 0;
+    this.attemptStartedAtMs = nowMs;
+  }
+
+  recordKill(): void {
+    this.kills += 1;
+  }
+
+  addShards(amount: number): void {
+    this.shards += amount;
+  }
+
+  /** 잔액이 모자라면 아무것도 하지 않고 false. 구매 검증의 유일한 관문이다. */
+  spendShards(amount: number): boolean {
+    if (this.shards < amount) return false;
+    this.shards -= amount;
+    return true;
+  }
+
+  /** 이번 시도의 생존 시간. 사망 결과창에 쓴다. */
+  attemptDurationMs(nowMs: number): number {
+    return Math.max(0, nowMs - this.attemptStartedAtMs);
   }
 
   setPhase(phase: GamePhase): void {
@@ -89,7 +150,11 @@ export class RunState {
   beginRoom(roomId: RoomId): void {
     this.roomIndex += 1;
     this.currentRoomId = roomId;
-    eventBus.emit("room:start", { roomIndex: this.roomIndex, roomId });
+    eventBus.emit("room:start", {
+      roomIndex: this.roomIndex,
+      roomId,
+      showIntro: roomId === FIXED_ROOM_SEQUENCE[0] && !this.skipTutorialIntro,
+    });
   }
 
   /** 방 클리어 기록. 같은 방에 두 번 호출되면 무시한다. (MVP_PLAN §12 중복 이벤트 대응) */
@@ -104,6 +169,8 @@ export class RunState {
     });
     this.previousTelemetry = this.currentTelemetry;
     this.currentTelemetry = telemetry;
+
+    if (this.selectedUpgrades.includes("HEALTH_REGEN")) this.heal(TUNING.upgrade.healthRegenAmount);
 
     eventBus.emit("room:clear", { roomIndex: this.roomIndex, telemetry });
     return true;
@@ -123,6 +190,11 @@ export class RunState {
   addUpgrade(upgradeId: UpgradeId): void {
     if (this.selectedUpgrades.includes(upgradeId)) return;
     this.selectedUpgrades.push(upgradeId);
+
+    if (upgradeId === "HEALTH_MAX_UP") {
+      this.maxHp += TUNING.upgrade.healthMaxBonus;
+      this.heal(TUNING.upgrade.healthMaxBonus);
+    }
   }
 
   setBossWeights(weights: BossPatternWeights): void {
@@ -173,3 +245,9 @@ export class RunState {
 
 /** 런타임 전역 인스턴스. 게임을 파괴하고 다시 만들 때도 같은 객체를 reset해서 쓴다. */
 export const runState = new RunState();
+
+// 개발용: 브라우저 콘솔에서 `runState.addUpgrade("MELEE_FIRE_EDGE")`처럼 강화를 즉시
+// 부여해 테스트할 수 있게 한다. 프로덕션 빌드에는 포함하지 않는다.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+  (window as unknown as { runState: RunState }).runState = runState;
+}

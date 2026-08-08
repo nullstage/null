@@ -26,7 +26,12 @@ import type {
 export interface GameEventMap {
   /** Phaser → React */
   "phase:change": { phase: GamePhase };
-  "room:start": { roomIndex: number; roomId: RoomId };
+  "room:start": {
+    roomIndex: number;
+    roomId: RoomId;
+    /** 방 1 기록자 대화창을 열지. 새 런의 첫 진입만 true — 사망·포기 복귀에는 안 연다. */
+    showIntro: boolean;
+  };
   "room:clear": { roomIndex: number; telemetry: CombatTelemetry };
   "analysis:ready": { analysis: DirectorAnalysis };
   "upgrade:offer": { choices: UpgradeDefinition[] };
@@ -34,9 +39,15 @@ export interface GameEventMap {
   "boss:weights": { weights: BossPatternWeights };
   "hud:update": { hud: HudState };
   "run:result": { result: RunResult };
+  /** 사망·포기 직후 검은 결과창에 띄울 이번 시도 요약. `ui:continue`로 닫는다. */
+  "respawn:summary": { survivedMs: number; kills: number };
+  /** 마을 그림자 상인과의 거래 시작. 씬은 이걸 쏘고 스스로 멈춘다(대화창과 같은 문법). */
+  "shop:open": { choices: UpgradeDefinition[]; shards: number; price: number };
 
   /** React → Phaser */
   "upgrade:select": { upgradeId: UpgradeId };
+  /** 상점 구매. 검증(잔액)은 Phaser 쪽이 한다 — React는 표시만 담당한다. */
+  "shop:buy": { upgradeId: UpgradeId };
   "ui:continue": Record<string, never>;
   "run:restart": Record<string, never>;
   /** 일시정지 메뉴가 열리고 닫힐 때. 전투 씬의 시간을 멈췄다 되돌린다. */
@@ -44,6 +55,11 @@ export interface GameEventMap {
   "game:resume": Record<string, never>;
   /** 일시정지 메뉴의 나가기. 진행 중인 런을 버리고 시작 화면으로 돌아간다. */
   "run:abort": Record<string, never>;
+  /** 일시정지 메뉴의 포기하기. 사망과 같은 흐름 — 튜토리얼 방으로 되돌아간다. */
+  "run:giveup": Record<string, never>;
+  /** 설정 패널에서 소리 값을 바꿀 때. Phaser 내장 사운드(BGM·발소리 루프)는 재생 시점에
+   * 볼륨을 한 번만 읽어 두므로, 재생 중인 소리는 이 이벤트로 갱신해야 한다. */
+  "audio:change": { master: number; bgm: number; sfx: number };
 
   /** 양방향 */
   "debug:toggle": { visible: boolean };
