@@ -719,6 +719,124 @@
 
 ---
 
+## 2026-08-08
+
+> 이 날짜의 오디오/스프라이트/전투 피드백 작업 다수가 회고적으로 기록됐다(세션 압축으로
+> 인해 상세 diff 없이 요약만 남아 있음). 아래는 실제 완료된 작업의 개요이며, 오디오·
+> 스프라이트 통합 건은 재검증 없이 앞선 세션 요약을 근거로 기록했다.
+
+### 오디오 시스템 통합 (Phaser 네이티브 사운드) + BGM 정지 후 재생 불가 버그 수정
+
+- 상태: DONE
+
+#### 작업
+- 검격 3종·총성·탄피·패링·발소리·전투/마을 BGM 등 9개 오디오 파일을 Phaser 사운드로 연결(`systems/audio.ts`).
+- 볼륨은 `settingsStore`(localStorage)를 직접 읽고, `EventBus`의 `audio:change` 이벤트로 재생 중인 루프 사운드에도 실시간 반영.
+
+#### 오류 및 원인
+- 증상: BGM을 한 번이라도 멈추면 이후 다시는 재생되지 않음.
+- 원인: `scene.sound.get(key)`가 정지된 사운드 인스턴스를 `.destroy()`하지 않는 한 계속 돌려줌 — "이미 재생 중" 가드가 정지 상태도 재생 중으로 오판.
+- 수정: 가드를 `.isPlaying` 기준으로, 정지 로직은 `.stop()` 대신 `.destroy()`로 변경.
+
+#### 검증
+- `npm run build` 통과. 실플레이 확인은 세션 요약 근거(직접 재검증 안 함).
+
+---
+
+### 적 스프라이트·보스 스프라이트 통합, 플레이어 인트로 애니메이션
+
+- 상태: DONE
+
+#### 작업
+- 사용자 제공 적1(원거리)·적2(근거리) 스프라이트시트를 `ChaserEnemy`/`RangedEnemy`에 적용.
+- 참고 이미지 1장뿐인 보스를 위해 AI로 10포즈(대기+4패턴×예고/타격+피격) 스프라이트시트를 생성(`codex exec` 직접 호출 + numpy 마젠타 배경 제거로 프레임 추출). `Boss.ts`에 `setPose`/`strikePose`로 포즈 전환 배선.
+- 크로스 프레임 기반 플레이어 인트로 애니메이션 생성, `BootScene`에 등록, `CombatScene`이 방 1 최초 진입 시 재생.
+- `?boss=1` 쿼리로 보스전 직행 테스트 경로 추가(`debugFlag`).
+
+#### 검증
+- `npm run build` 통과. 실플레이 확인은 세션 요약 근거.
+
+---
+
+### 체력바 UI 교체, 장식-적 레이어 순서·대시 접지 버그 수정
+
+- 상태: DONE
+
+#### 작업
+- 체력바 프레임 에셋을 `체력바.png`로 교체, 게이지 창 위치를 numpy로 재측정해 `HUDOverlay.tsx` CSS에 반영.
+- `DEPTH` 상수(`types/combat.ts`) 도입, `BaseEnemy.spawnBody()`에 `DEPTH.enemy` 명시 — 적이 depth 기본값(0)이라 장식(depth 2)에 가리던 문제 수정. 전투방 장식은 `addDecor(..., recede: true)`로 블러·톤다운.
+
+#### 오류 및 원인
+- 증상: 가끔 대시 중 캐릭터가 바닥으로 꺼짐.
+- 원인: Phaser `Body.preUpdate()`가 매 프레임 `scaleY` 기준으로 충돌 박스를 재계산하는데, 지상 대시가 `setAllowGravity(false)`로 중력을 끄면서 매 프레임 바닥 보정이 멈춤.
+- 수정: 지상 대시 중에도 중력은 켜 둔 채 `velocity.y`만 매 프레임 0으로 고정.
+
+#### 검증
+- `npm run build`, `npm run lint` 통과.
+
+---
+
+### 총(원거리) 타격감 강화 — 3연사 차등, 반동, 3타 접지 버그 근본 수정
+
+- 상태: DONE
+
+#### 작업
+- `muzzleFlash`/`beamLine`에 `power` 파라미터 추가, 샷마다 이펙트 세기·피치가 계단식으로 커지게 함.
+- 총 반동이 그 프레임에 바로 덮어써지던 문제를 멜리 런지용 `lungeUntilMs` 감쇠 구간을 재사용해 해결.
+
+#### 오류 및 원인
+- 증상: 강화된 3타(피니셔) 펀치 스케일 적용 시 캐릭터가 땅으로 꺼짐.
+- 원인: 위 대시 버그와 같은 뿌리 — 접지 상태에서 `scaleY`를 건드리는 스쿼시 트윈이 충돌 박스를 매 프레임 재계산시킴.
+- 수정: `Player.punch()`가 접지 중에는 `scaleY`를 1로 고정(`effectiveScaleY`), `scaleX`만 스쿼시. 멜리·원거리 공통 적용.
+
+#### 검증
+- `npm run build`, `npm run lint` 통과.
+
+---
+
+### 패링 시스템 (S키, 퍼펙트 시 딜 반사) — P-025, DEC-014, AI-007
+
+- 상태: DONE
+
+#### 작업
+- `Player.ts`: `PARRY` 액션(S키) 추가. 퍼펙트 판정창 160ms(무피해+반사), 이후 340ms까지 25% 경감 블록, 쿨타임 900ms.
+- `takeDamage()` 반환값을 `{ parried, perfect }`로 변경 — 씬이 반사 여부를 판단.
+- 전투방·보스전 양쪽 충돌 핸들러에 `if (result.perfect) source.takeDamage(damage)` 반사 배선. 모든 적 공격체(`ChaserEnemy`/`RangedEnemy`/`MobilityCounterEnemy`/`Boss`)에 `setData("source", this)` 추가.
+- `parryGuard`/`perfectParryBurst` VFX 신규 작성(`CombatVfx.ts`).
+
+#### 검증
+- `npm run build`, `npm run lint` 통과. 실플레이 미검증.
+
+#### 남은 작업
+- 실브라우저에서 퍼펙트 판정 타이밍 체감 확인 필요.
+
+---
+
+### 아티팩트 시스템 (공격/유틸/체력 스탯트리 + 속성 부가 효과) — P-026, DEC-014, AI-008
+
+- 상태: DONE
+- 관련 계획: P-026
+- 관련 결정: DEC-014
+- 관련 AI 로그: AI-008
+
+#### 작업
+- `types/game.ts`: `UpgradeId` 10종 추가(검 크기·화염날·검기, 총알 크기·냉기탄, 대시 쿨타임 감소·무적 보너스, 체력 최대치·재생·경감), `UpgradeCategory`에 `HEALTH` 추가, `UpgradeElement`(`FIRE`|`FROST`) 타입 신설.
+- `data/upgrades.ts`: 위 10종 정의 추가.
+- `Player.ts`: `TUNING`을 export해 씬에서 재사용 가능하게 함. 검기 발사체(`fireSwordWave`), 총알 크기·화염날·냉기탄 태깅, 대시 쿨타임/무적 보너스 적용.
+- `CombatScene.ts`/`BossScene.ts`: `applyElement(element, target)` 메서드 신설 — `FIRE`는 시간차 틱 데미지(`fireTickCount`회, `fireTickIntervalMs` 간격), `FROST`는 `target.applySlow(...)`로 이동속도 저하. 공격 판정에 실려온 `element` 데이터를 읽어 호출.
+- `BaseEnemy.ts`/`Boss.ts`: `speedMultiplier` 필드와 `applySlow(factor, durationMs)` 메서드 추가(잡몹·보스 동일 계약).
+- `RunState.ts`: `addUpgrade()`에서 `HEALTH_MAX_UP` 선택 시 `maxHp` 증가 + 즉시 회복, `completeRoom()`에서 `HEALTH_REGEN` 보유 시 방 클리어마다 소량 회복.
+- `CombatScene.ts`/`BossScene.ts`의 방 진입부에 `player.maxHp = runState.maxHp` 동기화 추가(기존에는 `hp`만 동기화되고 있었음).
+
+#### 검증
+- `npm run build`, `npm run lint` 통과.
+
+#### 남은 작업
+- 실브라우저에서 화염 틱뎀·냉기 슬로우 체감, 검기 발사체 궤적, HEALTH 계열 강화 3종 동작 확인.
+- `UpgradePanel.tsx`는 카테고리별 라벨 매핑이 없어(이름/설명만 렌더링) 별도 수정 불필요함을 확인.
+
+---
+
 ## 기록 템플릿
 
 ```md
