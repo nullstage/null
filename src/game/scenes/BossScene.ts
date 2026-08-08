@@ -20,7 +20,7 @@ import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
 import { attachHitFx, damageNumber, portalWipeOut, startBloodRain } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
-import { AUDIO, createArena, type CombatArena } from "../types/combat";
+import { AUDIO, createArena, TEXTURE, type CombatArena } from "../types/combat";
 import type { AttackMode, UpgradeElement } from "../types/game";
 
 export class BossScene extends Phaser.Scene {
@@ -47,7 +47,8 @@ export class BossScene extends Phaser.Scene {
     attachHitFx(this);
     this.telemetry.begin(this.time.now);
 
-    this.arena = createArena(this, VIEWPORT);
+    // 보스방도 맨바닥 도형이 아니라 전투방과 같은 돌바닥·폐허 배경을 깐다.
+    this.arena = createArena(this, VIEWPORT, TEXTURE.floorTileStone, TEXTURE.background, 87, 0x3a1c28);
     // 전투방과 같은 핏빛 비 — 보스전만 하늘이 맑으면 톤이 끊긴다.
     startBloodRain(this, VIEWPORT.width, this.arena.bounds.floorY);
 
@@ -77,6 +78,7 @@ export class BossScene extends Phaser.Scene {
       onDefeated: () => this.finish(true),
     });
     this.boss.spawn(VIEWPORT.width * 0.8, this.arena.bounds.floorY - 90);
+    this.runBossIntro();
 
     this.wireCollisions();
 
@@ -169,6 +171,76 @@ export class BossScene extends Phaser.Scene {
         });
       }
     }
+  }
+
+  /**
+   * 등장 연출. 레터박스가 닫히고 카메라가 보스에게 다가가며 이름이 떠오른다.
+   * 첫 패턴은 연출이 끝날 때까지 미루되, 조작은 막지 않는다 — 연출 중에도 거리를 벌릴 자유가 있다.
+   */
+  private runBossIntro(): void {
+    const cam = this.cameras.main;
+    cam.setBounds(0, 0, VIEWPORT.width, VIEWPORT.height);
+    const bossX = VIEWPORT.width * 0.8;
+
+    this.boss.holdPatterns(2600);
+
+    const barH = 64;
+    const top = this.add
+      .rectangle(0, 0, VIEWPORT.width, barH, 0x000000)
+      .setOrigin(0, 1)
+      .setScrollFactor(0)
+      .setDepth(950);
+    const bottom = this.add
+      .rectangle(0, VIEWPORT.height, VIEWPORT.width, barH, 0x000000)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(950);
+    this.tweens.add({ targets: top, y: barH, duration: 300, ease: "power2.out" });
+    this.tweens.add({ targets: bottom, y: VIEWPORT.height - barH, duration: 300, ease: "power2.out" });
+
+    cam.pan(bossX, VIEWPORT.height * 0.55, 700, "Sine.easeInOut");
+    cam.zoomTo(1.28, 700, "Sine.easeInOut");
+
+    const name = this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height * 0.24, "「 집 행 자 」", {
+        fontFamily: "'Pretendard', sans-serif",
+        fontSize: "44px",
+        fontStyle: "bold",
+        color: "#f3dfe3",
+        stroke: "#3d0a14",
+        strokeThickness: 6,
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(951)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: name,
+      alpha: 1,
+      y: VIEWPORT.height * 0.26,
+      delay: 500,
+      duration: 420,
+      ease: "power2.out",
+    });
+
+    this.time.delayedCall(1800, () => {
+      cam.pan(VIEWPORT.width / 2, VIEWPORT.height / 2, 600, "Sine.easeInOut");
+      cam.zoomTo(1, 600, "Sine.easeInOut");
+      this.tweens.add({ targets: name, alpha: 0, duration: 300 });
+      this.tweens.add({ targets: top, y: 0, duration: 400, ease: "power2.in" });
+      this.tweens.add({
+        targets: bottom,
+        y: VIEWPORT.height,
+        duration: 400,
+        ease: "power2.in",
+        onComplete: () => {
+          top.destroy();
+          bottom.destroy();
+          name.destroy();
+        },
+      });
+    });
   }
 
   private finish(cleared: boolean): void {

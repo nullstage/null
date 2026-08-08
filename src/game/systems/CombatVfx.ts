@@ -1140,7 +1140,7 @@ export const deathBurst = (scene: Phaser.Scene, x: number, y: number, color: num
  * 맞은 순간 물리를 아주 짧게 멈춘다. 이게 있으면 같은 피해량도 훨씬 무겁게 느껴진다.
  * 애니메이션과 트윈은 계속 돌게 둔다. 전부 멈추면 화면이 얼어붙은 것처럼 보인다.
  */
-export const hitStop = (scene: Phaser.Scene, durationMs = VFX.hitStopMs): void => {
+export const hitStop = (scene: Phaser.Scene, durationMs: number = VFX.hitStopMs): void => {
   const world = scene.physics.world;
   if (world.isPaused) return;
 
@@ -1267,6 +1267,187 @@ export const startBloodRain = (scene: Phaser.Scene, roomWidth: number, floorY: n
   };
 
   scene.time.addEvent({ delay: BLOOD_RAIN.spawnIntervalMs, loop: true, callback: spawnOne });
+};
+
+/**
+ * 보스 예고 구역. 주황 단색 사각형 대신 — 옅은 핏빛 바닥판 + 맥동하는 진홍 테두리
+ * + 모서리 꺾쇠 + 안에서 피어오르는 불티로 "위험한 자리"를 그린다.
+ * 끝나는 순간 흰 테두리가 한 번 번쩍이며 조여들어 "지금 터진다"를 알린다.
+ */
+export const bossTelegraphZone = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  durationMs: number,
+): void => {
+  const w = width / 2;
+  const h = height / 2;
+
+  const zone = scene.add.graphics({ x, y });
+  zone.setDepth(1);
+  zone.fillStyle(0x8a1220, 0.16);
+  zone.fillRect(-w, -h, width, height);
+  zone.lineStyle(2, 0xff3b4e, 0.85);
+  zone.strokeRect(-w, -h, width, height);
+  // 모서리 꺾쇠 — 테두리만으로는 "구역"이 약해 보인다. 표적 프레임처럼 조인다.
+  const c = Math.min(14, w, h);
+  zone.lineStyle(3, 0xffb199, 0.9);
+  for (const [sx, sy] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ] as const) {
+    zone.beginPath();
+    zone.moveTo(sx * w - sx * c, sy * h);
+    zone.lineTo(sx * w, sy * h);
+    zone.lineTo(sx * w, sy * h - sy * c);
+    zone.strokePath();
+  }
+
+  const pulse = scene.tweens.add({
+    targets: zone,
+    alpha: { from: 0.5, to: 1 },
+    duration: 150,
+    yoyo: true,
+    repeat: -1,
+  });
+
+  // 구역 안에서 피어오르는 불티 — 면을 채우지 않고도 "끓고 있다"가 보인다.
+  const embers = scene.time.addEvent({
+    delay: 90,
+    loop: true,
+    callback: () => {
+      const ember = scene.add.rectangle(
+        x + Phaser.Math.Between(Math.round(-w), Math.round(w)),
+        y + h,
+        2.5,
+        2.5,
+        0xff6a4e,
+        0.9,
+      );
+      ember.setDepth(1);
+      ember.setBlendMode(Phaser.BlendModes.ADD);
+      scene.tweens.add({
+        targets: ember,
+        y: y - h * 0.5,
+        alpha: 0,
+        duration: 420,
+        ease: "power1.out",
+        onComplete: () => ember.destroy(),
+      });
+    },
+  });
+
+  scene.time.delayedCall(durationMs, () => {
+    pulse.remove();
+    embers.remove();
+    zone.destroy();
+    const snap = scene.add.graphics({ x, y });
+    snap.setDepth(2);
+    snap.setBlendMode(Phaser.BlendModes.ADD);
+    snap.lineStyle(3, 0xffffff, 0.95);
+    snap.strokeRect(-w, -h, width, height);
+    scene.tweens.add({
+      targets: snap,
+      alpha: 0,
+      scaleX: 0.9,
+      scaleY: 0.9,
+      duration: 110,
+      onComplete: () => snap.destroy(),
+    });
+  });
+};
+
+/**
+ * 보스 충격파. 내려찍기 착지·포효 순간 — 납작하게 퍼지는 링 + 포물선을 그리며
+ * 튀는 돌 파편. 흙먼지(groundDust)는 호출부가 따로 얹는다.
+ */
+export const bossShockwave = (scene: Phaser.Scene, x: number, y: number, width: number): void => {
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.lineStyle(4, 0xff5a3c, 0.9);
+  ring.strokeEllipse(0, 0, 60, 18);
+  scene.tweens.add({
+    targets: ring,
+    scaleX: Math.max(2, width / 60),
+    scaleY: 2.2,
+    alpha: 0,
+    duration: 340,
+    ease: "power2.out",
+    onComplete: () => ring.destroy(),
+  });
+
+  for (let i = 0; i < 12; i += 1) {
+    const size = Phaser.Math.Between(3, 6);
+    const debris = scene.add.rectangle(x + Phaser.Math.Between(-26, 26), y, size, size, 0x6b5a55);
+    debris.setDepth(VFX.depth + 1);
+    debris.setAngle(Phaser.Math.Between(0, 360));
+
+    const startX = debris.x;
+    const drift = Phaser.Math.FloatBetween(-1, 1) * width * 0.45;
+    const peak = Phaser.Math.FloatBetween(40, 110);
+    const spin = Phaser.Math.FloatBetween(-0.25, 0.25);
+    const carrier = { t: 0 };
+    scene.tweens.add({
+      targets: carrier,
+      t: 1,
+      duration: Phaser.Math.Between(380, 560),
+      ease: "linear",
+      onUpdate: () => {
+        debris.x = startX + drift * carrier.t;
+        debris.y = y - peak * Math.sin(carrier.t * Math.PI);
+        debris.rotation += spin;
+        debris.setAlpha(1 - carrier.t * 0.7);
+      },
+      onComplete: () => debris.destroy(),
+    });
+  }
+};
+
+/**
+ * 보스 투사체의 그림. 판정체(빨간 사각형)는 투명하게 두고, 마젠타 구체와 꼬리가
+ * 투사체를 따라다닌다 — 잡몹 스팅어 궤적과 같은 폴링 방식.
+ */
+export const bossOrbTrail = (scene: Phaser.Scene, projectile: Phaser.GameObjects.Image): void => {
+  const graphics = scene.add.graphics();
+  graphics.setDepth(VFX.depth);
+  graphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  const history: { x: number; y: number }[] = [];
+  const event = scene.time.addEvent({
+    delay: 16,
+    loop: true,
+    callback: () => {
+      if (!projectile.active) {
+        event.remove(false);
+        scene.tweens.add({
+          targets: graphics,
+          alpha: 0,
+          duration: 100,
+          onComplete: () => graphics.destroy(),
+        });
+        return;
+      }
+
+      history.unshift({ x: projectile.x, y: projectile.y });
+      if (history.length > 8) history.pop();
+
+      graphics.clear();
+      history.forEach((point, i) => {
+        const t = i / history.length;
+        graphics.fillStyle(0xd9469a, (1 - t) * 0.45);
+        graphics.fillCircle(point.x, point.y, (1 - t) * 9 + 2);
+      });
+      graphics.fillStyle(0xff7ac8, 0.75);
+      graphics.fillCircle(projectile.x, projectile.y, 10);
+      graphics.fillStyle(0xffffff, 0.95);
+      graphics.fillCircle(projectile.x, projectile.y, 4.5);
+    },
+  });
 };
 
 /**

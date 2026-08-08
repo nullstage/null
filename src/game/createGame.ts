@@ -84,5 +84,12 @@ export const createGame = (parent: HTMLElement): Phaser.Game => {
   });
 
   wireLifecycle(game);
+
+  // 개발용: 콘솔에서 씬을 직접 조작해 테스트할 수 있게 한다(예: 보스전 즉시 진입).
+  // runState 노출과 같은 패턴이며 프로덕션 빌드에는 포함하지 않는다.
+  if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+    (window as unknown as { phaserGame: Phaser.Game }).phaserGame = game;
+  }
+
   return game;
 };

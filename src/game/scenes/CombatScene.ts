@@ -108,6 +108,16 @@ export class CombatScene extends Phaser.Scene {
     this.roomId = data.roomId ?? FIXED_ROOM_SEQUENCE[0];
     this.enemies = [];
     this.subscriptions = [];
+    // scene.restart는 인스턴스를 재사용한다 — 이전 방의 상인·방랑자 참조가 남으면
+    // 파괴된 스프라이트의 잔존 좌표에 대고 상호작용이 열린다(실제로 방 2에서 상점이 열렸다).
+    this.merchant = null;
+    this.merchantPrompt = null;
+    this.wanderer = null;
+    this.wandererPrompt = null;
+    this.shopChoices = [];
+    this.portal = null;
+    this.portalPrompt = null;
+    this.portalCallback = null;
   }
 
   create(): void {
