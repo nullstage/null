@@ -634,6 +634,13 @@ export const beamLine = (
   facing: 1 | -1,
   /** 총구에서 사거리 끝(벽 또는 최대 사거리)까지의 거리. */
   length: number,
+  /**
+   * 연사 단계에 따른 굵기 배율. 1이 기본. 매번 같은 두께로 그어지면 3연사가
+   * 다 똑같아 보인다 — 1·2발째는 가볍게, 마무리는 두껍게 갈라준다.
+   * 지속 시간은 건드리지 않는다 — 실제 발사 지연(BEAM_WINDUP_MS)과 묶여 있어서,
+   * 여기서 늘리면 총알이 나간 뒤에도 조준선이 안 꺼진 것처럼 보인다.
+   */
+  power = 1,
 ): void => {
   const { beam } = VFX;
   const graphics = scene.add.graphics();
@@ -644,9 +651,9 @@ export const beamLine = (
     graphics.clear();
     const right = current;
     // 흐릿한 바깥 겹 + 얇은 안쪽 심. 두 겹 다 옅어야 "레이저사이트"로 읽힌다 — 진하면 광선이 된다.
-    graphics.lineStyle(beam.thickness * beam.glowScale, beam.glow, beam.glowAlpha);
+    graphics.lineStyle(beam.thickness * beam.glowScale * power, beam.glow, beam.glowAlpha);
     graphics.lineBetween(0, 0, right, 0);
-    graphics.lineStyle(beam.thickness, beam.core, beam.coreAlpha);
+    graphics.lineStyle(beam.thickness * power, beam.core, beam.coreAlpha);
     graphics.lineBetween(0, 0, right, 0);
   };
 
@@ -698,6 +705,11 @@ export const muzzleFlash = (
   x: number,
   y: number,
   facing: 1 | -1,
+  /**
+   * 연사 단계에 따른 세기. 1이 기본, 2~3발째로 갈수록 키운다.
+   * 매번 같은 크기로 터지면 3연사인데 한 발처럼 밋밋하게 읽힌다.
+   */
+  power = 1,
 ): void => {
   const { muzzle } = VFX;
   const graphics = scene.add.graphics({ x, y });
@@ -705,24 +717,32 @@ export const muzzleFlash = (
   graphics.setBlendMode(Phaser.BlendModes.ADD);
 
   graphics.fillStyle(muzzle.spark, 0.9);
-  graphics.fillCircle(0, 0, muzzle.coreRadius * 1.6);
+  graphics.fillCircle(0, 0, muzzle.coreRadius * 1.6 * power);
   graphics.fillStyle(muzzle.core, 1);
-  graphics.fillCircle(0, 0, muzzle.coreRadius);
+  graphics.fillCircle(0, 0, muzzle.coreRadius * power);
 
   // 총구 방향(전방 반원)으로만 불꽃 가닥을 뻗는다. 뒤로 뻗으면 반동처럼 보여 어색하다.
+  // power가 클수록 가닥도 늘어난다 — 마무리 발이 더 터지는 느낌을 준다.
+  const rays = power > 1.2 ? muzzle.rays + 3 : muzzle.rays;
   graphics.lineStyle(2, muzzle.spark, 0.85);
-  for (let i = 0; i < muzzle.rays; i += 1) {
+  for (let i = 0; i < rays; i += 1) {
     const spread = Phaser.Math.FloatBetween(-0.5, 0.5);
-    const rayX = facing * muzzle.rayLength * (0.7 + Phaser.Math.FloatBetween(0, 0.4));
-    const rayY = spread * muzzle.rayLength * 0.5;
+    const rayX = facing * muzzle.rayLength * power * (0.7 + Phaser.Math.FloatBetween(0, 0.4));
+    const rayY = spread * muzzle.rayLength * power * 0.5;
     graphics.lineBetween(0, 0, rayX, rayY);
+  }
+
+  // 마무리 발만 얇은 충격 링을 한 번 더 얹는다 — 총구가 확실히 "쾅" 터지는 인상.
+  if (power > 1.2) {
+    graphics.lineStyle(1.5, muzzle.core, 0.7);
+    graphics.strokeCircle(0, 0, muzzle.coreRadius * 1.2);
   }
 
   scene.tweens.add({
     targets: graphics,
     alpha: 0,
-    scale: 1.4,
-    duration: muzzle.lifeMs,
+    scale: power > 1.2 ? 1.9 : 1.4,
+    duration: muzzle.lifeMs * (power > 1.2 ? 1.4 : 1),
     ease: "power2.out",
     onComplete: () => graphics.destroy(),
   });

@@ -63,6 +63,13 @@ const SPRITE_SCALE = 1.2;
 /** 기상 인트로 길이(ms). 4프레임 × 5fps = 800ms에 여유를 더한 값. */
 const INTRO_MS = 900;
 
+/**
+ * 연사 단계별 총 이펙트 세기. 검의 1·2·3타처럼 총도 단계마다 달라야 한다.
+ * 1·2발은 가볍게 흘리고, 마무리(3발째)만 확실히 크게 — 매번 똑같이 나가면
+ * "3연사"가 아니라 "같은 총알 세 번"으로 읽힌다는 지적을 반영했다.
+ */
+const RANGED_POWER_BY_STEP = [0.8, 1, 1.7] as const;
+
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
 const RANGED_MODE_TINT = 0xffc9d4;
 
@@ -765,10 +772,15 @@ export class Player {
     const originY = sprite.y;
     const facing = this.facing;
 
+    // 3연사 리듬을 이펙트로도 갈라준다 — 매번 같은 굵기로 나가면 검과 달리 총만
+    // 단발처럼 밋밋해 보인다는 지적. 1·2발은 가볍게, 마무리(3발째)는 확실히 크게.
+    const power = RANGED_POWER_BY_STEP[this.rangedStep - 1] ?? 1;
+    const isFinisher = this.rangedStep === 3;
+
     // 총구 섬광 없이 조준선만 먼저 보여준다. 이게 "찌잉" — 옅게 그어졌다가 밝아지며 곧 쏜다고 예고한다.
     const reachToWall = facing > 0 ? this.deps.arena.bounds.width - originX : originX;
     const reach = Math.min(reachToWall, this.beamReachToEnemy(originX, originY, facing));
-    beamLine(this.scene, originX, originY, facing, reach);
+    beamLine(this.scene, originX, originY, facing, reach, power);
 
     this.scene.time.delayedCall(BEAM_WINDUP_MS, () => {
       if (this.isDead) return;
@@ -799,17 +811,24 @@ export class Player {
       this.projectiles.push({ body: projectile, trail });
 
       // 예고가 끝나고 실제로 나가는 "팡" — 총구 섬광은 발사 순간에만 터진다.
-      muzzleFlash(this.scene, projectile.x, projectile.y, facing);
+      muzzleFlash(this.scene, projectile.x, projectile.y, facing, power);
       // 1·2발째는 피치를 올려 연사가 급해지는 느낌을 준다. 마무리(3발째)는 원래 피치로 무게를 싣는다.
       playSfx(this.scene, AUDIO.gunShot, { detune: this.rangedStep < 3 ? 400 : 0 });
       // 탄피 소리는 총성과 겹치지 않게 그 텀에 낸다.
       playSfx(this.scene, AUDIO.shellDrop, { delay: 180 });
 
-      // 반동으로 뒤로 조금 밀린다. 검과 총의 감각이 갈리는 지점이다.
+      // 반동으로 뒤로 밀린다 — 마무리 발은 더 세게 밀려야 무게가 실린다.
       const playerBody = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
-      playerBody?.setVelocityX(playerBody.velocity.x - facing * ranged.recoil);
+      playerBody?.setVelocityX(playerBody.velocity.x - facing * ranged.recoil * power);
 
-      this.punch(1 / TUNING.feedback.punchScale, TUNING.feedback.punchScale);
+      const punchScale = isFinisher
+        ? TUNING.feedback.punchScale * 1.4
+        : TUNING.feedback.punchScale;
+      this.punch(1 / punchScale, punchScale);
+      // 마무리 발만 화면이 살짝 흔들린다 — 검 3타(finisher)와 같은 급의 무게감.
+      if (isFinisher) {
+        this.scene.cameras.main.shake(70, 0.0035);
+      }
     });
 
     return true;
