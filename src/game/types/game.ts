@@ -178,4 +178,8 @@ export interface HudState {
   reloading: boolean;
   /** 그림자 조각 — 적 처치로 모으고 마을 상인에게 쓰는 런 화폐. */
   shards: number;
+  /** 액티브 스킬(Q)을 해금했는가(검기 아티팩트 보유). */
+  hasSkill: boolean;
+  /** 스킬이 지금 발동 가능한가(재사용 대기 끝). */
+  skillReady: boolean;
 }

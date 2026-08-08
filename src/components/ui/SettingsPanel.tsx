@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<GameAction, string> = {
   ATTACK: "공격",
   SWITCH_MODE: "모드 전환",
   PARRY: "패링",
+  SKILL: "스킬 (검기)",
   INTERACT: "상호작용",
   CONFIRM: "확인",
   TOGGLE_DEBUG: "디버그 패널",

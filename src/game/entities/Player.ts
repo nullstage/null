@@ -38,6 +38,7 @@ import {
   rangedSpark,
   slashArc,
   slashFlash,
+  spikeBurst,
   swordWaveTrail,
 } from "../systems/CombatVfx";
 import { playSfx, startFootsteps, stopFootsteps } from "../systems/audio";
@@ -219,8 +220,11 @@ export const TUNING = {
     /** 확장 탄창 — 탄창 최대치에 더한다. */
     magazineBonus: 3,
 
-    /** 검기 — 마무리 타격에 얹는 참격 투사체. */
+    /** 검기 — Q 스킬로 발동하는 참격 투사체. */
     swordWaveDamageMultiplier: 0.6,
+    /** 검기 스킬 재사용 대기시간과 스킬 보정(수동 발동이라 3타 자동보다 세다). */
+    swordWaveSkillCooldownMs: 4000,
+    swordWaveSkillDamageBonus: 1.5,
     swordWaveSpeed: 640,
     swordWaveWidth: 40,
     swordWaveHeight: 46,
@@ -301,6 +305,7 @@ const MOVE_ACTIONS = [
   "ATTACK",
   "SWITCH_MODE",
   "PARRY",
+  "SKILL",
 ] as const satisfies readonly GameAction[];
 
 type PlayerAction = (typeof MOVE_ACTIONS)[number];
@@ -378,6 +383,9 @@ export class Player {
 
   /** 공격으로 파고드는 중이면 이 시각까지 이동 입력이 속도를 덮지 않는다. */
   private lungeUntilMs = 0;
+
+  /** 액티브 스킬(Q)의 재사용 대기. 아티팩트를 갖고 있어야만 발동된다. */
+  private skillCooldownUntilMs = 0;
 
   /** 공격 애니메이션이 끝나는 시각. 그 전에는 다른 상태가 끼어들지 못한다. */
   private attackAnimUntilMs = 0;
@@ -551,6 +559,7 @@ export class Player {
     if (this.justPressed("ATTACK")) this.attack();
     if (this.justPressed("SWITCH_MODE")) this.switchMode();
     if (this.justPressed("PARRY")) this.parry();
+    if (this.justPressed("SKILL")) this.useSkill();
 
     if (this.parrying) {
       if (time >= this.parryEndsAtMs) this.endParry();
@@ -854,12 +863,52 @@ export class Player {
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
 
-    // 검기 — 마무리 타격에만 얹는다. 근접 사거리 밖의 적도 벨 수 있는 특수기술이다.
-    if (isFinisher && this.hasUpgrade("MELEE_SWORD_WAVE")) {
-      this.fireSwordWave(sprite, Math.round(damage * TUNING.upgrade.swordWaveDamageMultiplier));
-    }
+    // 검기는 이제 3타 자동 발동이 아니라 Q 액티브 스킬이다(useSkill). (사용자 결정)
 
     return true;
+  }
+
+  /**
+   * 액티브 스킬(Q) — 검기. MELEE_SWORD_WAVE 아티팩트를 가진 동안만 발동된다.
+   * 3타에 자동으로 얹히던 것을 "원할 때 쏘는 한 방"으로 옮겼다 — 증강이 아니라 스킬이다.
+   */
+  private useSkill(): void {
+    const sprite = this.sprite;
+    const now = this.scene.time.now;
+    if (!sprite || this.isDead || this.isDashing) return;
+    if (!this.hasUpgrade("MELEE_SWORD_WAVE")) return;
+    if (now < this.skillCooldownUntilMs) return;
+    this.skillCooldownUntilMs = now + TUNING.upgrade.swordWaveSkillCooldownMs;
+
+    // 그림부터 마무리 타격이어야 한다 — 3타 모션으로 크게 벤다.
+    this.comboStep = 0;
+    this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 3));
+    playSfx(this.scene, AUDIO.swordHit3);
+
+    const damage = Math.round(
+      TUNING.melee.damage *
+        TUNING.melee.finisherDamageMultiplier *
+        TUNING.upgrade.swordWaveDamageMultiplier *
+        TUNING.upgrade.swordWaveSkillDamageBonus,
+    );
+    this.fireSwordWave(sprite, damage);
+
+    // 발동의 "쾅" — 가시 폭발은 이런 스킬급 순간의 언어다. 검기와 같은 한랭 팔레트.
+    spikeBurst(this.scene, sprite.x + this.facing * 24, sprite.y, {
+      scale: 0.85,
+      spikes: 8,
+      dark: 0x141c33,
+      mid: 0x4d7dff,
+      bright: 0xcfeeff,
+    });
+    this.scene.cameras.main.shake(110, 0.006);
+    this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
+    this.emitHud();
+
+    // 쿨다운이 끝나는 순간 HUD 표시가 다시 밝아지게 한 번 더 알린다.
+    this.scene.time.delayedCall(TUNING.upgrade.swordWaveSkillCooldownMs, () => {
+      if (!this.isDead) this.emitHud();
+    });
   }
 
   /** 검기 투사체. 근접 판정과 별개로 `playerAttacks`에 들어가는 얇고 빠른 참격이다. */
@@ -1484,6 +1533,8 @@ export class Player {
         magazineSize: this.maxMagazineSize,
         reloading: this.scene.time.now < this.reloadingUntilMs,
         shards: this.deps.getShards(),
+        hasSkill: this.deps.upgrades.includes("MELEE_SWORD_WAVE"),
+        skillReady: this.scene.time.now >= this.skillCooldownUntilMs,
       },
     });
   }

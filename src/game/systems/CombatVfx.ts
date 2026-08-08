@@ -1052,16 +1052,8 @@ export const spikeBurst = (
 /** 적중 지점에서 튀는 도트 파편. 사각형만 써야 스프라이트와 같은 결로 보인다. */
 export const hitBurst = (scene: Phaser.Scene, x: number, y: number): void => {
   const { burst } = VFX;
-
-  // 스컬풍 가시 — 잔타격이라 작게, 섬광선 없이. 붉은 계열로 맞았다는 신호를 겸한다.
-  spikeBurst(scene, x, y, {
-    scale: 0.5,
-    spikes: 6,
-    dark: 0x2a0c18,
-    mid: 0xe0304a,
-    bright: 0xffb894,
-    slashLines: false,
-  });
+  // 잔타격은 원래의 섬광+링+파편을 유지한다 — 가시 폭발(spikeBurst)은 처치·패링·
+  // 스킬 발동 같은 "스킬급 순간"의 언어로 아껴 쓴다. (사용자 결정)
 
   // 링보다도 먼저, 아주 짧게 켜졌다 꺼지는 흰 섬광 — "팡" 하고 터지는 인상은
   // 파편이 아니라 이 한 프레임짜리 밝은 점에서 온다. 카메라 플래시처럼 순간적이어야 한다.

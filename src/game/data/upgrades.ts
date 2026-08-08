@@ -86,7 +86,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     id: "MELEE_SWORD_WAVE",
     category: "MELEE",
     name: "검기",
-    description: "마무리 타격(3타)에 참격을 함께 날려 멀리 있는 적도 벤다.",
+    description: "스킬 해금 — Q를 눌러 멀리 베는 참격을 날린다. 재사용 4초.",
   },
   RANGED_BULLET_SIZE_UP: {
     id: "RANGED_BULLET_SIZE_UP",

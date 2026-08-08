@@ -266,6 +266,16 @@ const ShardTag = styled.span`
   letter-spacing: 0.1em;
 `;
 
+/** 액티브 스킬(Q) 표시. 쿨다운 중에는 흐려져 "아직"이라는 게 한눈에 보인다. */
+const SkillTag = styled.span<{ ready: boolean }>`
+  padding: 2px 8px;
+  border: 1px solid ${({ ready }) => (ready ? "rgba(143, 215, 255, 0.7)" : "rgba(255, 255, 255, 0.15)")};
+  color: ${({ ready }) => (ready ? "#8fd7ff" : "rgba(255, 255, 255, 0.3)")};
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  transition: color 0.15s, border-color 0.15s;
+`;
+
 const reloadBlink = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -676,6 +686,7 @@ export default function HUDOverlay() {
               {hud.hp} / {hud.maxHp}
             </HpText>
             <ShardTag>◆ {hud.shards}</ShardTag>
+            {hud.hasSkill && <SkillTag ready={hud.skillReady}>Q 검기</SkillTag>}
             {hud.mode === "RANGED" &&
               (hud.reloading ? (
                 <ReloadTag>재장전</ReloadTag>
