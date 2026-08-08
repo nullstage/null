@@ -1039,7 +1039,7 @@ export const rangedSpark = (scene: Phaser.Scene, x: number, y: number, facing: 1
  * 조각마다 위로 뜨는 속도·좌우 흔들림(sin)·크기를 다르게 흔들어야 재처럼 보인다.
  */
 export const ashRise = (scene: Phaser.Scene, x: number, y: number, color: number): void => {
-  const count = 16;
+  const count = 20;
   for (let i = 0; i < count; i += 1) {
     const size = Phaser.Math.FloatBetween(2, 5);
     const flake = scene.add.rectangle(
@@ -1053,8 +1053,10 @@ export const ashRise = (scene: Phaser.Scene, x: number, y: number, color: number
     flake.setDepth(VFX.depth);
     flake.setAngle(Phaser.Math.Between(0, 360));
 
-    const rise = Phaser.Math.FloatBetween(50, 110);
-    const life = Phaser.Math.Between(500, 780);
+    // 너무 빨리 끝나 잘 안 보인다는 지적 — 수명을 두 배 가까이 늘려 재가 떠오르는
+    // 순간이 눈에 담기게 한다. 페이드는 수명 비율로 걸려 있어 같이 늘어난다.
+    const rise = Phaser.Math.FloatBetween(70, 150);
+    const life = Phaser.Math.Between(950, 1500);
     const swayAmp = Phaser.Math.FloatBetween(6, 16);
     const swayFreq = Phaser.Math.FloatBetween(2, 4);
     const startX = flake.x;
@@ -1210,6 +1212,64 @@ export const startAmbientParticles = (
 };
 
 /**
+ * 배경의 핏빛 비. 화면 위에서 비스듬히 떨어지는 가는 붉은 줄기들 — 분위기용이라
+ * 캐릭터·장식보다 뒤(depth 0)에서, 가산 없이 어둡고 옅게 내린다.
+ * 바닥에 닿으면 이따금 작게 튀는 물자국을 남긴다.
+ */
+const BLOOD_RAIN = {
+  color: 0xa01824,
+  spawnIntervalMs: 70,
+  lengthPx: { min: 10, max: 24 },
+  alpha: { min: 0.14, max: 0.34 },
+  fallMs: { min: 650, max: 1050 },
+  /** 낙하 동안 옆으로 흐르는 거리. 수직으로만 내리면 정지 화면처럼 심심하다. */
+  driftPx: -46,
+} as const;
+
+export const startBloodRain = (scene: Phaser.Scene, roomWidth: number, floorY: number): void => {
+  // 낙하 벡터에 맞춰 눕힌다 — 줄기가 떨어지는 방향과 어긋나면 붙여넣은 선으로 보인다.
+  // (세로 막대의 로컬 +y가 (−sinθ, cosθ)로 돌므로 drift 부호를 뒤집어야 방향이 맞는다)
+  const angle = Math.atan2(-BLOOD_RAIN.driftPx, floorY);
+
+  const spawnOne = () => {
+    const x = Phaser.Math.Between(0, roomWidth - BLOOD_RAIN.driftPx);
+    const length = Phaser.Math.FloatBetween(BLOOD_RAIN.lengthPx.min, BLOOD_RAIN.lengthPx.max);
+    const alpha = Phaser.Math.FloatBetween(BLOOD_RAIN.alpha.min, BLOOD_RAIN.alpha.max);
+    const startY = Phaser.Math.Between(-floorY, -20);
+
+    const drop = scene.add.rectangle(x, startY, 1.5, length, BLOOD_RAIN.color, alpha);
+    drop.setDepth(0);
+    drop.setRotation(angle);
+
+    const fallMs = Phaser.Math.Between(BLOOD_RAIN.fallMs.min, BLOOD_RAIN.fallMs.max);
+    scene.tweens.add({
+      targets: drop,
+      y: floorY,
+      x: x + BLOOD_RAIN.driftPx,
+      duration: fallMs * ((floorY - startY) / floorY),
+      ease: "linear",
+      onComplete: () => {
+        drop.destroy();
+        // 셋에 하나만 튄다 — 전부 튀기면 바닥이 계속 반짝여 시끄럽다.
+        if (Phaser.Math.Between(0, 2) !== 0) return;
+        const splash = scene.add.ellipse(x + BLOOD_RAIN.driftPx, floorY, 4, 1.4, BLOOD_RAIN.color, alpha);
+        splash.setDepth(0);
+        scene.tweens.add({
+          targets: splash,
+          scaleX: 2.4,
+          alpha: 0,
+          duration: 260,
+          ease: "power2.out",
+          onComplete: () => splash.destroy(),
+        });
+      },
+    });
+  };
+
+  scene.time.addEvent({ delay: BLOOD_RAIN.spawnIntervalMs, loop: true, callback: spawnOne });
+};
+
+/**
  * 데미지 숫자. 맞은 자리에서 살짝 떠오르며 곧 사라진다.
  * 좌우로 조금씩 흩어 연타 시 숫자가 겹쳐 안 읽히는 것을 막는다.
  */
@@ -1317,22 +1377,33 @@ export const enemySlash = (
  * 검기(마무리 타격 특수기술) 궤적. 벌 침 궤적과 달리 출렁이지 않는다 —
  * 칼날이 날아가는 것이므로 얇고 곧은 빛의 조각을 남기며 지나가야 한다.
  */
-/** 칼날 실루엣 한 장. 앞은 뾰족하고 몸통이 부풀었다가 꼬리로 가늘어진다 — 사각형 조각 대신 진짜 칼날처럼 보이게. */
-const swordWaveWing = (len: number, width: number): { x: number; y: number }[] => [
-  { x: len, y: 0 },
-  { x: len * 0.32, y: -width },
-  { x: -len * 0.75, y: -width * 0.32 },
-  { x: -len, y: 0 },
-  { x: -len * 0.75, y: width * 0.32 },
-  { x: len * 0.32, y: width },
-];
+/**
+ * 검기용 초승달 면. `slashArc`의 3타 궤적과 같은 문법이다 — 양 끝이 가늘고
+ * 몸통이 부풀어, 사각형/칼날 조각이 아니라 "휘두른 궤적"으로 읽힌다.
+ */
+const waveCrescent = (radius: number, thickness: number): { x: number; y: number }[] => {
+  const SEGMENTS = 18;
+  // 3타 슬래시(SLASH_SWEEPS[2])와 같은 대각선 스윕.
+  const FROM = -150;
+  const TO = 46;
+  const outer: { x: number; y: number }[] = [];
+  const inner: { x: number; y: number }[] = [];
+  for (let i = 0; i <= SEGMENTS; i += 1) {
+    const t = i / SEGMENTS;
+    const angle = Phaser.Math.DegToRad(Phaser.Math.Linear(FROM, TO, t));
+    const half = (thickness * (0.08 + 0.92 * Math.sin(t * Math.PI))) / 2;
+    outer.push({ x: Math.cos(angle) * (radius + half), y: Math.sin(angle) * (radius + half) });
+    inner.push({ x: Math.cos(angle) * (radius - half), y: Math.sin(angle) * (radius - half) });
+  }
+  return [...outer, ...inner.reverse()];
+};
 
 /**
  * 검기(마무리 타격 특수기술) 궤적.
  *
- * 이전엔 얇은 사각형 두 장을 찍기만 해서 "선"으로 보였다. `slashArc`와 같은
- * 겹쳐진 광채 레이어 + 이따금 튀는 불티로 바꿔, 날아가는 동안에도 스킬 이펙트처럼
- * 화려하게 읽히게 한다. 투사체 물리는 그대로 직선으로 날고, 그림만 얹는다.
+ * 빔/총알처럼 보인다는 지적 — 3타 슬래시와 같은 초승달 참격이 통째로 날아가고,
+ * 지나간 자리에 옅은 초승달 잔상이 겹겹이 남는 "베기 모션이 날아가는" 그림으로 바꾼다.
+ * 투사체 물리는 그대로 직선으로 날고, 그림만 얹는다.
  */
 export const swordWaveTrail = (
   scene: Phaser.Scene,
@@ -1340,6 +1411,18 @@ export const swordWaveTrail = (
   projectile: Phaser.GameObjects.Image,
   facing: 1 | -1,
 ): void => {
+  // 본체 — 투사체를 따라다니는 초승달 참격. 3타 슬래시가 그대로 날아가는 그림이다.
+  const head = scene.add.graphics({ x: projectile.x, y: projectile.y });
+  head.setDepth(VFX.depth + 1);
+  head.setBlendMode(Phaser.BlendModes.ADD);
+  head.setScale(facing, 1);
+  head.fillStyle(0x8fd7ff, 0.18);
+  head.fillPoints(waveCrescent(26, 16), true);
+  head.fillStyle(0xcfeeff, 0.42);
+  head.fillPoints(waveCrescent(26, 10), true);
+  head.fillStyle(0xffffff, 0.92);
+  head.fillPoints(waveCrescent(26, 4), true);
+
   let tick = 0;
   const event = scene.time.addEvent({
     delay: 24,
@@ -1347,30 +1430,36 @@ export const swordWaveTrail = (
     callback: () => {
       if (!projectile.active) {
         event.remove(false);
+        scene.tweens.add({
+          targets: head,
+          alpha: 0,
+          duration: 120,
+          ease: "power2.out",
+          onComplete: () => head.destroy(),
+        });
         return;
       }
       tick += 1;
+      head.setPosition(projectile.x, projectile.y);
+      // 날아가며 천천히 앞으로 기운다 — 회전이 있어야 "휘두른 검이 날아간다"로 읽힌다.
+      head.setRotation(facing * tick * 0.05);
 
-      const blade = scene.add.graphics({ x: projectile.x, y: projectile.y });
-      blade.setDepth(VFX.depth);
-      blade.setBlendMode(Phaser.BlendModes.ADD);
-      blade.setScale(facing, 1);
-
-      // 바깥 옅은 광채 → 안쪽 진한 광채 → 밝은 심, slashArc와 같은 3겹 구성.
-      blade.fillStyle(0x8fd7ff, 0.2);
-      blade.fillPoints(swordWaveWing(34, 15), true);
-      blade.fillStyle(0xcfeeff, 0.55);
-      blade.fillPoints(swordWaveWing(26, 8), true);
-      blade.fillStyle(0xffffff, 0.95);
-      blade.fillPoints(swordWaveWing(17, 3), true);
-
+      // 잔상 — 방금 자리에 옅은 초승달을 남긴다. 대시 잔상과 같은 문법으로,
+      // 진행 반대로 살짝 밀리며 사라져 궤적이 이어져 보인다.
+      const ghost = scene.add.graphics({ x: projectile.x, y: projectile.y });
+      ghost.setDepth(VFX.depth);
+      ghost.setBlendMode(Phaser.BlendModes.ADD);
+      ghost.setScale(facing, 1);
+      ghost.setRotation(head.rotation);
+      ghost.fillStyle(0x8fd7ff, 0.3);
+      ghost.fillPoints(waveCrescent(24, 9), true);
       scene.tweens.add({
-        targets: blade,
+        targets: ghost,
         alpha: 0,
-        scaleY: 2.4,
-        duration: 220,
+        x: projectile.x - facing * 18,
+        duration: 240,
         ease: "power2.out",
-        onComplete: () => blade.destroy(),
+        onComplete: () => ghost.destroy(),
       });
 
       // 매 틱 찍으면 빽빽해져 뭉개진다 — 세 틱에 한 번만 불티를 흩뿌린다.
@@ -1475,30 +1564,59 @@ export const parryGuard = (
   arcs.strokePath();
   container.add(arcs);
 
-  // 호 둘레를 도는 작은 빛 조각 3개. sin/cos로 각자 다른 속도·반지름을 돌게 해
-  // 정적인 호 하나만 있을 때보다 "지금 뭔가 버티고 있다"는 느낌이 산다.
-  const motes = [0, 1, 2].map((i) => {
-    const mote = scene.add.graphics();
-    mote.setBlendMode(Phaser.BlendModes.ADD);
-    mote.fillStyle(0xfff6c8, 0.95);
-    mote.fillCircle(0, 0, 2 - i * 0.4);
-    container.add(mote);
-    return mote;
+  // 룬 고리 — 파선 원이 천천히 돈다. "발동 중인 술식"처럼 보이게 하는 바닥판이다.
+  const rune = scene.add.graphics();
+  rune.setBlendMode(Phaser.BlendModes.ADD);
+  const RUNE_SEGMENTS = 10;
+  for (let i = 0; i < RUNE_SEGMENTS; i += 1) {
+    const a0 = (i / RUNE_SEGMENTS) * Math.PI * 2;
+    rune.lineStyle(1.5, 0xffe066, 0.45);
+    rune.beginPath();
+    rune.arc(0, -4, 31, a0, a0 + Math.PI * 0.11);
+    rune.strokePath();
+  }
+  container.add(rune);
+
+  // 점 대신 빛나는 검 조각 4개가 궤도를 돈다. 궤도 접선 방향으로 눕고 짧은 꼬리를
+  // 달아, 정적인 호 하나만 있을 때보다 "지금 뭔가 버티고 있다"가 한눈에 보인다.
+  const shards = [0, 1, 2, 3].map(() => {
+    const shard = scene.add.graphics();
+    shard.setBlendMode(Phaser.BlendModes.ADD);
+    shard.fillStyle(0xfff6c8, 0.95);
+    shard.fillPoints(
+      [
+        { x: 6, y: 0 },
+        { x: 0, y: -2.2 },
+        { x: -4, y: 0 },
+        { x: 0, y: 2.2 },
+      ],
+      true,
+    );
+    // 꼬리 — 도는 방향 반대로 빛이 끌린다.
+    shard.lineStyle(1, 0xffe066, 0.55);
+    shard.lineBetween(-4, 0, -13, 0);
+    container.add(shard);
+    return shard;
   });
 
   const clock = { t: 0 };
   const orbit = scene.tweens.add({
     targets: clock,
     t: Math.PI * 2,
-    duration: 900,
+    duration: 1100,
     repeat: -1,
     ease: "linear",
     onUpdate: () => {
-      motes.forEach((mote, i) => {
-        const speed = 1 + i * 0.6;
-        const radius = 26 - i * 5;
-        const angle = clock.t * speed + (i * Math.PI * 2) / motes.length;
-        mote.setPosition(Math.cos(angle) * radius, -4 + Math.sin(angle) * radius * 0.6);
+      rune.setRotation(clock.t * 0.6);
+      shards.forEach((shard, i) => {
+        const speed = 1 + i * 0.28;
+        const radius = 27 - i * 3;
+        const angle = clock.t * speed + (i * Math.PI * 2) / shards.length;
+        shard.setPosition(Math.cos(angle) * radius, -4 + Math.sin(angle) * radius * 0.55);
+        // 타원 궤도의 접선을 향해 눕는다 — 조각이 항상 진행 방향을 보고 돈다.
+        shard.setRotation(Math.atan2(Math.cos(angle) * 0.55, -Math.sin(angle)));
+        // 궤도 뒤쪽(아래)을 돌 때 살짝 옅어져 입체감이 생긴다.
+        shard.setAlpha(0.65 + 0.35 * Math.sin(angle));
       });
     },
   });

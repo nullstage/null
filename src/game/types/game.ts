@@ -50,6 +50,12 @@ export type UpgradeId =
   | "RANGED_BULLET_SIZE_UP"
   /** 냉기 속성. 원거리 적중 시 대상이 짧게 느려진다. */
   | "RANGED_FROST_ROUND"
+  /** 맹독 속성. 원거리 적중 시 길고 약한 독 틱이 들어간다. */
+  | "RANGED_POISON_ROUND"
+  /** 화염 속성 탄. 근접 화염과 같은 화상 틱을 원거리에도 붙인다. */
+  | "RANGED_FIRE_ROUND"
+  /** 탄창 확장. 재장전 없이 쏠 수 있는 발수가 늘어난다. */
+  | "RANGED_MAG_UP"
   | "DASH_CHARGE_UP"
   | "DASH_FOLLOWUP_DAMAGE_UP"
   | "DASH_COOLDOWN_DOWN"
@@ -62,8 +68,8 @@ export type UpgradeId =
 
 export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
 
-/** 무기에 붙는 속성. 지금은 얕은 부가 효과 하나씩만 준다(화상 틱 / 감속) — 상성표는 없다. */
-export type UpgradeElement = "FIRE" | "FROST";
+/** 무기에 붙는 속성. 지금은 얕은 부가 효과 하나씩만 준다(화상 틱 / 감속 / 독 틱) — 상성표는 없다. */
+export type UpgradeElement = "FIRE" | "FROST" | "POISON";
 
 /** MVP_PLAN §3 전투 텔레메트리. 방 하나마다 하나씩 만든다. */
 export interface CombatTelemetry {
@@ -165,4 +171,9 @@ export interface HudState {
   enemiesRemaining: number;
   /** 상태창(E)이 보여줄 보유 아티팩트 목록. */
   selectedUpgrades: readonly UpgradeId[];
+  /** 남은 탄. 원거리 모드일 때만 HUD에 그린다. */
+  ammo: number;
+  magazineSize: number;
+  /** 재장전 중인가. HUD가 "재장전" 표시로 바꾼다. */
+  reloading: boolean;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { keyframes } from "@emotion/react";
 import styled from "@emotion/styled";
 import { useCallback, useEffect, useState } from "react";
 
@@ -236,6 +237,39 @@ const ModeTag = styled.span<{ mode: "MELEE" | "RANGED" }>`
 
 const HpText = styled.span`
   color: rgba(255, 255, 255, 0.72);
+`;
+
+/** 남은 탄. 총 모드에서만 보인다 — 탄피 모양 칸이 쏠 때마다 꺼진다. */
+const AmmoRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 3px;
+`;
+
+const AmmoPip = styled.span<{ spent: boolean }>`
+  width: 5px;
+  height: 13px;
+  border-radius: 1px;
+  background: ${({ spent }) =>
+    spent
+      ? "rgba(255, 255, 255, 0.12)"
+      : "linear-gradient(180deg, #ffe2b8 0%, #e0965a 100%)"};
+  box-shadow: ${({ spent }) => (spent ? "none" : "0 0 5px rgba(255, 190, 120, 0.5)")};
+  transition: background 0.1s, box-shadow 0.1s;
+`;
+
+const reloadBlink = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+`;
+
+const ReloadTag = styled.span`
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: #ffd9a8;
+  animation: ${reloadBlink} 0.45s ease-in-out infinite;
 `;
 
 export default function HUDOverlay() {
@@ -622,6 +656,16 @@ export default function HUDOverlay() {
             <HpText>
               {hud.hp} / {hud.maxHp}
             </HpText>
+            {hud.mode === "RANGED" &&
+              (hud.reloading ? (
+                <ReloadTag>재장전</ReloadTag>
+              ) : (
+                <AmmoRow>
+                  {Array.from({ length: hud.magazineSize }, (_, i) => (
+                    <AmmoPip key={i} spent={i >= hud.ammo} />
+                  ))}
+                </AmmoRow>
+              ))}
           </StatusRow>
         </CombatHud>
       )}

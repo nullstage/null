@@ -29,6 +29,7 @@ import {
   damageNumber,
   portalWipeOut,
   startAmbientParticles,
+  startBloodRain,
   updateAmbientLightCenter,
 } from "../systems/CombatVfx";
 import { playSfx, startRoomBgm } from "../systems/audio";
@@ -253,6 +254,7 @@ export class CombatScene extends Phaser.Scene {
 
     // (실험) 방 전체에 떠다니는 잔불 입자. 모든 일반 전투방에 건다.
     startAmbientParticles(this, roomWidth, this.arena.bounds.floorY);
+    startBloodRain(this, roomWidth, this.arena.bounds.floorY);
 
     if (isTutorialRoom) {
       for (const decor of ROOM_ONE_DECOR) {
@@ -552,6 +554,15 @@ export class CombatScene extends Phaser.Scene {
       }
     } else if (element === "FROST") {
       enemy.applySlow(upgrade.frostSlowFactor, upgrade.frostSlowMs);
+    } else if (element === "POISON") {
+      // 맹독 — 화상과 같은 틱 패턴이되 더 약하게, 더 오래.
+      for (let i = 1; i <= upgrade.poisonTickCount; i += 1) {
+        this.time.delayedCall(i * upgrade.poisonTickIntervalMs, () => {
+          if (enemy.isDefeated || !enemy.sprite) return;
+          enemy.takeDamage(upgrade.poisonTickDamage);
+          damageNumber(this, enemy.sprite.x, enemy.sprite.y - 30, upgrade.poisonTickDamage);
+        });
+      }
     }
   }
 

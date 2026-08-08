@@ -17,7 +17,7 @@ import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Boss } from "../entities/Boss";
 import { Player, TUNING } from "../entities/Player";
 import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
-import { attachHitFx, damageNumber, portalWipeOut } from "../systems/CombatVfx";
+import { attachHitFx, damageNumber, portalWipeOut, startBloodRain } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { AUDIO, createArena, type CombatArena } from "../types/combat";
@@ -48,6 +48,8 @@ export class BossScene extends Phaser.Scene {
     this.telemetry.begin(this.time.now);
 
     this.arena = createArena(this, VIEWPORT);
+    // 전투방과 같은 핏빛 비 — 보스전만 하늘이 맑으면 톤이 끊긴다.
+    startBloodRain(this, VIEWPORT.width, this.arena.bounds.floorY);
 
     this.player = new Player({
       scene: this,
@@ -156,6 +158,15 @@ export class BossScene extends Phaser.Scene {
       }
     } else if (element === "FROST") {
       target.applySlow(upgrade.frostSlowFactor, upgrade.frostSlowMs);
+    } else if (element === "POISON") {
+      // 맹독 — 화상과 같은 틱 패턴이되 더 약하게, 더 오래. CombatScene과 동일 규칙.
+      for (let i = 1; i <= upgrade.poisonTickCount; i += 1) {
+        this.time.delayedCall(i * upgrade.poisonTickIntervalMs, () => {
+          if (target.isDefeated || !target.sprite) return;
+          target.takeDamage(upgrade.poisonTickDamage);
+          damageNumber(this, target.sprite.x, target.sprite.y - 30, upgrade.poisonTickDamage);
+        });
+      }
     }
   }
 

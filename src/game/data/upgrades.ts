@@ -101,6 +101,26 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     element: "FROST",
     description: "원거리 공격이 냉기 속성을 띤다. 적중한 대상이 잠시 느려진다.",
   },
+  RANGED_POISON_ROUND: {
+    id: "RANGED_POISON_ROUND",
+    category: "RANGED",
+    name: "맹독탄",
+    element: "POISON",
+    description: "원거리 공격이 맹독 속성을 띤다. 적중한 대상이 서서히 독 피해를 입는다.",
+  },
+  RANGED_FIRE_ROUND: {
+    id: "RANGED_FIRE_ROUND",
+    category: "RANGED",
+    name: "소이탄",
+    element: "FIRE",
+    description: "원거리 공격이 화염 속성을 띤다. 적중한 대상이 잠시 불타 추가 피해를 입는다.",
+  },
+  RANGED_MAG_UP: {
+    id: "RANGED_MAG_UP",
+    category: "RANGED",
+    name: "확장 탄창",
+    description: "탄창이 3발 늘어난다. 재장전 없이 더 오래 쏠 수 있다.",
+  },
   HEALTH_MAX_UP: {
     id: "HEALTH_MAX_UP",
     category: "HEALTH",

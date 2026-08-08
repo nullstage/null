@@ -160,6 +160,11 @@ export const TUNING = {
     recoil: 70,
     /** 이 시간 안에 다시 쏘면 연사가 이어진다. 끊기면 1발째 자세로 돌아간다. */
     burstWindowMs: 900,
+    /** 탄창. 이만큼 쏘면 자동 재장전 — 무한 연사 대신 쏘는 리듬에 틈을 만든다. */
+    magazineSize: 6,
+    reloadMs: 1100,
+    /** 최대 사거리(px). 조준선도 여기까지만 그어진다 — 화면 끝까지 무한히 닿지 않는다. */
+    maxRangePx: 560,
   },
 
   dash: {
@@ -207,6 +212,12 @@ export const TUNING = {
     /** 냉기 — 적중한 대상의 이동 속도를 이 배율로, 이 시간만큼 낮춘다. */
     frostSlowFactor: 0.4,
     frostSlowMs: 900,
+    /** 맹독 — 화상보다 약한 틱이 더 오래 들어간다. 총합은 화염과 비슷하게 맞춘다. */
+    poisonTickDamage: 2,
+    poisonTickCount: 6,
+    poisonTickIntervalMs: 450,
+    /** 확장 탄창 — 탄창 최대치에 더한다. */
+    magazineBonus: 3,
 
     /** 검기 — 마무리 타격에 얹는 참격 투사체. */
     swordWaveDamageMultiplier: 0.6,
@@ -352,6 +363,11 @@ export class Player {
   private rangedStep = 0;
   private rangedComboExpiresAtMs = 0;
 
+  /** 남은 탄. 다 쓰면 자동 재장전이 돌고, 그동안은 쏘지 못한다. */
+  // `as const` 탓에 초기값 그대로 두면 리터럴 타입(6)으로 좁혀진다.
+  private ammo: number = TUNING.ranged.magazineSize;
+  private reloadingUntilMs = 0;
+
   private dashCharges: number = PLAYER.dashCharges;
   private dashEndsAtMs = 0;
   private dashRechargeAtMs = 0;
@@ -396,6 +412,8 @@ export class Player {
     this.scene = deps.scene;
     this.telemetry = deps.telemetry;
     this.dashCharges = this.maxDashCharges;
+    // 확장 탄창을 가졌으면 시작부터 가득 채워 준다.
+    this.ammo = this.maxMagazineSize;
   }
 
   // ────────────────────────────── 수명 주기 ──────────────────────────────
@@ -872,6 +890,13 @@ export class Player {
     const now = this.scene.time.now;
     if (!sprite || this.isDead || now < this.nextAttackAtMs) return false;
 
+    // 재장전 중에는 쏘지 못한다. 탄이 없으면(모드 전환 등으로 빈 채 온 경우) 재장전부터 건다.
+    if (now < this.reloadingUntilMs) return false;
+    if (this.ammo <= 0) {
+      this.startReload();
+      return false;
+    }
+
     const cooldown =
       PLAYER.rangedCooldownMs *
       (this.hasUpgrade("RANGED_COOLDOWN_DOWN") ? TUNING.upgrade.rangedCooldownMultiplier : 1);
@@ -882,6 +907,8 @@ export class Player {
     // 연사 리듬. 창이 끊기면 다시 1발째 자세로 돌아간다.
     this.rangedStep = now > this.rangedComboExpiresAtMs ? 1 : (this.rangedStep % 3) + 1;
     this.rangedComboExpiresAtMs = now + TUNING.ranged.burstWindowMs;
+
+    this.ammo -= 1;
 
     this.telemetry.recordRangedAttack();
     if (!this.isGrounded) this.telemetry.recordAirAttack();
@@ -909,7 +936,12 @@ export class Player {
 
     // 총구 섬광 없이 조준선만 먼저 보여준다. 이게 "찌잉" — 옅게 그어졌다가 밝아지며 곧 쏜다고 예고한다.
     const reachToWall = facing > 0 ? this.deps.arena.bounds.width - originX : originX;
-    const reach = Math.min(reachToWall, this.beamReachToEnemy(originX, originY, facing));
+    // 조준선은 실제 사거리(maxRangePx)까지만 긋는다 — 선이 닿는 곳까지만 탄도 닿는다.
+    const reach = Math.min(
+      reachToWall,
+      this.beamReachToEnemy(originX, originY, facing),
+      ranged.maxRangePx,
+    );
     beamLine(this.scene, originX, originY, facing, reach, power);
 
     this.scene.time.delayedCall(BEAM_WINDUP_MS, () => {
@@ -937,13 +969,21 @@ export class Player {
 
       projectile.setData("damage", rangedDamage);
       projectile.setData("mode", "RANGED" satisfies AttackMode);
-      if (this.hasUpgrade("RANGED_FROST_ROUND")) {
-        projectile.setData("element", "FROST" satisfies UpgradeElement);
-      }
+      // 속성탄은 한 발에 하나만 실린다 — 여러 개 가졌으면 불 > 독 > 냉기 순으로 우선한다.
+      const element: UpgradeElement | null = this.hasUpgrade("RANGED_FIRE_ROUND")
+        ? "FIRE"
+        : this.hasUpgrade("RANGED_POISON_ROUND")
+          ? "POISON"
+          : this.hasUpgrade("RANGED_FROST_ROUND")
+            ? "FROST"
+            : null;
+      if (element) projectile.setData("element", element);
       // 관통이 없으면 씬이 첫 적중에서 없애준다. 관통이 있으면 여기서 횟수를 센다.
       projectile.setData("consumeOnHit", maxHits <= 1);
       projectile.setData("maxHits", maxHits);
       projectile.setData("expiresAtMs", this.scene.time.now + ranged.lifeMs);
+      // 사거리 판정의 기준점. 이 지점에서 maxRangePx를 넘어가면 cullProjectiles가 지운다.
+      projectile.setData("startX", originX);
       this.projectiles.push({ body: projectile, trail });
 
       // 예고가 끝나고 실제로 나가는 "팡" — 총구 섬광은 발사 순간에만 터진다.
@@ -974,7 +1014,27 @@ export class Player {
       this.scene.cameras.main.shake(40 + 40 * power, 0.0012 * power);
     });
 
+    // 탄창을 비웠으면 곧바로 재장전에 들어간다. HUD는 매 발 갱신한다.
+    if (this.ammo <= 0) this.startReload();
+    else this.emitHud();
+
     return true;
+  }
+
+  /** 자동 재장전. 끝나기 전에는 attackRanged가 막힌다. */
+  private startReload(): void {
+    const now = this.scene.time.now;
+    if (now < this.reloadingUntilMs) return;
+    this.reloadingUntilMs = now + TUNING.ranged.reloadMs;
+    // 전용 사운드가 없어 탄피 소리로 대신한다 — 시작과 끝에 한 번씩.
+    playSfx(this.scene, AUDIO.shellDrop);
+    this.emitHud();
+    this.scene.time.delayedCall(TUNING.ranged.reloadMs, () => {
+      if (this.isDead) return;
+      this.ammo = this.maxMagazineSize;
+      playSfx(this.scene, AUDIO.shellDrop);
+      this.emitHud();
+    });
   }
 
   /**
@@ -1064,9 +1124,16 @@ export class Player {
         // 퍼펙트 — 완전 무효화. 반사는 씬이 처리한다.
         this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
         this.endParry();
-        this.scene.cameras.main.shake(90, 0.006);
         playSfx(this.scene, AUDIO.parry);
         if (this.sprite) perfectParryBurst(this.scene, this.sprite.x, this.sprite.y);
+        // 성공의 쾌감은 시간과 화면이 같이 흔들려야 산다 — 히트스톱 + 줌 펀치 + 금빛 섬광.
+        hitStop(this.scene);
+        const cam = this.scene.cameras.main;
+        cam.shake(110, 0.008);
+        cam.flash(90, 255, 240, 190);
+        const baseZoom = cam.zoom;
+        cam.zoomTo(baseZoom * 1.07, 60, "Sine.easeOut");
+        this.scene.time.delayedCall(110, () => cam.zoomTo(baseZoom, 160, "Sine.easeInOut"));
         return { parried: true, perfect: true };
       }
       // 늦은 막기 — 피해를 크게 깎는다. 창은 계속 열어 둔다(연속 공격도 받아낼 수 있게).
@@ -1348,6 +1415,13 @@ export class Player {
     );
   }
 
+  private get maxMagazineSize(): number {
+    return (
+      TUNING.ranged.magazineSize +
+      (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0)
+    );
+  }
+
   /** 대시 직후 첫 공격에만 붙는 보너스. 한 번 쓰면 창을 닫는다. */
   private applyDashFollowup(damage: number): number {
     if (!this.hasUpgrade("DASH_FOLLOWUP_DAMAGE_UP")) return damage;
@@ -1374,6 +1448,8 @@ export class Player {
       const expired =
         hitCount >= (body.getData("maxHits") as number) ||
         nowMs > (body.getData("expiresAtMs") as number) ||
+        // 사거리 제한 — 조준선이 닿는 곳(maxRangePx)을 넘어가면 탄도 사라진다.
+        Math.abs(body.x - (body.getData("startX") as number)) > TUNING.ranged.maxRangePx ||
         body.x < 0 ||
         body.x > width;
 
@@ -1402,6 +1478,9 @@ export class Player {
         roomIndex: this.lastRoomIndex,
         enemiesRemaining: this.lastEnemiesRemaining,
         selectedUpgrades: this.deps.upgrades,
+        ammo: this.ammo,
+        magazineSize: this.maxMagazineSize,
+        reloading: this.scene.time.now < this.reloadingUntilMs,
       },
     });
   }
