@@ -2,7 +2,7 @@
 
 import { keyframes } from "@emotion/react";
 import styled from "@emotion/styled";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 
 import { assetPath, debugFlag } from "@/game/config/gameConfig";
 import { loadKeyBindings } from "@/game/config/inputConfig";
@@ -19,6 +19,7 @@ import type {
   RoomId,
   RunResult,
   UpgradeDefinition,
+  UpgradeId,
 } from "@/game/types/game";
 import { theme } from "@/styles/theme";
 
@@ -27,6 +28,15 @@ import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
 import DialogueBox from "./ui/DialogueBox";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
+import {
+  CycloneIcon,
+  GunIcon,
+  ReloadIcon,
+  ShardIcon,
+  SpikeIcon,
+  SwordIcon,
+  WaveIcon,
+} from "./ui/HudIcons";
 import LoadingScreen from "./ui/LoadingScreen";
 import PauseMenu from "./ui/PauseMenu";
 import PrologueText from "./ui/PrologueText";
@@ -53,6 +63,13 @@ import UpgradePanel from "./ui/UpgradePanel";
  */
 
 type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status" | "shop";
+
+/** 스킬 아이콘 매핑. 새 스킬은 여기에 한 줄 추가한다. */
+const SKILL_ICONS: Partial<Record<UpgradeId, ReactElement>> = {
+  MELEE_SWORD_WAVE: <WaveIcon />,
+  MELEE_SPIKE_ERUPTION: <SpikeIcon />,
+  MELEE_BLADE_CYCLONE: <CycloneIcon />,
+};
 
 
 const Layer = styled.div`
@@ -222,19 +239,37 @@ const StatusRow = styled.div`
   color: rgba(255, 255, 255, 0.5);
 `;
 
-/** 지금 무엇을 들고 있는지. 모드 전환이 핵심 조작이라 가장 눈에 띄어야 한다. */
-const ModeTag = styled.span<{ mode: "MELEE" | "RANGED" }>`
-  padding: 3px 10px;
-  border-left: 2px solid ${({ mode }) => (mode === "MELEE" ? "#e05055" : "#9a5f86")};
-  background: ${({ mode }) =>
-    mode === "MELEE"
-      ? "linear-gradient(90deg, rgba(224,80,85,0.3) 0%, rgba(224,80,85,0) 100%)"
-      : "linear-gradient(90deg, rgba(154,95,134,0.32) 0%, rgba(154,95,134,0) 100%)"};
-  font-family: ${theme.font.ui};
-  font-weight: 300;
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  color: #fff;
+/**
+ * 아이콘 슬롯 공통 몸체. 텍스트 라벨 대신 게임식 사각 슬롯에 SVG 아이콘을 담는다.
+ * (사용자 요청 — HUD의 텍스트를 전부 스킬 아이콘류로)
+ */
+const IconSlot = styled.span<{ accent: string; dim?: boolean }>`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid ${({ accent, dim }) => (dim ? "rgba(255,255,255,0.14)" : accent)};
+  background: rgba(8, 5, 9, 0.75);
+  color: ${({ accent, dim }) => (dim ? "rgba(255,255,255,0.28)" : accent)};
+  box-shadow: ${({ accent, dim }) => (dim ? "none" : `0 0 8px ${accent}44`)};
+  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+`;
+
+/** 슬롯 우하단의 키 뱃지(Q/R/F/K). 아이콘만으로는 어느 키인지 몰라 작게 붙인다. */
+const KeyBadge = styled.em`
+  position: absolute;
+  right: -4px;
+  bottom: -5px;
+  padding: 0 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #0d090c;
+  font-style: normal;
+  font-family: ${theme.font.mono};
+  font-size: 9px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.75);
 `;
 
 const HpText = styled.span`
@@ -260,35 +295,33 @@ const AmmoPip = styled.span<{ spent: boolean }>`
   transition: background 0.1s, box-shadow 0.1s;
 `;
 
-/** 그림자 조각 잔액. 적을 잡을 때마다 오르는 게 보여야 모으는 재미가 산다. */
-const ShardTag = styled.span`
+/** 그림자 조각 — 아이콘 + 수치. 수치는 개수라 남긴다(라벨이 아니다). */
+const ShardChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: #c9a8ff;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
 `;
 
-/** 액티브 스킬(Q) 표시. 쿨다운 중에는 흐려져 "아직"이라는 게 한눈에 보인다. */
-const SkillTag = styled.span<{ ready: boolean }>`
-  padding: 2px 8px;
-  border: 1px solid ${({ ready }) => (ready ? "rgba(143, 215, 255, 0.7)" : "rgba(255, 255, 255, 0.15)")};
-  color: ${({ ready }) => (ready ? "#8fd7ff" : "rgba(255, 255, 255, 0.3)")};
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  transition: color 0.15s, border-color 0.15s;
+const reloadSpin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 `;
 
-const reloadBlink = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-`;
-
-const ReloadTag = styled.span`
-  font-family: ${theme.font.ui};
-  font-weight: 300;
-  font-size: 12px;
-  letter-spacing: 0.24em;
+/** 재장전 — 텍스트 대신 도는 화살표 아이콘. */
+const ReloadSpin = styled.span`
+  display: inline-flex;
   color: #ffd9a8;
-  animation: ${reloadBlink} 0.45s ease-in-out infinite;
+
+  svg {
+    animation: ${reloadSpin} 0.9s linear infinite;
+  }
 `;
 
 export default function HUDOverlay() {
@@ -682,19 +715,36 @@ export default function HUDOverlay() {
           </HealthBar>
 
           <StatusRow>
-            <ModeTag mode={hud.mode}>{hud.mode === "MELEE" ? "검" : "총"}</ModeTag>
+            <IconSlot
+              accent={hud.mode === "MELEE" ? "#e05055" : "#c99ab8"}
+              title={hud.mode === "MELEE" ? "검 — K로 전환" : "총 — K로 전환"}
+            >
+              {hud.mode === "MELEE" ? <SwordIcon /> : <GunIcon />}
+              <KeyBadge>K</KeyBadge>
+            </IconSlot>
             <HpText>
               {hud.hp} / {hud.maxHp}
             </HpText>
-            <ShardTag>◆ {hud.shards}</ShardTag>
+            <ShardChip title="그림자 조각">
+              <ShardIcon />
+              {hud.shards}
+            </ShardChip>
             {hud.skills.map((skill) => (
-              <SkillTag key={skill.id} ready={skill.ready}>
-                {skill.key} {UPGRADES[skill.id].name}
-              </SkillTag>
+              <IconSlot
+                key={skill.id}
+                accent="#8fd7ff"
+                dim={!skill.ready}
+                title={UPGRADES[skill.id].name}
+              >
+                {SKILL_ICONS[skill.id] ?? <SwordIcon />}
+                <KeyBadge>{skill.key}</KeyBadge>
+              </IconSlot>
             ))}
             {hud.mode === "RANGED" &&
               (hud.reloading ? (
-                <ReloadTag>재장전</ReloadTag>
+                <ReloadSpin title="재장전 중">
+                  <ReloadIcon />
+                </ReloadSpin>
               ) : (
                 <AmmoRow>
                   {Array.from({ length: hud.magazineSize }, (_, i) => (
