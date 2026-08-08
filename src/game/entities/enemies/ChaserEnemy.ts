@@ -79,7 +79,7 @@ export class ChaserEnemy extends BaseEnemy {
         // 낭떠러지 앞이면 멈춘다 — 플레이어처럼 점프해서 건너지 못한다.
         const aheadX = body.x + this.facing * LEDGE_LOOKAHEAD;
         if (this.hasFloorBelow(aheadX)) {
-          body.setVelocityX(this.facing * this.definition.moveSpeed);
+          body.setVelocityX(this.facing * this.definition.moveSpeed * this.speedMultiplier);
           body.anims.play("chaserWalk", true);
         } else {
           body.setVelocityX(0);

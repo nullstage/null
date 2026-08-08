@@ -18,7 +18,7 @@ import { TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
-import { Player } from "../entities/Player";
+import { Player, TUNING } from "../entities/Player";
 import { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
 import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
@@ -45,6 +45,7 @@ import type {
   EnemyType,
   RoomId,
   RoomPreset,
+  UpgradeElement,
 } from "../types/game";
 
 export interface CombatSceneData {
@@ -109,6 +110,7 @@ export class CombatScene extends Phaser.Scene {
     });
 
     // 런 전체에서 체력이 이어지도록 이전 방에서 남은 값을 넘긴다. (OQ-008 미결정)
+    this.player.maxHp = runState.maxHp;
     this.player.hp = runState.hp;
 
     this.room = new RoomController({
@@ -492,6 +494,7 @@ export class CombatScene extends Phaser.Scene {
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
       const hitTarget = bodyObj as Phaser.GameObjects.Sprite;
       damageNumber(this, hitTarget.x, hitTarget.y - 20, damage);
+      this.applyElement(attack.getData("element") as UpgradeElement | undefined, enemy);
 
       const mode = attack.getData("mode") as AttackMode | undefined;
       // 파편은 맞은 적 위에서 터져야 한다. 플레이어 위치에서 터지면 누굴 쳤는지 모른다.
@@ -529,6 +532,27 @@ export class CombatScene extends Phaser.Scene {
 
     // 게이트는 충돌·오버랩이 아니라 `update()`의 거리 판정 + INTERACT 키로 반응한다
     // (`updatePortalPrompt` 참조) — 부딪히기만 해도 넘어가면 실수로 지나칠 수 있다는 피드백 반영.
+  }
+
+  /**
+   * 속성 부가 효과. 화염은 시간차 화상 틱(추가 타격 판정을 새로 만들지 않고 직접
+   * takeDamage를 부른다), 냉기는 적의 speedMultiplier를 잠깐 낮춘다.
+   */
+  private applyElement(element: UpgradeElement | undefined, enemy: BaseEnemy): void {
+    if (!element) return;
+    const { upgrade } = TUNING;
+
+    if (element === "FIRE") {
+      for (let i = 1; i <= upgrade.fireTickCount; i += 1) {
+        this.time.delayedCall(i * upgrade.fireTickIntervalMs, () => {
+          if (enemy.isDefeated || !enemy.sprite) return;
+          enemy.takeDamage(upgrade.fireTickDamage);
+          damageNumber(this, enemy.sprite.x, enemy.sprite.y - 30, upgrade.fireTickDamage);
+        });
+      }
+    } else if (element === "FROST") {
+      enemy.applySlow(upgrade.frostSlowFactor, upgrade.frostSlowMs);
+    }
   }
 
   private spawnEnemy(spawn: EnemySpawn, _preset: RoomPreset): void {

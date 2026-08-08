@@ -22,6 +22,7 @@ import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
 import {
+  ashRise,
   BEAM_WINDUP_MS,
   beamLine,
   clearParryGuard,
@@ -37,6 +38,7 @@ import {
   rangedSpark,
   slashArc,
   slashFlash,
+  swordWaveTrail,
 } from "../systems/CombatVfx";
 import { playSfx, startFootsteps, stopFootsteps } from "../systems/audio";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
@@ -53,7 +55,7 @@ import {
   type CombatArena,
   type PlayerAnimState,
 } from "../types/combat";
-import type { AttackMode, UpgradeId } from "../types/game";
+import type { AttackMode, UpgradeElement, UpgradeId } from "../types/game";
 
 /**
  * 도트 확대 배율. 64px 셀을 화면에서 이 배수로 키운다.
@@ -94,7 +96,7 @@ const PARRY_BLOCK_DAMAGE_RATIO = 0.25;
 const RANGED_MODE_TINT = 0xffc9d4;
 
 /** gameBalance로 옮겨야 할 임시 수치. 확정 전까지 여기서만 관리한다. */
-const TUNING = {
+export const TUNING = {
   /**
    * 충돌 바디 크기. 그림 전체가 아니라 몸통만 잡는다.
    *
@@ -187,6 +189,31 @@ const TUNING = {
     /** 대시 후 이 시간 안의 첫 공격만 보너스를 받는다. */
     dashFollowupWindowMs: 600,
     dashChargeBonus: 1,
+    dashCooldownMultiplier: 0.75,
+    dashInvulnBonusMs: 120,
+
+    bladeSizeReachBonus: 18,
+    bulletSizeMultiplier: 1.6,
+
+    healthMaxBonus: 20,
+    healthRegenAmount: 12,
+    /** 내구 강화 — 받는 피해에 곱한다. */
+    armorDamageMultiplier: 0.85,
+
+    /** 화염 — 적중 후 이 간격으로 이 횟수만큼 화상 틱이 들어간다. */
+    fireTickDamage: 3,
+    fireTickCount: 3,
+    fireTickIntervalMs: 400,
+    /** 냉기 — 적중한 대상의 이동 속도를 이 배율로, 이 시간만큼 낮춘다. */
+    frostSlowFactor: 0.4,
+    frostSlowMs: 900,
+
+    /** 검기 — 마무리 타격에 얹는 참격 투사체. */
+    swordWaveDamageMultiplier: 0.6,
+    swordWaveSpeed: 640,
+    swordWaveWidth: 40,
+    swordWaveHeight: 46,
+    swordWaveLifeMs: 500,
   },
 
   /** 공중에서 입력이 없을 때 수평 속도가 줄어드는 비율(프레임당). 1이면 영원히 날아간다. */
@@ -288,6 +315,8 @@ export class Player {
 
   mode: AttackMode = "MELEE";
   hp: number = PLAYER.maxHp;
+  /** HEALTH_MAX_UP으로 늘어날 수 있다. 씬이 RunState.maxHp와 함께 동기화한다. */
+  maxHp: number = PLAYER.maxHp;
   isGrounded = true;
   isDashing = false;
   isDead = false;
@@ -343,7 +372,7 @@ export class Player {
   private parryStartedAtMs = 0;
   private parryEndsAtMs = 0;
   private parryCooldownUntilMs = 0;
-  private parryGuardFx: Phaser.GameObjects.Graphics | null = null;
+  private parryGuardFx: Phaser.GameObjects.Container | null = null;
   private blinkTween: Phaser.Tweens.Tween | null = null;
 
   /**
@@ -463,7 +492,10 @@ export class Player {
 
     if (this.dashCharges < this.maxDashCharges && time >= this.dashRechargeAtMs) {
       this.dashCharges += 1;
-      this.dashRechargeAtMs = time + TUNING.dash.rechargeMs;
+      this.dashRechargeAtMs =
+        time +
+        TUNING.dash.rechargeMs *
+          (this.hasUpgrade("DASH_COOLDOWN_DOWN") ? TUNING.upgrade.dashCooldownMultiplier : 1);
     }
 
     // 대시가 끝나도 관성으로 계속 날아간다. 그 구간에도 잔상을 이어야 궤적이 안 끊긴다.
@@ -581,9 +613,12 @@ export class Player {
     if (!sprite || !body || this.isDashing || this.dashCharges <= 0) return;
 
     const now = this.scene.time.now;
+    const rechargeMs =
+      TUNING.dash.rechargeMs *
+      (this.hasUpgrade("DASH_COOLDOWN_DOWN") ? TUNING.upgrade.dashCooldownMultiplier : 1);
     this.dashCharges -= 1;
     // 충전이 가득 찼다가 처음 빠진 순간부터 재충전 타이머를 돌린다.
-    if (this.dashRechargeAtMs <= now) this.dashRechargeAtMs = now + TUNING.dash.rechargeMs;
+    if (this.dashRechargeAtMs <= now) this.dashRechargeAtMs = now + rechargeMs;
 
     this.telemetry.recordDash();
     playSfx(this.scene, AUDIO.dash);
@@ -591,10 +626,10 @@ export class Player {
     this.isDashing = true;
     this.dashEndsAtMs = now + TUNING.dash.durationMs;
     this.dashFollowupUntilMs = now + TUNING.upgrade.dashFollowupWindowMs;
-    this.invulnerableUntilMs = Math.max(
-      this.invulnerableUntilMs,
-      now + PLAYER.dashInvulnerabilityMs,
-    );
+    const invulnMs =
+      PLAYER.dashInvulnerabilityMs +
+      (this.hasUpgrade("DASH_INVULN_UP") ? TUNING.upgrade.dashInvulnBonusMs : 0);
+    this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, now + invulnMs);
 
     // 스케일 펀치가 남아 있으면 대시 중에 충돌 박스가 계속 흔들린다(punch 주석 참고).
     this.clearPunch();
@@ -644,7 +679,8 @@ export class Player {
     this.parryEndsAtMs = now + PARRY_ACTIVE_MS;
     this.parryCooldownUntilMs = now + PARRY_COOLDOWN_MS;
 
-    playSfx(this.scene, AUDIO.parry);
+    // 소리는 성공했을 때만 낸다(takeDamage의 퍼펙트 분기) — 자세를 잡는 순간에 매번
+    // 울리면 실제로 막았는지와 상관없이 성공한 것처럼 들린다.
     this.parryGuardFx?.destroy();
     this.parryGuardFx = parryGuard(this.scene, sprite.x, sprite.y, this.facing);
   }
@@ -726,7 +762,8 @@ export class Player {
     const reach =
       (isFinisher ? melee.finisherReach : melee.reach) +
       (isFinisher && this.hasUpgrade("MELEE_FINISHER_RANGE_UP") ? melee.finisherRangeBonus : 0) +
-      (reforgedBlade ? TUNING.upgrade.bladeReachBonus : 0);
+      (reforgedBlade ? TUNING.upgrade.bladeReachBonus : 0) +
+      (this.hasUpgrade("MELEE_BLADE_SIZE_UP") ? TUNING.upgrade.bladeSizeReachBonus : 0);
 
     let damage: number = melee.damage;
     if (this.hasUpgrade("MELEE_DAMAGE_UP")) damage *= TUNING.upgrade.meleeDamageMultiplier;
@@ -749,6 +786,7 @@ export class Player {
     hitbox.setData("damage", Math.round(damage));
     hitbox.setData("mode", "MELEE" satisfies AttackMode);
     // consumeOnHit을 걸지 않는다. 한 번 휘두르면 범위 안의 적을 모두 벤다.
+    if (this.hasUpgrade("MELEE_FIRE_EDGE")) hitbox.setData("element", "FIRE" satisfies UpgradeElement);
 
     this.scene.time.delayedCall(melee.hitboxLifeMs, () => hitbox.destroy());
 
@@ -795,7 +833,37 @@ export class Player {
     this.trailAfterimage(now);
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
+
+    // 검기 — 마무리 타격에만 얹는다. 근접 사거리 밖의 적도 벨 수 있는 특수기술이다.
+    if (isFinisher && this.hasUpgrade("MELEE_SWORD_WAVE")) {
+      this.fireSwordWave(sprite, Math.round(damage * TUNING.upgrade.swordWaveDamageMultiplier));
+    }
+
     return true;
+  }
+
+  /** 검기 투사체. 근접 판정과 별개로 `playerAttacks`에 들어가는 얇고 빠른 참격이다. */
+  private fireSwordWave(sprite: Phaser.Physics.Arcade.Sprite, damage: number): void {
+    const { upgrade } = TUNING;
+    const facing = this.facing;
+    const wave = this.scene.physics.add.image(
+      sprite.x + facing * TUNING.body.width,
+      sprite.y,
+      TEXTURE.playerAttack,
+    );
+    wave.setDisplaySize(upgrade.swordWaveWidth, upgrade.swordWaveHeight);
+    wave.setDepth(TUNING.depth.attack);
+    wave.setAlpha(0);
+    this.deps.arena.playerAttacks.add(wave);
+    const body = wave.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setVelocityX(facing * upgrade.swordWaveSpeed);
+
+    wave.setData("damage", damage);
+    wave.setData("mode", "MELEE" satisfies AttackMode);
+    this.scene.time.delayedCall(upgrade.swordWaveLifeMs, () => wave.destroy());
+
+    swordWaveTrail(this.scene, wave, facing);
   }
 
   /** 원거리 공격 입력. 짧은 쿨타임의 투사체. */
@@ -847,8 +915,11 @@ export class Player {
     this.scene.time.delayedCall(BEAM_WINDUP_MS, () => {
       if (this.isDead) return;
 
+      const bulletScale = this.hasUpgrade("RANGED_BULLET_SIZE_UP")
+        ? TUNING.upgrade.bulletSizeMultiplier
+        : 1;
       const projectile = this.scene.physics.add.image(originX, originY, TEXTURE.playerAttack);
-      projectile.setDisplaySize(ranged.width, ranged.height);
+      projectile.setDisplaySize(ranged.width * bulletScale, ranged.height * bulletScale);
       projectile.setDepth(TUNING.depth.attack);
       // 탄 자체는 안 보이게 두고 꼬리로만 보여준다. 사각형 두 개가 겹치면 지저분하다.
       projectile.setAlpha(0);
@@ -866,6 +937,9 @@ export class Player {
 
       projectile.setData("damage", rangedDamage);
       projectile.setData("mode", "RANGED" satisfies AttackMode);
+      if (this.hasUpgrade("RANGED_FROST_ROUND")) {
+        projectile.setData("element", "FROST" satisfies UpgradeElement);
+      }
       // 관통이 없으면 씬이 첫 적중에서 없애준다. 관통이 있으면 여기서 횟수를 센다.
       projectile.setData("consumeOnHit", maxHits <= 1);
       projectile.setData("maxHits", maxHits);
@@ -991,11 +1065,16 @@ export class Player {
         this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
         this.endParry();
         this.scene.cameras.main.shake(90, 0.006);
+        playSfx(this.scene, AUDIO.parry);
         if (this.sprite) perfectParryBurst(this.scene, this.sprite.x, this.sprite.y);
         return { parried: true, perfect: true };
       }
       // 늦은 막기 — 피해를 크게 깎는다. 창은 계속 열어 둔다(연속 공격도 받아낼 수 있게).
       amount = Math.round(amount * PARRY_BLOCK_DAMAGE_RATIO);
+    }
+    // 내구 강화 — 막기와 별개로, 맞을 때마다 항상 곱해진다(중첩 가능).
+    if (this.hasUpgrade("HEALTH_ARMOR")) {
+      amount = Math.round(amount * TUNING.upgrade.armorDamageMultiplier);
     }
 
     this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
@@ -1038,14 +1117,15 @@ export class Player {
       this.blinkTween = null;
       (sprite.body as Phaser.Physics.Arcade.Body | null)?.setEnable(false);
       sprite.setTintFill(0xff2a3a);
-      // 산화하듯 붉은 파편이 흩어지며 사라진다. 파편 터짐 + 축소/회전/페이드가 같이 간다.
+      // 산화 — 몸을 빙글 돌리는 스핀 대신, 파편 터짐 + 위로 흩어지는 재로 표현한다.
+      // 회전은 "죽었다"로 읽히고, 재가 뜨는 쪽이 "산화했다"에 더 맞는다는 지적을 반영했다.
       deathBurst(this.scene, sprite.x, sprite.y, 0xff2a3a);
+      ashRise(this.scene, sprite.x, sprite.y, 0xff2a3a);
       this.scene.tweens.add({
         targets: sprite,
         scaleX: 0,
         scaleY: 0,
         alpha: 0,
-        angle: 180,
         duration: TUNING.feedback.deathMs,
         ease: "Cubic.easeIn",
         // 이펙트가 다 보이기 전에 씬이 전환되면(부활 흐름) 산화 연출이 잘려 보인다 —
@@ -1317,7 +1397,7 @@ export class Player {
     eventBus.emit("hud:update", {
       hud: {
         hp: this.hp,
-        maxHp: PLAYER.maxHp,
+        maxHp: this.maxHp,
         mode: this.mode,
         roomIndex: this.lastRoomIndex,
         enemiesRemaining: this.lastEnemiesRemaining,

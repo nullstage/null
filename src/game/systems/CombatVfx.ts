@@ -1033,6 +1033,55 @@ export const rangedSpark = (scene: Phaser.Scene, x: number, y: number, facing: 1
  *
  * @param color 그 적의 실루엣 색. 누가 죽었는지 색으로 구분된다.
  */
+/**
+ * 재로 산화. 몸이 빙글 도는 스핀 대신, 타고 남은 재가 떠오르며 흩어지는 쪽이
+ * "죽었다"보다 "산화했다"에 더 맞는다는 지적 — `deathBurst`(터짐)와 짝을 이뤄 쓴다.
+ * 조각마다 위로 뜨는 속도·좌우 흔들림(sin)·크기를 다르게 흔들어야 재처럼 보인다.
+ */
+export const ashRise = (scene: Phaser.Scene, x: number, y: number, color: number): void => {
+  const count = 16;
+  for (let i = 0; i < count; i += 1) {
+    const size = Phaser.Math.FloatBetween(2, 5);
+    const flake = scene.add.rectangle(
+      x + Phaser.Math.FloatBetween(-10, 10),
+      y + Phaser.Math.FloatBetween(-6, 6),
+      size,
+      size,
+      color,
+      Phaser.Math.FloatBetween(0.55, 0.9),
+    );
+    flake.setDepth(VFX.depth);
+    flake.setAngle(Phaser.Math.Between(0, 360));
+
+    const rise = Phaser.Math.FloatBetween(50, 110);
+    const life = Phaser.Math.Between(500, 780);
+    const swayAmp = Phaser.Math.FloatBetween(6, 16);
+    const swayFreq = Phaser.Math.FloatBetween(2, 4);
+    const startX = flake.x;
+
+    const carrier = { t: 0 };
+    scene.tweens.add({
+      targets: carrier,
+      t: 1,
+      duration: life,
+      ease: "sine.out",
+      onUpdate: () => {
+        flake.y = y - rise * carrier.t;
+        flake.x = startX + Math.sin(carrier.t * Math.PI * swayFreq) * swayAmp * carrier.t;
+        flake.setScale(1 - carrier.t * 0.5);
+      },
+      onComplete: () => flake.destroy(),
+    });
+    scene.tweens.add({
+      targets: flake,
+      alpha: 0,
+      delay: life * 0.35,
+      duration: life * 0.65,
+      ease: "power1.in",
+    });
+  }
+};
+
 export const deathBurst = (scene: Phaser.Scene, x: number, y: number, color: number): void => {
   const { death } = VFX;
 
@@ -1264,6 +1313,45 @@ export const enemySlash = (
  * 판정은 예측 가능하게 유지하면서(DEC-004) 그림만 살아있게 하는 절충이다.
  * 투사체가 파괴되면 스스로 정리된다.
  */
+/**
+ * 검기(마무리 타격 특수기술) 궤적. 벌 침 궤적과 달리 출렁이지 않는다 —
+ * 칼날이 날아가는 것이므로 얇고 곧은 빛의 조각을 남기며 지나가야 한다.
+ */
+export const swordWaveTrail = (
+  scene: Phaser.Scene,
+  // physics.add.image()로 만든 투사체를 그대로 받는다 — Sprite가 아니라 Image다.
+  projectile: Phaser.GameObjects.Image,
+  facing: 1 | -1,
+): void => {
+  const event = scene.time.addEvent({
+    delay: 24,
+    loop: true,
+    callback: () => {
+      if (!projectile.active) {
+        event.remove(false);
+        return;
+      }
+      // 진행 방향으로 얇고 긴 조각을 하나씩 찍는다 — 쌓이면서 광선 같은 잔상이 된다.
+      const sliver = scene.add.graphics({ x: projectile.x, y: projectile.y });
+      sliver.setDepth(VFX.depth);
+      sliver.setBlendMode(Phaser.BlendModes.ADD);
+      sliver.setScale(facing, 1);
+      sliver.fillStyle(0xcfeeff, 0.85);
+      sliver.fillRect(-14, -2, 28, 4);
+      sliver.fillStyle(0xffffff, 1);
+      sliver.fillRect(-6, -1, 12, 2);
+      scene.tweens.add({
+        targets: sliver,
+        alpha: 0,
+        scaleY: 2.2,
+        duration: 220,
+        ease: "power2.out",
+        onComplete: () => sliver.destroy(),
+      });
+    },
+  });
+};
+
 export const attachStingerTrail = (
   scene: Phaser.Scene,
   projectile: Phaser.GameObjects.Sprite,
@@ -1326,37 +1414,68 @@ export const parryGuard = (
   x: number,
   y: number,
   facing: 1 | -1,
-): Phaser.GameObjects.Graphics => {
-  const graphics = scene.add.graphics();
-  graphics.setDepth(VFX.depth + 1);
-  graphics.setPosition(x, y);
-  graphics.setScale(facing, 1);
-  graphics.setBlendMode(Phaser.BlendModes.ADD);
+): Phaser.GameObjects.Container => {
+  const container = scene.add.container(x, y);
+  container.setDepth(VFX.depth + 1);
+  container.setScale(facing, 1);
 
-  graphics.lineStyle(2.5, 0xffe066, 0.9);
-  graphics.beginPath();
-  graphics.arc(0, -4, 28, Phaser.Math.DegToRad(-65), Phaser.Math.DegToRad(65));
-  graphics.strokePath();
-  graphics.lineStyle(1, 0xfff6c8, 0.5);
-  graphics.beginPath();
-  graphics.arc(0, -4, 23, Phaser.Math.DegToRad(-60), Phaser.Math.DegToRad(60));
-  graphics.strokePath();
+  const arcs = scene.add.graphics();
+  arcs.setBlendMode(Phaser.BlendModes.ADD);
+  arcs.lineStyle(2.5, 0xffe066, 0.9);
+  arcs.beginPath();
+  arcs.arc(0, -4, 28, Phaser.Math.DegToRad(-65), Phaser.Math.DegToRad(65));
+  arcs.strokePath();
+  arcs.lineStyle(1, 0xfff6c8, 0.5);
+  arcs.beginPath();
+  arcs.arc(0, -4, 23, Phaser.Math.DegToRad(-60), Phaser.Math.DegToRad(60));
+  arcs.strokePath();
+  container.add(arcs);
+
+  // 호 둘레를 도는 작은 빛 조각 3개. sin/cos로 각자 다른 속도·반지름을 돌게 해
+  // 정적인 호 하나만 있을 때보다 "지금 뭔가 버티고 있다"는 느낌이 산다.
+  const motes = [0, 1, 2].map((i) => {
+    const mote = scene.add.graphics();
+    mote.setBlendMode(Phaser.BlendModes.ADD);
+    mote.fillStyle(0xfff6c8, 0.95);
+    mote.fillCircle(0, 0, 2 - i * 0.4);
+    container.add(mote);
+    return mote;
+  });
+
+  const clock = { t: 0 };
+  const orbit = scene.tweens.add({
+    targets: clock,
+    t: Math.PI * 2,
+    duration: 900,
+    repeat: -1,
+    ease: "linear",
+    onUpdate: () => {
+      motes.forEach((mote, i) => {
+        const speed = 1 + i * 0.6;
+        const radius = 26 - i * 5;
+        const angle = clock.t * speed + (i * Math.PI * 2) / motes.length;
+        mote.setPosition(Math.cos(angle) * radius, -4 + Math.sin(angle) * radius * 0.6);
+      });
+    },
+  });
 
   // 숨쉬듯 깜빡여야 "지금 막는 중"이라는 상태가 눈에 들어온다.
-  scene.tweens.add({
-    targets: graphics,
+  const breathe = scene.tweens.add({
+    targets: arcs,
     alpha: { from: 0.55, to: 1 },
     duration: 180,
     yoyo: true,
     repeat: -1,
   });
 
-  return graphics;
+  container.setData("tweens", [orbit, breathe]);
+  return container;
 };
 
 /** 방어 창이 그냥 끝났을 때(퍼펙트 실패) 호를 걷어낸다. */
-export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.Graphics): void => {
-  scene.tweens.killTweensOf(guard);
+export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.Container): void => {
+  const tweens = guard.getData("tweens") as Phaser.Tweens.Tween[] | undefined;
+  tweens?.forEach((tween) => tween.remove());
   scene.tweens.add({
     targets: guard,
     alpha: 0,
@@ -1366,38 +1485,59 @@ export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.G
 };
 
 /**
- * 퍼펙트 패링 성공. 방어 호 대신 터지는 금빛 섬광 + 방사형 스파크로 확실히 구분한다 —
+ * 퍼펙트 패링 성공. 방어 호 대신 방패가 팡 터져나가는 그림으로 확실히 교체된다 —
  * 그냥 막았을 때와 같은 그림이면 "반사가 됐다"는 게 안 읽힌다.
+ * 원형 방패 실루엣이 빠르게 부풀었다 갈라지고, 조각과 스파크가 sin/cos로 흩어진다.
  */
 export const perfectParryBurst = (scene: Phaser.Scene, x: number, y: number): void => {
-  const flash = scene.add.circle(x, y, 6, 0xfff6c8, 1);
+  // 방패 본체 — 확 부풀었다 갈라지듯 사라진다.
+  const shield = scene.add.graphics({ x, y });
+  shield.setDepth(VFX.depth + 2);
+  shield.setBlendMode(Phaser.BlendModes.ADD);
+  shield.lineStyle(3, 0xfff6c8, 1);
+  shield.strokeCircle(0, 0, 10);
+  shield.lineStyle(1.5, 0xffe066, 0.6);
+  shield.strokeCircle(0, 0, 16);
+  scene.tweens.add({
+    targets: shield,
+    scale: 3.2,
+    alpha: 0,
+    duration: 220,
+    ease: "power3.out",
+    onComplete: () => shield.destroy(),
+  });
+
+  const flash = scene.add.circle(x, y, 6, 0xffffff, 1);
   flash.setDepth(VFX.depth + 2);
   flash.setBlendMode(Phaser.BlendModes.ADD);
   scene.tweens.add({
     targets: flash,
     scale: 5,
     alpha: 0,
-    duration: 200,
+    duration: 160,
     ease: "power3.out",
     onComplete: () => flash.destroy(),
   });
 
-  const sparkCount = 10;
-  for (let i = 0; i < sparkCount; i += 1) {
-    const angle = (i / sparkCount) * Math.PI * 2;
-    const spark = scene.add.graphics({ x, y });
-    spark.setDepth(VFX.depth + 2);
-    spark.setBlendMode(Phaser.BlendModes.ADD);
-    spark.lineStyle(2, 0xffe066, 0.9);
-    spark.lineBetween(0, 0, Math.cos(angle) * 5, Math.sin(angle) * 5);
+  // 방패가 깨져 흩어지는 조각들 — 길이·속도를 조금씩 흔들어 규칙적으로 보이지 않게 한다.
+  const shardCount = 12;
+  for (let i = 0; i < shardCount; i += 1) {
+    const angle = (i / shardCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.15, 0.15);
+    const dist = 40 + Phaser.Math.FloatBetween(-8, 14);
+    const shard = scene.add.graphics({ x, y });
+    shard.setDepth(VFX.depth + 2);
+    shard.setBlendMode(Phaser.BlendModes.ADD);
+    shard.lineStyle(2, i % 2 === 0 ? 0xffe066 : 0xfff6c8, 0.9);
+    shard.lineBetween(0, 0, Math.cos(angle) * 6, Math.sin(angle) * 6);
+    shard.setRotation(angle);
     scene.tweens.add({
-      targets: spark,
-      x: x + Math.cos(angle) * 46,
-      y: y + Math.sin(angle) * 46,
+      targets: shard,
+      x: x + Math.cos(angle) * dist,
+      y: y + Math.sin(angle) * dist,
       alpha: 0,
-      duration: 240,
+      duration: 260 + Phaser.Math.Between(-40, 60),
       ease: "power2.out",
-      onComplete: () => spark.destroy(),
+      onComplete: () => shard.destroy(),
     });
   }
 };

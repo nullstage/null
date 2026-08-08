@@ -147,6 +147,8 @@ export class Boss {
   private facing: 1 | -1 = -1;
   /** slam 중에는 y를 tween이 관리한다. 바닥 스냅이 궤적을 덮어쓰지 않게 하는 플래그다. */
   private airborne = false;
+  /** 냉기 속성 적중 시 낮아진다. 잡몹과 같은 방식(BaseEnemy.applySlow)이다. */
+  private speedMultiplier = 1;
   /** 돌진 히트박스는 본체를 따라다녀야 "지나간 자리"만 맞는다. */
   private followHitbox: Phaser.Physics.Arcade.Image | null = null;
 
@@ -243,7 +245,16 @@ export class Boss {
   private stepIdleMove(sprite: Phaser.Physics.Arcade.Sprite): void {
     const dx = this.deps.getPlayerPosition().x - sprite.x;
     const closing = Math.abs(dx) > BODY.keepDistanceX;
-    sprite.setVelocityX(closing ? Math.sign(dx) * BODY.moveSpeed : 0);
+    sprite.setVelocityX(closing ? Math.sign(dx) * BODY.moveSpeed * this.speedMultiplier : 0);
+  }
+
+  /** 냉기 속성 적중. 이동 속도를 잠시 낮춘다. 잡몹과 같은 계약(BaseEnemy.applySlow). */
+  applySlow(factor: number, durationMs: number): void {
+    if (this.defeated) return;
+    this.speedMultiplier = factor;
+    this.scene.time.delayedCall(durationMs, () => {
+      if (!this.defeated) this.speedMultiplier = 1;
+    });
   }
 
   // ────────────────────────────── 패턴 선택 ──────────────────────────────

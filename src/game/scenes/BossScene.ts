@@ -15,13 +15,13 @@ import { VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Boss } from "../entities/Boss";
-import { Player } from "../entities/Player";
+import { Player, TUNING } from "../entities/Player";
 import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
 import { attachHitFx, damageNumber, portalWipeOut } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { AUDIO, createArena, type CombatArena } from "../types/combat";
-import type { AttackMode } from "../types/game";
+import type { AttackMode, UpgradeElement } from "../types/game";
 
 export class BossScene extends Phaser.Scene {
   private telemetry = new CombatTelemetryRecorder();
@@ -57,6 +57,7 @@ export class BossScene extends Phaser.Scene {
       onDamaged: (amount) => runState.damage(amount),
       onDeath: () => this.finish(false),
     });
+    this.player.maxHp = runState.maxHp;
     this.player.hp = runState.hp;
     this.player.spawn(VIEWPORT.width * 0.2, VIEWPORT.height * 0.6);
     this.player.emitHud(1, runState.roomIndex);
@@ -117,6 +118,7 @@ export class BossScene extends Phaser.Scene {
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
       const hitPoint = bodyObj as Phaser.GameObjects.Sprite;
       damageNumber(this, hitPoint.x, hitPoint.y - 30, damage);
+      this.applyElement(attack.getData("element") as UpgradeElement | undefined, target);
 
       // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
       const mode = attack.getData("mode") as AttackMode | undefined;
@@ -137,6 +139,24 @@ export class BossScene extends Phaser.Scene {
       if (result.perfect) this.boss.takeDamage(damage ?? 0);
       if (attack.getData("consumeOnHit")) attack.destroy();
     });
+  }
+
+  /** 속성 부가 효과. CombatScene.applyElement와 동일한 규칙이다. */
+  private applyElement(element: UpgradeElement | undefined, target: Boss): void {
+    if (!element) return;
+    const { upgrade } = TUNING;
+
+    if (element === "FIRE") {
+      for (let i = 1; i <= upgrade.fireTickCount; i += 1) {
+        this.time.delayedCall(i * upgrade.fireTickIntervalMs, () => {
+          if (target.isDefeated || !target.sprite) return;
+          target.takeDamage(upgrade.fireTickDamage);
+          damageNumber(this, target.sprite.x, target.sprite.y - 30, upgrade.fireTickDamage);
+        });
+      }
+    } else if (element === "FROST") {
+      target.applySlow(upgrade.frostSlowFactor, upgrade.frostSlowMs);
+    }
   }
 
   private finish(cleared: boolean): void {

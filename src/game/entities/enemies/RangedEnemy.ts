@@ -90,7 +90,7 @@ export class RangedEnemy extends BaseEnemy {
     const player = this.getPlayerPosition();
     const dx = player.x - body.x;
     const distance = Math.abs(dx);
-    const speed = this.definition.moveSpeed;
+    const speed = this.definition.moveSpeed * this.speedMultiplier;
 
     if (distance < KEEP_DISTANCE_MIN) {
       // 플레이어 반대쪽으로 물러난다. 낭떠러지도 벽처럼 막힌 것으로 본다 —

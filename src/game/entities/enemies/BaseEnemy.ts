@@ -13,7 +13,7 @@
 import Phaser from "phaser";
 
 import { ENEMIES, type EnemyDefinition } from "../../data/enemies";
-import { deathBurst } from "../../systems/CombatVfx";
+import { ashRise, deathBurst } from "../../systems/CombatVfx";
 import { DEPTH, type CombatArena } from "../../types/combat";
 import type { EnemyType } from "../../types/game";
 
@@ -31,8 +31,6 @@ const HIT_PUNCH_MS = 90;
 const HIT_PUNCH_SCALE = 1.22;
 /** 사망 축소·페이드 시간(ms). 파티클 대신 쓴다. */
 const DEATH_MS = 240;
-/** 사망 회전량(도). 축소만 하면 그냥 사라지는 것처럼 보인다. */
-const DEATH_SPIN_DEG = 200;
 /** 잔상 한 장의 수명(ms)과 시작 투명도. */
 const AFTERIMAGE_MS = 200;
 const AFTERIMAGE_ALPHA = 0.45;
@@ -66,6 +64,8 @@ export abstract class BaseEnemy {
   private defeated = false;
   /** 상태 표시용 tint. 피격 플래시가 끝나면 이 색으로 되돌린다. */
   private stateTint: number | null = null;
+  /** 냉기 속성 피격 시 낮아진다. 이동 속도를 쓰는 곳(하위 클래스)이 여기 곱해서 읽는다. */
+  protected speedMultiplier = 1;
 
   protected constructor(type: EnemyType, deps: EnemyDeps) {
     this.definition = ENEMIES[type];
@@ -165,6 +165,15 @@ export abstract class BaseEnemy {
     return this.arena.floorSegments.some((segment) => x >= segment.x && x <= segment.x + segment.width);
   }
 
+  /** 냉기 속성 적중. 이동 속도를 잠시 낮춘다. 겹쳐 걸리면 마지막 것으로 덮어쓴다. */
+  applySlow(factor: number, durationMs: number): void {
+    if (this.defeated) return;
+    this.speedMultiplier = factor;
+    this.scene.time.delayedCall(durationMs, () => {
+      if (!this.defeated) this.speedMultiplier = 1;
+    });
+  }
+
   destroy(): void {
     this.sprite?.destroy();
     this.sprite = null;
@@ -237,7 +246,9 @@ export abstract class BaseEnemy {
 
     // 줄어들며 사라지기만 하면 "죽었다"가 아니라 "없어졌다"로 보인다.
     // 파편과 링이 그 자리에 터져야 마지막 한 대가 언제 들어갔는지 읽힌다.
+    // 몸을 빙글 돌리는 스핀 대신 재가 떠오르며 흩어지는 쪽이 "산화"에 더 맞는다는 지적 반영.
     deathBurst(this.scene, body.x, body.y, DEATH_COLOR);
+    ashRise(this.scene, body.x, body.y, DEATH_COLOR);
 
     // `destroy()`가 이 스프라이트를 즉시 지우지 않도록 참조를 먼저 끊는다.
     this.sprite = null;
@@ -249,7 +260,6 @@ export abstract class BaseEnemy {
       scaleX: 0,
       scaleY: 0,
       alpha: 0,
-      angle: DEATH_SPIN_DEG,
       duration: DEATH_MS,
       ease: "Quad.easeIn",
       onComplete: () => body.destroy(),

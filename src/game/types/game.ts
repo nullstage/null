@@ -32,20 +32,38 @@ export type RoomTemplate = "HORIZONTAL" | "PLATFORM";
 /** 방 프리셋 식별자. 카운터 방은 `counter_*` 접두사를 쓴다. */
 export type RoomId = string;
 
-/** MVP_PLAN §2 강화 6종 */
+/** MVP_PLAN §2 강화. 공격(근접·원거리)·기동 8종에 체력 계열과 속성 무기를 더했다. */
 export type UpgradeId =
   | "MELEE_DAMAGE_UP"
   | "MELEE_FINISHER_RANGE_UP"
   /** 검 자체를 벼린다. 수치와 함께 궤적 색이 바뀌어 눈으로 확인된다. */
   | "BLADE_REFORGED"
+  | "MELEE_BLADE_SIZE_UP"
+  /** 화염 속성. 근접 적중 시 짧은 화상 대미지가 따로 들어간다. */
+  | "MELEE_FIRE_EDGE"
+  /** 마무리 타격(3타)에 검기를 함께 날린다 — 특수기술. */
+  | "MELEE_SWORD_WAVE"
   | "RANGED_COOLDOWN_DOWN"
   | "RANGED_PIERCE"
   /** 총 자체를 개조한다. 탄속과 피해가 오르고 탄 궤적이 길고 밝아진다. */
   | "BARREL_REFORGED"
+  | "RANGED_BULLET_SIZE_UP"
+  /** 냉기 속성. 원거리 적중 시 대상이 짧게 느려진다. */
+  | "RANGED_FROST_ROUND"
   | "DASH_CHARGE_UP"
-  | "DASH_FOLLOWUP_DAMAGE_UP";
+  | "DASH_FOLLOWUP_DAMAGE_UP"
+  | "DASH_COOLDOWN_DOWN"
+  | "DASH_INVULN_UP"
+  | "HEALTH_MAX_UP"
+  /** 방을 클리어할 때마다 소량 회복한다. 큰 폭은 아니다. */
+  | "HEALTH_REGEN"
+  /** 받는 피해를 소폭 줄인다(내구력). */
+  | "HEALTH_ARMOR";
 
-export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY";
+export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
+
+/** 무기에 붙는 속성. 지금은 얕은 부가 효과 하나씩만 준다(화상 틱 / 감속) — 상성표는 없다. */
+export type UpgradeElement = "FIRE" | "FROST";
 
 /** MVP_PLAN §3 전투 텔레메트리. 방 하나마다 하나씩 만든다. */
 export interface CombatTelemetry {
@@ -94,6 +112,8 @@ export interface UpgradeDefinition {
   category: UpgradeCategory;
   name: string;
   description: string;
+  /** 있으면 이 강화는 속성 무기다. UI·이펙트 색 결정에 쓴다. */
+  element?: UpgradeElement;
 }
 
 export interface EnemySpawn {

@@ -11,6 +11,7 @@ import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
 import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
+import { TUNING } from "../entities/Player";
 import type {
   BossPattern,
   BossPatternWeights,
@@ -154,6 +155,8 @@ export class RunState {
     this.previousTelemetry = this.currentTelemetry;
     this.currentTelemetry = telemetry;
 
+    if (this.selectedUpgrades.includes("HEALTH_REGEN")) this.heal(TUNING.upgrade.healthRegenAmount);
+
     eventBus.emit("room:clear", { roomIndex: this.roomIndex, telemetry });
     return true;
   }
@@ -172,6 +175,11 @@ export class RunState {
   addUpgrade(upgradeId: UpgradeId): void {
     if (this.selectedUpgrades.includes(upgradeId)) return;
     this.selectedUpgrades.push(upgradeId);
+
+    if (upgradeId === "HEALTH_MAX_UP") {
+      this.maxHp += TUNING.upgrade.healthMaxBonus;
+      this.heal(TUNING.upgrade.healthMaxBonus);
+    }
   }
 
   setBossWeights(weights: BossPatternWeights): void {
