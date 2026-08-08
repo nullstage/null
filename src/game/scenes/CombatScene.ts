@@ -3,8 +3,8 @@
  *
  * 이 씬은 흐름만 관리한다. 전투 자체는 Player와 적 클래스가 담당한다.
  *
- *   방 시작 → 전투 → 클리어 → 분석 → (강화) → 다음 방
- *   방 3 클리어 후에는 역기만 판정을 거쳐 보스로 넘어간다.
+ *   방 시작 → 전투 → 클리어 → 분석 → 강화 → 다음 방
+ *   방 3 클리어 후에는 역기만 판정 → 강화(3회차) → 보스로 넘어간다. (OQ-016 RESOLVED, DEC-013)
  *
  * 분석 팝업과 강화 선택 UI는 React에 있다. (DEC-006)
  * 이 씬은 이벤트를 쏘고 `ui:continue` / `upgrade:select` 응답을 기다린다.
@@ -16,6 +16,7 @@ import Phaser from "phaser";
 import { eventBus, type GameEventMap } from "../EventBus";
 import { VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
+import { SOFT_COUNTER_ROOM_2_BY_STYLE } from "../data/directorRules";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Player } from "../entities/Player";
 import { BaseEnemy } from "../entities/enemies/BaseEnemy";
@@ -232,30 +233,53 @@ export class CombatScene extends Phaser.Scene {
     runState.attachAnalysis(analyze(telemetry, runState.previousTelemetry));
 
     // 분석 팝업을 닫으면 강화 선택으로 넘어간다.
-    this.once("ui:continue", () => this.offerUpgrade());
+    this.once("ui:continue", () => this.offerUpgrade(() => this.goToNextRoom()));
   }
 
-  /** OQ-016 미결정 — 지금은 방 1·방 2 클리어 후 두 번만 지급한다. */
-  private offerUpgrade(): void {
+  /**
+   * 강화 3회 지급(방 1·방 2·방 3 클리어 후). (OQ-016 RESOLVED, DEC-013)
+   *
+   * `onSelected`가 다음 단계를 결정한다 — 방 1·방 2 후에는 다음 방으로,
+   * 방 3 후에는 보스로 넘어간다. `final`은 UI에 방 전환 로딩을 건너뛰라고 알리는 신호다.
+   * 보스전은 씬 재시작이 아니라 `scene.start`라 `room:start`가 발생하지 않기 때문이다.
+   */
+  private offerUpgrade(onSelected: () => void, final = false): void {
     runState.setPhase("UPGRADE");
-    eventBus.emit("upgrade:offer", { choices: rollUpgradeChoices(runState.selectedUpgrades) });
+    eventBus.emit("upgrade:offer", {
+      choices: rollUpgradeChoices(runState.selectedUpgrades),
+      final,
+    });
 
     this.once("upgrade:select", ({ upgradeId }) => {
       runState.addUpgrade(upgradeId);
-      this.goToNextRoom();
+      onSelected();
     });
   }
 
   private goToNextRoom(): void {
     const nextIndex = runState.roomIndex + 1;
 
-    // 방 3은 Director가 고른 카운터 방이다. 그 외에는 고정 순서를 쓴다.
-    const nextRoomId =
-      nextIndex >= LAST_COMBAT_ROOM_INDEX
-        ? (runState.counterRoomId ?? "counter_mixed")
-        : FIXED_ROOM_SEQUENCE[nextIndex - 1];
-
+    const nextRoomId = this.resolveRoomId(nextIndex);
     this.scene.restart({ roomId: nextRoomId });
+  }
+
+  /**
+   * 방 1은 고정, 방 3은 Director가 고른 카운터 방(3기)이다.
+   *
+   * 방 2는 방 1 텔레메트리만으로 분류한 스타일에 따라 축소판(2기) 소프트 카운터를 쓴다.
+   * (OQ-010 RESOLVED, DEC-014) 이 시점의 `runState.predictedStyle`은 방 1 클리어 직후
+   * `analyze()`가 세팅한 값 그대로다 — 방 2가 아직 시작 전이라 65/35 가중 평균에 쓰일
+   * 방 2 자신의 데이터가 없으므로 방 1 단독 분류가 곧 "방 1 결과"다.
+   */
+  private resolveRoomId(nextIndex: number): RoomId {
+    if (nextIndex >= LAST_COMBAT_ROOM_INDEX) {
+      return runState.counterRoomId ?? "counter_mixed";
+    }
+    if (nextIndex === 2) {
+      const style = runState.predictedStyle ?? "MIXED";
+      return SOFT_COUNTER_ROOM_2_BY_STYLE[style];
+    }
+    return FIXED_ROOM_SEQUENCE[nextIndex - 1];
   }
 
   /**
@@ -273,7 +297,8 @@ export class CombatScene extends Phaser.Scene {
     );
     runState.setBossWeights(bossWeightsFor(actualStyle));
 
-    this.once("ui:continue", () => this.scene.start("Boss"));
+    // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-013)
+    this.once("ui:continue", () => this.offerUpgrade(() => this.scene.start("Boss"), true));
   }
 
   private handlePlayerDeath(): void {

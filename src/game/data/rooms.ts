@@ -2,10 +2,11 @@
  * 방 프리셋. (MVP_PLAN §2, §5)
  *
  * 카운터 방 4종은 MVP_PLAN §5에 확정되어 있어 그대로 옮겼다.
- * 방 1·방 2 구성은 아직 정해지지 않았다.
- *   OQ-009 미결정 — 방 1 중립 / 방 2 혼합 구성의 적 종류와 수
- *   OQ-010 미결정 — 방 2가 방 1 분석 결과를 반영할지 여부
- * 아래 `room_1`, `room_2`는 흐름을 굴리기 위한 임시 구성이다.
+ * 방 1 구성은 아직 정해지지 않았다. (OQ-009 미결정 — 임시 구성)
+ *
+ * 방 2는 OQ-010 RESOLVED(DEC-014)에 따라 방 1 분석 스타일별 축소판(2기) 카운터를 쓴다.
+ * `room_2`는 그중 MIXED(또는 신뢰할 결과가 없을 때)용 중립 구성으로 남는다.
+ * 어떤 프리셋을 쓸지는 `SOFT_COUNTER_ROOM_2_BY_STYLE`(directorRules.ts)이 정한다.
  */
 
 import type { RoomId, RoomPreset } from "../types/game";
@@ -22,7 +23,7 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
     ],
   },
 
-  /** 방 2 — 성향 분석용 혼합 방 (OQ-009, OQ-010 미결정, 임시 구성) */
+  /** 방 2 — MIXED(또는 방 1 분석 없음)용 중립 방 (OQ-009 미결정, 임시 구성) */
   {
     id: "room_2",
     template: "PLATFORM",
@@ -31,6 +32,38 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
       { type: "CHASER", xRatio: 0.7, delayMs: 0 },
       { type: "RANGED", xRatio: 0.9, delayMs: 1500 },
       { type: "CHASER", xRatio: 0.2, delayMs: 4000 },
+    ],
+  },
+
+  /**
+   * 방 2 소프트 카운터 3종. (MVP_PLAN §5 "방 2 소프트 카운터", DEC-014)
+   * 각각 대응 방 3 카운터의 다수 그룹만 2기로 남긴 축소판이다.
+   */
+  {
+    id: "room_2_soft_ranged",
+    template: "HORIZONTAL",
+    hazardsEnabled: false,
+    spawns: [
+      { type: "CHASER", xRatio: 0.7, delayMs: 0 },
+      { type: "CHASER", xRatio: 0.9, delayMs: 800 },
+    ],
+  },
+  {
+    id: "room_2_soft_melee",
+    template: "PLATFORM",
+    hazardsEnabled: false,
+    spawns: [
+      { type: "RANGED", xRatio: 0.1, delayMs: 0 },
+      { type: "RANGED", xRatio: 0.9, delayMs: 0 },
+    ],
+  },
+  {
+    id: "room_2_soft_mobile",
+    template: "PLATFORM",
+    hazardsEnabled: true,
+    spawns: [
+      { type: "MOBILITY_COUNTER", xRatio: 0.25, delayMs: 0 },
+      { type: "MOBILITY_COUNTER", xRatio: 0.75, delayMs: 1200 },
     ],
   },
 
@@ -87,7 +120,11 @@ export const ROOM_PRESETS: Record<RoomId, RoomPreset> = Object.fromEntries(
   ROOM_PRESET_LIST.map((preset) => [preset.id, preset]),
 );
 
-/** 런에서 방 1, 방 2는 고정이고 방 3만 Director가 고른다. */
+/**
+ * 방 1은 고정이고, 방 3은 Director가 고른다.
+ * 방 2는 여기 있는 `room_2`가 기본값(MIXED·분석 없음)일 뿐, 실제로는
+ * `SOFT_COUNTER_ROOM_2_BY_STYLE`(directorRules.ts)이 방 1 분석에 따라 고른다. (DEC-014)
+ */
 export const FIXED_ROOM_SEQUENCE: RoomId[] = ["room_1", "room_2"];
 
 export const getRoomPreset = (id: RoomId): RoomPreset => {

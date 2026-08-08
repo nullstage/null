@@ -158,6 +158,8 @@ export default function HUDOverlay() {
   const [telemetry, setTelemetry] = useState<CombatTelemetry | null>(null);
   const [analysis, setAnalysis] = useState<DirectorAnalysis | null>(null);
   const [choices, setChoices] = useState<UpgradeDefinition[]>([]);
+  /** 방 3 클리어 후 보스 진입 직전 지급되는 마지막 강화인지. (OQ-016, DEC-013) */
+  const [finalUpgrade, setFinalUpgrade] = useState(false);
   const [deception, setDeception] = useState<DeceptionResult | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
   const [bossWeights, setBossWeights] = useState<BossPatternWeights>(DEFAULT_BOSS_WEIGHTS);
@@ -243,8 +245,9 @@ export default function HUDOverlay() {
     setActivePanel("analysis");
   });
 
-  useGameEvent("upgrade:offer", ({ choices: next }) => {
+  useGameEvent("upgrade:offer", ({ choices: next, final }) => {
     setChoices(next);
+    setFinalUpgrade(!!final);
     setActivePanel("upgrade");
   });
 
@@ -336,6 +339,7 @@ export default function HUDOverlay() {
     setTelemetry(null);
     setDeception(null);
     setResult(null);
+    setFinalUpgrade(false);
     setBossWeights(DEFAULT_BOSS_WEIGHTS);
     // 방 전환 도중에 죽거나 나가면 흰 로딩이 그대로 남는다.
     setRoomLoading(false);
@@ -473,9 +477,13 @@ export default function HUDOverlay() {
           choices={choices}
           onSelect={(upgradeId) => {
             setActivePanel("none");
-            // 로딩을 먼저 덮고 나서 방을 바꾼다. 순서가 반대면 바뀌는 장면이 그대로 보인다.
-            setRoomReady(false);
-            setRoomLoading(true);
+            // 방 3 이후의 마지막 강화는 다음 방이 아니라 보스전으로 이어진다.
+            // 보스전은 scene.start라 room:start가 발생하지 않으므로 room 로딩을 걸면 안 걷힌다.
+            if (!finalUpgrade) {
+              // 로딩을 먼저 덮고 나서 방을 바꾼다. 순서가 반대면 바뀌는 장면이 그대로 보인다.
+              setRoomReady(false);
+              setRoomLoading(true);
+            }
             emitGameEvent("upgrade:select", { upgradeId });
           }}
         />
