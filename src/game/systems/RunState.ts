@@ -14,18 +14,19 @@ import { ENGRAVING_EFFECT } from "../data/engravings";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { hasEngraving } from "./Engravings";
 import { TUNING } from "../entities/Player";
-import type {
-  BossPattern,
-  BossPatternWeights,
-  CombatTelemetry,
-  DeceptionResult,
-  DirectorAnalysis,
-  GamePhase,
-  PlayStyle,
-  RoomId,
-  RoomRecord,
-  RunResult,
-  UpgradeId,
+import {
+  SKILL_CATEGORY,
+  type BossPattern,
+  type BossPatternWeights,
+  type CombatTelemetry,
+  type DeceptionResult,
+  type DirectorAnalysis,
+  type GamePhase,
+  type PlayStyle,
+  type RoomId,
+  type RoomRecord,
+  type RunResult,
+  type UpgradeId,
 } from "../types/game";
 
 const emptyPatternUsage = (): Record<BossPattern, number> => ({
@@ -238,6 +239,16 @@ export class RunState {
 
   addUpgrade(upgradeId: UpgradeId): void {
     if (this.selectedUpgrades.includes(upgradeId)) return;
+
+    // 칼/총/대쉬 슬롯형 스킬은 슬롯당 하나다 — 새로 얻으면 같은 슬롯의 기존 걸 밀어낸다.
+    // `splice`로 그 자리에서 지운다: 배열을 통째로 새로 만들면 Player가 생성 시점에
+    // 캡처해 둔 같은 배열 참조(`deps.upgrades`)가 끊겨 이후 장착이 전혀 안 보이게 된다.
+    const category = SKILL_CATEGORY[upgradeId];
+    if (category) {
+      const prevIndex = this.selectedUpgrades.findIndex((id) => SKILL_CATEGORY[id] === category);
+      if (prevIndex !== -1) this.selectedUpgrades.splice(prevIndex, 1);
+    }
+
     this.selectedUpgrades.push(upgradeId);
 
     if (upgradeId === "HEALTH_MAX_UP") {

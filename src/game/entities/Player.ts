@@ -59,7 +59,7 @@ import {
   type PlayerAnimState,
   type SkillVfxKey,
 } from "../types/combat";
-import type { AttackMode, UpgradeElement, UpgradeId } from "../types/game";
+import { SKILL_CATEGORY, type AttackMode, type SkillCategory, type UpgradeElement, type UpgradeId } from "../types/game";
 
 /**
  * 도트 확대 배율. 64px 셀을 화면에서 이 배수로 키운다.
@@ -363,6 +363,38 @@ export const TUNING = {
     swordWaveVisualScale: 0.42,
     eruptionVisualScale: 0.55,
     cycloneVisualScale: 1.1,
+
+    /** 관통탄(총 슬롯). */
+    pierceCooldownMs: 4500,
+    pierceDamageMultiplier: 1.8,
+    pierceVisualScale: 0.55,
+
+    /** 총검돌격(총 슬롯). */
+    bayonetCooldownMs: 6000,
+    bayonetDamageMultiplier: 2.2,
+    bayonetVisualScale: 0.55,
+
+    /** 확산탄(총 슬롯) — 세 갈래, 갈래당 배율이라 낱개는 약하게 잡는다. */
+    spreadCooldownMs: 5000,
+    spreadDamageMultiplier: 0.9,
+    spreadVisualScale: 0.75,
+
+    /** 질주의 잔영(대쉬 슬롯). */
+    rushTrailCooldownMs: 6000,
+    rushTrailDamageMultiplier: 1.6,
+    rushTrailVisualScale: 0.85,
+    rushTrailReachPx: 150,
+
+    /** 심연의 도약(대쉬 슬롯). */
+    abyssLeapCooldownMs: 7000,
+    abyssLeapDamageMultiplier: 1.4,
+    abyssLeapVisualScale: 0.7,
+    abyssLeapDistancePx: 190,
+    abyssLeapInvulnMs: 260,
+
+    /** 패링 이펙트 표시 배율. */
+    parryGuardVisualScale: 0.45,
+    perfectParryVisualScale: 0.55,
   },
 
   /** 공중에서 입력이 없을 때 수평 속도가 줄어드는 비율(프레임당). 1이면 영원히 날아간다. */
@@ -446,12 +478,16 @@ const MOVE_ACTIONS = [
 
 type PlayerAction = (typeof MOVE_ACTIONS)[number];
 
-/** 스킬 아티팩트 ↔ 키 슬롯. 새 스킬은 여기에 한 줄 추가하면 HUD 표시까지 따라온다. */
-const SKILL_SLOTS: readonly { id: UpgradeId; action: GameAction }[] = [
-  { id: "MELEE_SWORD_WAVE", action: "SKILL" },
-  { id: "MELEE_SPIKE_ERUPTION", action: "SKILL_2" },
-  { id: "MELEE_BLADE_CYCLONE", action: "SKILL_3" },
-];
+/**
+ * 칼/총/대쉬 슬롯 ↔ 키. 슬롯 하나엔 스킬 하나만 장착되고(`SKILL_CATEGORY`,
+ * `RunState.addUpgrade`가 교체를 처리), 새 카테고리를 늘리려면 여기 한 줄만 추가하면 된다.
+ */
+const SKILL_SLOT_ACTION: Record<SkillCategory, GameAction> = {
+  MELEE: "SKILL",
+  RANGED: "SKILL_2",
+  DASH: "SKILL_3",
+};
+const SKILL_SLOT_ORDER: readonly SkillCategory[] = ["MELEE", "RANGED", "DASH"];
 
 export interface PlayerDeps {
   scene: Phaser.Scene;
@@ -568,7 +604,7 @@ export class Player {
   private parryStartedAtMs = 0;
   private parryEndsAtMs = 0;
   private parryCooldownUntilMs = 0;
-  private parryGuardFx: Phaser.GameObjects.Container | null = null;
+  private parryGuardFx: Phaser.GameObjects.Sprite | null = null;
   private blinkTween: Phaser.Tweens.Tween | null = null;
 
   /**
@@ -727,13 +763,16 @@ export class Player {
     if (this.justPressed("ATTACK")) this.attack();
     if (this.justPressed("SWITCH_MODE")) this.switchMode();
     if (this.justPressed("PARRY")) this.parry();
-    if (this.justPressed("SKILL")) this.castSwordWave();
-    if (this.justPressed("SKILL_2")) this.castSpikeEruption();
-    if (this.justPressed("SKILL_3")) this.castBladeCyclone();
+    if (this.justPressed("SKILL")) this.castEquippedSkill("MELEE");
+    if (this.justPressed("SKILL_2")) this.castEquippedSkill("RANGED");
+    if (this.justPressed("SKILL_3")) this.castEquippedSkill("DASH");
 
     if (this.parrying) {
       if (time >= this.parryEndsAtMs) this.endParry();
-      else this.parryGuardFx?.setPosition(sprite.x, sprite.y).setScale(this.facing, 1);
+      else {
+        const scale = TUNING.upgrade.parryGuardVisualScale;
+        this.parryGuardFx?.setPosition(sprite.x, sprite.y).setScale(this.facing * scale, scale);
+      }
     }
 
     this.syncAnim();
@@ -918,7 +957,7 @@ export class Player {
     // 소리는 성공했을 때만 낸다(takeDamage의 퍼펙트 분기) — 자세를 잡는 순간에 매번
     // 울리면 실제로 막았는지와 상관없이 성공한 것처럼 들린다.
     this.parryGuardFx?.destroy();
-    this.parryGuardFx = parryGuard(this.scene, sprite.x, sprite.y, this.facing);
+    this.parryGuardFx = parryGuard(this.scene, sprite.x, sprite.y, this.facing, TUNING.upgrade.parryGuardVisualScale);
   }
 
   private endParry(): void {
@@ -1115,6 +1154,39 @@ export class Player {
     return true;
   }
 
+  /** 이 슬롯(카테고리)에 지금 장착된 스킬을 찾아 발동한다. 없으면 조용히 아무 일도 안 한다. */
+  private castEquippedSkill(category: SkillCategory): void {
+    const id = this.deps.upgrades.find((upgradeId) => SKILL_CATEGORY[upgradeId] === category);
+    switch (id) {
+      case "MELEE_SWORD_WAVE":
+        this.castSwordWave();
+        break;
+      case "MELEE_SPIKE_ERUPTION":
+        this.castSpikeEruption();
+        break;
+      case "MELEE_BLADE_CYCLONE":
+        this.castBladeCyclone();
+        break;
+      case "RANGED_PIERCE_SHOT":
+        this.castPierceShot();
+        break;
+      case "RANGED_BAYONET_THRUST":
+        this.castBayonetThrust();
+        break;
+      case "RANGED_SPREAD_SHOT":
+        this.castSpreadShot();
+        break;
+      case "DASH_RUSH_TRAIL":
+        this.castRushTrail();
+        break;
+      case "DASH_ABYSS_LEAP":
+        this.castAbyssLeap();
+        break;
+      default:
+        break;
+    }
+  }
+
   /**
    * 검기(Q). 3타에 자동으로 얹히던 것을 "원할 때 쏘는 한 방"으로 옮겼다 —
    * 증강이 아니라 스킬이다. (사용자 결정)
@@ -1219,6 +1291,153 @@ export class Player {
     this.punch(TUNING.feedback.punchScale * 1.25, 1 / TUNING.feedback.punchScale);
   }
 
+  /** 관통탄(총 슬롯) — 강력한 한 발이 전방을 길게 꿰뚫는다. */
+  private castPierceShot(): void {
+    if (!this.tryCastSkill("RANGED_PIERCE_SHOT", TUNING.upgrade.pierceCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+    const dir = this.facing;
+
+    playSfx(this.scene, AUDIO.gunShot);
+    this.punch(TUNING.feedback.punchScale * 1.15, 1 / TUNING.feedback.punchScale);
+
+    const damage = Math.round(TUNING.ranged.damage * upgrade.pierceDamageMultiplier);
+    const at = sprite.x + dir * 90;
+    const box = this.scene.physics.add.image(at, sprite.y, TEXTURE.playerAttack);
+    box.setDisplaySize(150, 24);
+    box.setDepth(TUNING.depth.attack);
+    box.setAlpha(0);
+    this.deps.arena.playerAttacks.add(box);
+    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    box.setData("damage", damage);
+    box.setData("mode", "RANGED" satisfies AttackMode);
+    this.scene.time.delayedCall(120, () => box.destroy());
+
+    this.burstSkillVfx("skillPierceBurst", sprite.x + dir * 40, sprite.y, upgrade.pierceVisualScale, dir);
+    this.scene.cameras.main.shake(70, 0.004);
+  }
+
+  /** 총검돌격(총 슬롯) — 총검을 길게 내질러 전방을 꿰뚫는다. */
+  private castBayonetThrust(): void {
+    if (!this.tryCastSkill("RANGED_BAYONET_THRUST", TUNING.upgrade.bayonetCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+    const dir = this.facing;
+
+    playSfx(this.scene, AUDIO.swordHit2);
+    this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
+
+    const damage = Math.round(TUNING.ranged.damage * upgrade.bayonetDamageMultiplier);
+    const at = sprite.x + dir * 100;
+    const box = this.scene.physics.add.image(at, sprite.y, TEXTURE.playerAttack);
+    box.setDisplaySize(170, 30);
+    box.setDepth(TUNING.depth.attack);
+    box.setAlpha(0);
+    this.deps.arena.playerAttacks.add(box);
+    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    box.setData("damage", damage);
+    box.setData("mode", "RANGED" satisfies AttackMode);
+    this.scene.time.delayedCall(140, () => box.destroy());
+
+    this.burstSkillVfx("skillBayonetBurst", sprite.x + dir * 50, sprite.y, upgrade.bayonetVisualScale, dir);
+    this.scene.cameras.main.shake(90, 0.005);
+  }
+
+  /** 확산탄(총 슬롯) — 부채꼴로 여러 발을 흩뿌린다. */
+  private castSpreadShot(): void {
+    if (!this.tryCastSkill("RANGED_SPREAD_SHOT", TUNING.upgrade.spreadCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+    const dir = this.facing;
+
+    playSfx(this.scene, AUDIO.gunShot);
+    this.punch(TUNING.feedback.punchScale * 1.1, 1 / TUNING.feedback.punchScale);
+
+    const damage = Math.round(TUNING.ranged.damage * upgrade.spreadDamageMultiplier);
+    // 세 갈래 — 가운데는 곧게, 위아래는 살짝 어긋난 y에 판정을 둬 부채꼴처럼 맞는다.
+    const offsets = [-26, 0, 26];
+    for (const offsetY of offsets) {
+      const box = this.scene.physics.add.image(sprite.x + dir * 80, sprite.y + offsetY, TEXTURE.playerAttack);
+      box.setDisplaySize(90, 22);
+      box.setDepth(TUNING.depth.attack);
+      box.setAlpha(0);
+      this.deps.arena.playerAttacks.add(box);
+      (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      box.setData("damage", damage);
+      box.setData("mode", "RANGED" satisfies AttackMode);
+      this.scene.time.delayedCall(110, () => box.destroy());
+    }
+
+    this.burstSkillVfx("skillSpreadBurst", sprite.x + dir * 30, sprite.y, upgrade.spreadVisualScale, dir);
+    this.scene.cameras.main.shake(70, 0.004);
+  }
+
+  /** 질주의 잔영(대쉬 슬롯) — 전방으로 짓쳐들며 잔상으로 베어낸다. */
+  private castRushTrail(): void {
+    if (!this.tryCastSkill("DASH_RUSH_TRAIL", TUNING.upgrade.rushTrailCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+    const dir = this.facing;
+
+    this.comboStep = 0;
+    playSfx(this.scene, AUDIO.dash);
+    this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
+
+    const damage = Math.round(TUNING.melee.damage * upgrade.rushTrailDamageMultiplier);
+    const at = sprite.x + dir * upgrade.rushTrailReachPx * 0.5;
+    const box = this.scene.physics.add.image(at, sprite.y, TEXTURE.playerAttack);
+    box.setDisplaySize(upgrade.rushTrailReachPx, 60);
+    box.setDepth(TUNING.depth.attack);
+    box.setAlpha(0);
+    this.deps.arena.playerAttacks.add(box);
+    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    box.setData("damage", damage);
+    box.setData("mode", "MELEE" satisfies AttackMode);
+    this.scene.time.delayedCall(160, () => box.destroy());
+
+    this.burstSkillVfx("skillRushTrailFly", sprite.x, sprite.y, upgrade.rushTrailVisualScale, dir);
+    this.scene.cameras.main.shake(90, 0.005);
+  }
+
+  /** 심연의 도약(대쉬 슬롯) — 짧은 거리를 순간이동하며 시작·도착 지점에 충격을 남긴다. */
+  private castAbyssLeap(): void {
+    if (!this.tryCastSkill("DASH_ABYSS_LEAP", TUNING.upgrade.abyssLeapCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+    const dir = this.facing;
+
+    playSfx(this.scene, AUDIO.portal);
+    this.burstSkillVfx("skillAbyssLeapBurst", sprite.x, sprite.y, upgrade.abyssLeapVisualScale);
+
+    const damage = Math.round(TUNING.melee.damage * upgrade.abyssLeapDamageMultiplier);
+    const spawnHit = (x: number, y: number) => {
+      const box = this.scene.physics.add.image(x, y, TEXTURE.playerAttack);
+      box.setDisplaySize(70, 70);
+      box.setDepth(TUNING.depth.attack);
+      box.setAlpha(0);
+      this.deps.arena.playerAttacks.add(box);
+      (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      box.setData("damage", damage);
+      box.setData("mode", "MELEE" satisfies AttackMode);
+      this.scene.time.delayedCall(130, () => box.destroy());
+    };
+    spawnHit(sprite.x, sprite.y);
+
+    // 순간이동 — 벽 통과를 막으려고 방 경계(0~bounds.width) 안으로만 값을 눌러 담는다.
+    const bounds = this.deps.arena.bounds;
+    const targetX = Phaser.Math.Clamp(
+      sprite.x + dir * upgrade.abyssLeapDistancePx,
+      TUNING.body.width,
+      bounds.width - TUNING.body.width,
+    );
+    sprite.x = targetX;
+    this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, this.scene.time.now + upgrade.abyssLeapInvulnMs);
+
+    this.burstSkillVfx("skillAbyssLeapBurst", targetX, sprite.y, upgrade.abyssLeapVisualScale);
+    spawnHit(targetX, sprite.y);
+    this.scene.cameras.main.shake(80, 0.004);
+  }
+
   /** 검기 투사체. 근접 판정과 별개로 `playerAttacks`에 들어가는 얇고 빠른 참격이다. */
   private fireSwordWave(sprite: Phaser.Physics.Arcade.Sprite, damage: number): void {
     const { upgrade } = TUNING;
@@ -1248,9 +1467,9 @@ export class Player {
    * 텍스처는 해당 시트 키를, `scale`은 프레임마다 다른 원본 크기를 화면 표시 크기로
    * 맞추는 배율이다.
    */
-  private burstSkillVfx(animKey: SkillVfxKey, x: number, y: number, scale: number): void {
+  private burstSkillVfx(animKey: SkillVfxKey, x: number, y: number, scale: number, facing: 1 | -1 = 1): void {
     const fx = this.scene.add.sprite(x, y, SKILL_VFX_TEXTURE[animKey]);
-    fx.setScale(scale);
+    fx.setScale(facing * scale, scale);
     fx.setDepth(TUNING.depth.attack + 1);
     fx.setBlendMode(Phaser.BlendModes.ADD);
     fx.play(animKey);
@@ -1573,7 +1792,9 @@ export class Player {
         this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
         this.endParry();
         playSfx(this.scene, AUDIO.parry);
-        if (this.sprite) perfectParryBurst(this.scene, this.sprite.x, this.sprite.y);
+        if (this.sprite) {
+          perfectParryBurst(this.scene, this.sprite.x, this.sprite.y, TUNING.upgrade.perfectParryVisualScale);
+        }
         // 성공의 쾌감은 시간과 화면이 같이 흔들려야 산다 — 히트스톱 + 줌 펀치 + 금빛 섬광.
         hitStop(this.scene);
         const cam = this.scene.cameras.main;
@@ -2096,13 +2317,18 @@ export class Player {
         magazineSize: this.maxMagazineSize,
         reloading: this.scene.time.now < this.reloadingUntilMs,
         shards: this.deps.getShards(),
-        skills: SKILL_SLOTS.filter((slot) => this.deps.upgrades.includes(slot.id)).map(
-          (slot) => ({
-            id: slot.id,
-            key: KEY_BINDINGS[slot.action],
-            ready: this.scene.time.now >= (this.skillCooldownUntil[slot.id] ?? 0),
-          }),
-        ),
+        // 슬롯(카테고리)마다 지금 장착된 스킬 하나씩만 — 없으면 그 슬롯은 HUD에 안 뜬다.
+        skills: SKILL_SLOT_ORDER.flatMap((category) => {
+          const id = this.deps.upgrades.find((upgradeId) => SKILL_CATEGORY[upgradeId] === category);
+          if (!id) return [];
+          return [
+            {
+              id,
+              key: KEY_BINDINGS[SKILL_SLOT_ACTION[category]],
+              ready: this.scene.time.now >= (this.skillCooldownUntil[id] ?? 0),
+            },
+          ];
+        }),
       },
     });
   }

@@ -31,11 +31,16 @@ import DialogueBox from "./ui/DialogueBox";
 import EngravePanel from "./ui/EngravePanel";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
 import {
+  AbyssLeapIcon,
+  BayonetIcon,
   CycloneIcon,
   GunIcon,
+  PierceIcon,
   ReloadIcon,
+  RushTrailIcon,
   ShardIcon,
   SpikeIcon,
+  SpreadIcon,
   SwordIcon,
   WaveIcon,
 } from "./ui/HudIcons";
@@ -80,6 +85,11 @@ const SKILL_ICONS: Partial<Record<UpgradeId, ReactElement>> = {
   MELEE_SWORD_WAVE: <WaveIcon />,
   MELEE_SPIKE_ERUPTION: <SpikeIcon />,
   MELEE_BLADE_CYCLONE: <CycloneIcon />,
+  RANGED_PIERCE_SHOT: <PierceIcon />,
+  RANGED_BAYONET_THRUST: <BayonetIcon />,
+  RANGED_SPREAD_SHOT: <SpreadIcon />,
+  DASH_RUSH_TRAIL: <RushTrailIcon />,
+  DASH_ABYSS_LEAP: <AbyssLeapIcon />,
 };
 
 

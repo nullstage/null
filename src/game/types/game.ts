@@ -141,9 +141,37 @@ export type UpgradeId =
   | "ITEM_VIOLET_POTION"
   | "ITEM_GOLD_RING"
   | "ITEM_BLOODY_SCROLL"
-  | "ITEM_VIOLET_HOURGLASS";
+  | "ITEM_VIOLET_HOURGLASS"
+  /**
+   * 슬롯형 액티브 스킬 5종. 칼(기존 3종)·총·대쉬 세 슬롯 중 총·대쉬 슬롯을 채운다 —
+   * `SKILL_CATEGORY` 참고. 한 슬롯엔 하나만 장착되고, 새로 얻으면 같은 슬롯의
+   * 기존 스킬을 대체한다(`RunState.addUpgrade`).
+   */
+  | "RANGED_PIERCE_SHOT"
+  | "RANGED_BAYONET_THRUST"
+  | "RANGED_SPREAD_SHOT"
+  | "DASH_RUSH_TRAIL"
+  | "DASH_ABYSS_LEAP";
 
 export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
+
+/** 슬롯형 액티브 스킬의 슬롯 종류. 칼/총/대쉬 각 슬롯엔 하나만 장착된다. */
+export type SkillCategory = "MELEE" | "RANGED" | "DASH";
+
+/**
+ * 슬롯형 스킬 id → 슬롯. `Player.ts`(발동·키 매핑)와 `RunState.ts`(장착 교체)가
+ * 같은 표를 본다 — 여기 없는 id는 슬롯형이 아닌 일반 강화다.
+ */
+export const SKILL_CATEGORY: Partial<Record<UpgradeId, SkillCategory>> = {
+  MELEE_SWORD_WAVE: "MELEE",
+  MELEE_SPIKE_ERUPTION: "MELEE",
+  MELEE_BLADE_CYCLONE: "MELEE",
+  RANGED_PIERCE_SHOT: "RANGED",
+  RANGED_BAYONET_THRUST: "RANGED",
+  RANGED_SPREAD_SHOT: "RANGED",
+  DASH_RUSH_TRAIL: "DASH",
+  DASH_ABYSS_LEAP: "DASH",
+};
 
 /** 무기에 붙는 속성. 지금은 얕은 부가 효과 하나씩만 준다(화상 틱 / 감속 / 독 틱) — 상성표는 없다. */
 export type UpgradeElement = "FIRE" | "FROST" | "POISON" | "BLEED" | "DARK" | "SHOCK" | "HOLY";

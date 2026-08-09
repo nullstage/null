@@ -10,7 +10,20 @@ import { UPGRADES } from "@/game/data/upgrades";
 import type { HudState, UpgradeCategory, UpgradeId } from "@/game/types/game";
 import { theme } from "@/styles/theme";
 
-import { BootIcon, CycloneIcon, GunIcon, HeartIcon, SpikeIcon, SwordIcon, WaveIcon } from "./HudIcons";
+import {
+  AbyssLeapIcon,
+  BayonetIcon,
+  BootIcon,
+  CycloneIcon,
+  GunIcon,
+  HeartIcon,
+  PierceIcon,
+  RushTrailIcon,
+  SpikeIcon,
+  SpreadIcon,
+  SwordIcon,
+  WaveIcon,
+} from "./HudIcons";
 import { Backdrop } from "./Panel";
 
 /**
@@ -22,12 +35,26 @@ import { Backdrop } from "./Panel";
  * 따로 그리지 않는다 — 동적으로 바뀌는 부분만 겹친다.
  */
 
-const SKILL_IDS: readonly UpgradeId[] = ["MELEE_SWORD_WAVE", "MELEE_SPIKE_ERUPTION", "MELEE_BLADE_CYCLONE"];
+const SKILL_IDS: readonly UpgradeId[] = [
+  "MELEE_SWORD_WAVE",
+  "MELEE_SPIKE_ERUPTION",
+  "MELEE_BLADE_CYCLONE",
+  "RANGED_PIERCE_SHOT",
+  "RANGED_BAYONET_THRUST",
+  "RANGED_SPREAD_SHOT",
+  "DASH_RUSH_TRAIL",
+  "DASH_ABYSS_LEAP",
+];
 
 const SKILL_ICON: Partial<Record<UpgradeId, ReactElement>> = {
   MELEE_SWORD_WAVE: <WaveIcon />,
   MELEE_SPIKE_ERUPTION: <SpikeIcon />,
   MELEE_BLADE_CYCLONE: <CycloneIcon />,
+  RANGED_PIERCE_SHOT: <PierceIcon />,
+  RANGED_BAYONET_THRUST: <BayonetIcon />,
+  RANGED_SPREAD_SHOT: <SpreadIcon />,
+  DASH_RUSH_TRAIL: <RushTrailIcon />,
+  DASH_ABYSS_LEAP: <AbyssLeapIcon />,
   /* eslint-disable @next/next/no-img-element */
   HEALTH_MASK: <img src={assetPath("ui/items/mask-of-no-name.png")} alt="" />,
   MELEE_BERSERK: <img src={assetPath("ui/items/enraged-blade.png")} alt="" />,

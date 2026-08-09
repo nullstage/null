@@ -16,6 +16,7 @@ import {
   AUDIO,
   BOSS_ANIM,
   ENEMY_ANIM,
+  PARRY_VFX_ANIM,
   PLAYER_INTRO_ANIM,
   PLAYER_SPRITE,
   SILHOUETTE,
@@ -56,19 +57,26 @@ export class BootScene extends Phaser.Scene {
       frameWidth: PLAYER_SPRITE.frameWidth,
       frameHeight: PLAYER_SPRITE.frameHeight,
     });
-    // 검기·검극·검무 이펙트 — 프레임마다 크기가 달라 행별 최댓값으로 셀을 통일했다.
-    this.load.spritesheet(TEXTURE.skillWave, assetPath(SKILL_VFX_SHEET.wave.path), {
-      frameWidth: SKILL_VFX_SHEET.wave.frameWidth,
-      frameHeight: SKILL_VFX_SHEET.wave.frameHeight,
-    });
-    this.load.spritesheet(TEXTURE.skillEruption, assetPath(SKILL_VFX_SHEET.eruption.path), {
-      frameWidth: SKILL_VFX_SHEET.eruption.frameWidth,
-      frameHeight: SKILL_VFX_SHEET.eruption.frameHeight,
-    });
-    this.load.spritesheet(TEXTURE.skillCyclone, assetPath(SKILL_VFX_SHEET.cyclone.path), {
-      frameWidth: SKILL_VFX_SHEET.cyclone.frameWidth,
-      frameHeight: SKILL_VFX_SHEET.cyclone.frameHeight,
-    });
+    // 스킬·패링 이펙트 — 전부 프레임마다 원본 크기가 달라 행별 최댓값으로 셀을 통일했다.
+    const skillVfxTextures: [string, keyof typeof SKILL_VFX_SHEET][] = [
+      [TEXTURE.skillWave, "wave"],
+      [TEXTURE.skillEruption, "eruption"],
+      [TEXTURE.skillCyclone, "cyclone"],
+      [TEXTURE.skillPierce, "pierce"],
+      [TEXTURE.skillBayonet, "bayonet"],
+      [TEXTURE.skillSpread, "spread"],
+      [TEXTURE.skillRushTrail, "rushTrail"],
+      [TEXTURE.skillAbyssLeap, "abyssLeap"],
+      [TEXTURE.parryCharge, "parryCharge"],
+      [TEXTURE.parryPerfect, "parryPerfect"],
+    ];
+    for (const [textureKey, sheetKey] of skillVfxTextures) {
+      const sheet = SKILL_VFX_SHEET[sheetKey];
+      this.load.spritesheet(textureKey, assetPath(sheet.path), {
+        frameWidth: sheet.frameWidth,
+        frameHeight: sheet.frameHeight,
+      });
+    }
     // 보스 체력바 장식 프레임.
     this.load.image(TEXTURE.bossHpFrame, assetPath("ui/boss-hp-frame.png"));
     // 보스방 전용 고딕 성당 배경.
@@ -108,6 +116,7 @@ export class BootScene extends Phaser.Scene {
     this.registerFrameAnimations(ENEMY_ANIM);
     this.registerFrameAnimations(BOSS_ANIM);
     this.registerFrameAnimations(SKILL_VFX_ANIM);
+    this.registerFrameAnimations(PARRY_VFX_ANIM);
     runState.reset(this.time.now);
     runState.setPhase("READY");
     this.scene.start("Ready");

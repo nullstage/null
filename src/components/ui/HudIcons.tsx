@@ -37,4 +37,19 @@ export const BootIcon = () => <img src={assetPath("ui/skills/mobility.png")} alt
 /** 검무(F) — 회전하는 칼바람. */
 export const CycloneIcon = () => <img src={assetPath("ui/skills/cyclone.png")} alt="" />;
 
+/** 관통탄(총 슬롯) — 단발 섬광. */
+export const PierceIcon = () => <img src={assetPath("ui/skills/pierce.png")} alt="" />;
+
+/** 총검돌격(총 슬롯) — 내지르는 참격. */
+export const BayonetIcon = () => <img src={assetPath("ui/skills/bayonet.png")} alt="" />;
+
+/** 확산탄(총 슬롯) — 부채꼴 탄막. */
+export const SpreadIcon = () => <img src={assetPath("ui/skills/spread.png")} alt="" />;
+
+/** 질주의 잔영(대쉬 슬롯). */
+export const RushTrailIcon = () => <img src={assetPath("ui/skills/rush-trail.png")} alt="" />;
+
+/** 심연의 도약(대쉬 슬롯) — 열리는 포탈. */
+export const AbyssLeapIcon = () => <img src={assetPath("ui/skills/abyss-leap.png")} alt="" />;
+
 /* eslint-enable @next/next/no-img-element */

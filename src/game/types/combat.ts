@@ -93,6 +93,20 @@ export const TEXTURE = {
   skillEruption: "tex_skill_eruption",
   /** 검무(F) 회전 폭발 — 소용돌이가 흩어지는 8프레임. */
   skillCyclone: "tex_skill_cyclone",
+  /** 관통탄(총 슬롯) — 단발 섬광. */
+  skillPierce: "tex_skill_pierce",
+  /** 총검돌격(총 슬롯) — 총검을 내지르는 긴 참격. */
+  skillBayonet: "tex_skill_bayonet",
+  /** 확산탄(총 슬롯) — 부채꼴로 퍼지는 탄막. */
+  skillSpread: "tex_skill_spread",
+  /** 질주의 잔영(대쉬 슬롯) — 잔상이 옅어지는 5프레임. */
+  skillRushTrail: "tex_skill_rush_trail",
+  /** 심연의 도약(대쉬 슬롯) — 포탈이 열리는 3프레임. */
+  skillAbyssLeap: "tex_skill_abyss_leap",
+  /** 패링 유지 — 막는 동안 방패가 커지는 8프레임. */
+  parryCharge: "tex_parry_charge",
+  /** 완벽 패링 성공 — 방패가 터지는 7프레임. */
+  parryPerfect: "tex_parry_perfect",
 } as const;
 
 /**
@@ -104,6 +118,13 @@ export const SKILL_VFX_SHEET = {
   wave: { path: "vfx/skill-wave.png", frameWidth: 309, frameHeight: 227, frames: 6 },
   eruption: { path: "vfx/skill-eruption.png", frameWidth: 261, frameHeight: 345, frames: 6 },
   cyclone: { path: "vfx/skill-cyclone.png", frameWidth: 198, frameHeight: 226, frames: 8 },
+  pierce: { path: "vfx/skill-piercing.png", frameWidth: 201, frameHeight: 97, frames: 1 },
+  bayonet: { path: "vfx/skill-bayonet.png", frameWidth: 271, frameHeight: 89, frames: 1 },
+  spread: { path: "vfx/skill-spread.png", frameWidth: 219, frameHeight: 141, frames: 1 },
+  rushTrail: { path: "vfx/skill-rushtrail.png", frameWidth: 150, frameHeight: 92, frames: 5 },
+  abyssLeap: { path: "vfx/skill-abyssleap.png", frameWidth: 106, frameHeight: 165, frames: 3 },
+  parryCharge: { path: "vfx/parry-charge.png", frameWidth: 216, frameHeight: 359, frames: 8 },
+  parryPerfect: { path: "vfx/parry-perfect.png", frameWidth: 283, frameHeight: 395, frames: 7 },
 } as const;
 
 /**
@@ -126,6 +147,29 @@ export const SKILL_VFX_ANIM = {
     fps: 36,
     loop: false,
   },
+  skillPierceBurst: { key: TEXTURE.skillPierce, start: 0, frames: SKILL_VFX_SHEET.pierce.frames, fps: 6, loop: false },
+  skillBayonetBurst: {
+    key: TEXTURE.skillBayonet,
+    start: 0,
+    frames: SKILL_VFX_SHEET.bayonet.frames,
+    fps: 6,
+    loop: false,
+  },
+  skillSpreadBurst: { key: TEXTURE.skillSpread, start: 0, frames: SKILL_VFX_SHEET.spread.frames, fps: 6, loop: false },
+  skillRushTrailFly: {
+    key: TEXTURE.skillRushTrail,
+    start: 0,
+    frames: SKILL_VFX_SHEET.rushTrail.frames,
+    fps: 17,
+    loop: false,
+  },
+  skillAbyssLeapBurst: {
+    key: TEXTURE.skillAbyssLeap,
+    start: 0,
+    frames: SKILL_VFX_SHEET.abyssLeap.frames,
+    fps: 12,
+    loop: false,
+  },
 } as const;
 
 export type SkillVfxKey = keyof typeof SKILL_VFX_ANIM;
@@ -135,7 +179,30 @@ export const SKILL_VFX_TEXTURE: Record<SkillVfxKey, string> = {
   skillWaveFly: TEXTURE.skillWave,
   skillEruptionBurst: TEXTURE.skillEruption,
   skillCycloneBurst: TEXTURE.skillCyclone,
+  skillPierceBurst: TEXTURE.skillPierce,
+  skillBayonetBurst: TEXTURE.skillBayonet,
+  skillSpreadBurst: TEXTURE.skillSpread,
+  skillRushTrailFly: TEXTURE.skillRushTrail,
+  skillAbyssLeapBurst: TEXTURE.skillAbyssLeap,
 };
+
+/** 패링 이펙트 애니메이션. 스킬과 달리 아이템 없이 항상 쓰는 기본 동작이라 별도 표로 둔다. */
+export const PARRY_VFX_ANIM = {
+  parryChargeLoop: {
+    key: TEXTURE.parryCharge,
+    start: 0,
+    frames: SKILL_VFX_SHEET.parryCharge.frames,
+    fps: 24,
+    loop: false,
+  },
+  parryPerfectBurst: {
+    key: TEXTURE.parryPerfect,
+    start: 0,
+    frames: SKILL_VFX_SHEET.parryPerfect.frames,
+    fps: 23,
+    loop: false,
+  },
+} as const;
 
 /**
  * 보스 스프라이트시트. 224px 정사각 셀 22칸(가로 한 줄), 상태별 다프레임 애니메이션.

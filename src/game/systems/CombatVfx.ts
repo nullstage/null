@@ -17,6 +17,8 @@
 
 import Phaser from "phaser";
 
+import { TEXTURE } from "../types/combat";
+
 /** 연출용 도트 한 칸. 이 배수로만 좌표를 찍어야 스프라이트 격자와 어긋나지 않는다. */
 const PIXEL = 4;
 
@@ -2077,106 +2079,28 @@ export const attachStingerTrail = (
 };
 
 /**
- * 패링 방어 자세. S를 누른 순간부터 방어 창이 끝날 때까지 몸 앞에 얇은 호를 띄운다.
- * 퍼펙트 성공 시 `perfectParryBurst`로 교체되므로, 호출한 쪽이 반환된 오브젝트를
- * 들고 있다가 직접 지워야 한다(자동으로 사라지지 않음 — 방어 창 길이가 상황마다 다르다).
+ * 패링 방어 자세. S를 누른 순간부터 방어 창이 끝날 때까지 몸 앞에 방패가 커진다
+ * (스프라이트 8프레임, `PARRY_ACTIVE_MS`와 맞춘 재생 시간). 퍼펙트 성공 시
+ * `perfectParryBurst`로 교체되므로, 호출한 쪽이 반환된 오브젝트를 들고 있다가
+ * 직접 지워야 한다(자동으로 사라지지 않음 — 방어 창 길이가 상황마다 다르다).
  */
 export const parryGuard = (
   scene: Phaser.Scene,
   x: number,
   y: number,
   facing: 1 | -1,
-): Phaser.GameObjects.Container => {
-  const container = scene.add.container(x, y);
-  container.setDepth(VFX.depth + 1);
-  container.setScale(facing, 1);
-
-  const arcs = scene.add.graphics();
-  arcs.setBlendMode(Phaser.BlendModes.ADD);
-  arcs.lineStyle(2.5, 0xffe066, 0.9);
-  arcs.beginPath();
-  arcs.arc(0, -4, 28, Phaser.Math.DegToRad(-65), Phaser.Math.DegToRad(65));
-  arcs.strokePath();
-  arcs.lineStyle(1, 0xfff6c8, 0.5);
-  arcs.beginPath();
-  arcs.arc(0, -4, 23, Phaser.Math.DegToRad(-60), Phaser.Math.DegToRad(60));
-  arcs.strokePath();
-  container.add(arcs);
-
-  // 룬 고리 — 파선 원이 천천히 돈다. "발동 중인 술식"처럼 보이게 하는 바닥판이다.
-  const rune = scene.add.graphics();
-  rune.setBlendMode(Phaser.BlendModes.ADD);
-  const RUNE_SEGMENTS = 10;
-  for (let i = 0; i < RUNE_SEGMENTS; i += 1) {
-    const a0 = (i / RUNE_SEGMENTS) * Math.PI * 2;
-    rune.lineStyle(1.5, 0xffe066, 0.45);
-    rune.beginPath();
-    rune.arc(0, -4, 31, a0, a0 + Math.PI * 0.11);
-    rune.strokePath();
-  }
-  container.add(rune);
-
-  // 점 대신 빛나는 검 조각 4개가 궤도를 돈다. 궤도 접선 방향으로 눕고 짧은 꼬리를
-  // 달아, 정적인 호 하나만 있을 때보다 "지금 뭔가 버티고 있다"가 한눈에 보인다.
-  const shards = [0, 1, 2, 3].map(() => {
-    const shard = scene.add.graphics();
-    shard.setBlendMode(Phaser.BlendModes.ADD);
-    shard.fillStyle(0xfff6c8, 0.95);
-    shard.fillPoints(
-      [
-        { x: 6, y: 0 },
-        { x: 0, y: -2.2 },
-        { x: -4, y: 0 },
-        { x: 0, y: 2.2 },
-      ],
-      true,
-    );
-    // 꼬리 — 도는 방향 반대로 빛이 끌린다.
-    shard.lineStyle(1, 0xffe066, 0.55);
-    shard.lineBetween(-4, 0, -13, 0);
-    container.add(shard);
-    return shard;
-  });
-
-  const clock = { t: 0 };
-  const orbit = scene.tweens.add({
-    targets: clock,
-    t: Math.PI * 2,
-    duration: 1100,
-    repeat: -1,
-    ease: "linear",
-    onUpdate: () => {
-      rune.setRotation(clock.t * 0.6);
-      shards.forEach((shard, i) => {
-        const speed = 1 + i * 0.28;
-        const radius = 27 - i * 3;
-        const angle = clock.t * speed + (i * Math.PI * 2) / shards.length;
-        shard.setPosition(Math.cos(angle) * radius, -4 + Math.sin(angle) * radius * 0.55);
-        // 타원 궤도의 접선을 향해 눕는다 — 조각이 항상 진행 방향을 보고 돈다.
-        shard.setRotation(Math.atan2(Math.cos(angle) * 0.55, -Math.sin(angle)));
-        // 궤도 뒤쪽(아래)을 돌 때 살짝 옅어져 입체감이 생긴다.
-        shard.setAlpha(0.65 + 0.35 * Math.sin(angle));
-      });
-    },
-  });
-
-  // 숨쉬듯 깜빡여야 "지금 막는 중"이라는 상태가 눈에 들어온다.
-  const breathe = scene.tweens.add({
-    targets: arcs,
-    alpha: { from: 0.55, to: 1 },
-    duration: 180,
-    yoyo: true,
-    repeat: -1,
-  });
-
-  container.setData("tweens", [orbit, breathe]);
-  return container;
+  scale: number,
+): Phaser.GameObjects.Sprite => {
+  const guard = scene.add.sprite(x, y, TEXTURE.parryCharge);
+  guard.setDepth(VFX.depth + 1);
+  guard.setScale(facing * scale, scale);
+  guard.setBlendMode(Phaser.BlendModes.ADD);
+  guard.play("parryChargeLoop");
+  return guard;
 };
 
-/** 방어 창이 그냥 끝났을 때(퍼펙트 실패) 호를 걷어낸다. */
-export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.Container): void => {
-  const tweens = guard.getData("tweens") as Phaser.Tweens.Tween[] | undefined;
-  tweens?.forEach((tween) => tween.remove());
+/** 방어 창이 그냥 끝났을 때(퍼펙트 실패) 방패를 걷어낸다. */
+export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.Sprite): void => {
   scene.tweens.add({
     targets: guard,
     alpha: 0,
@@ -2186,70 +2110,16 @@ export const clearParryGuard = (scene: Phaser.Scene, guard: Phaser.GameObjects.C
 };
 
 /**
- * 퍼펙트 패링 성공. 방어 호 대신 방패가 팡 터져나가는 그림으로 확실히 교체된다 —
+ * 퍼펙트 패링 성공. 방어 자세 대신 방패가 팡 터져나가는 그림으로 확실히 교체된다 —
  * 그냥 막았을 때와 같은 그림이면 "반사가 됐다"는 게 안 읽힌다.
- * 원형 방패 실루엣이 빠르게 부풀었다 갈라지고, 조각과 스파크가 sin/cos로 흩어진다.
  */
-export const perfectParryBurst = (scene: Phaser.Scene, x: number, y: number): void => {
-  // 스컬풍 금빛 가시 — 완벽하게 받아쳤다는 쾌감은 가장 날카로운 폭발로 돌려준다.
-  spikeBurst(scene, x, y, {
-    scale: 0.9,
-    spikes: 9,
-    dark: 0x33240a,
-    mid: 0xffca4a,
-    bright: 0xfff6c8,
-  });
-
-  // 방패 본체 — 확 부풀었다 갈라지듯 사라진다.
-  const shield = scene.add.graphics({ x, y });
-  shield.setDepth(VFX.depth + 2);
-  shield.setBlendMode(Phaser.BlendModes.ADD);
-  shield.lineStyle(3, 0xfff6c8, 1);
-  shield.strokeCircle(0, 0, 10);
-  shield.lineStyle(1.5, 0xffe066, 0.6);
-  shield.strokeCircle(0, 0, 16);
-  scene.tweens.add({
-    targets: shield,
-    scale: 3.2,
-    alpha: 0,
-    duration: 220,
-    ease: "power3.out",
-    onComplete: () => shield.destroy(),
-  });
-
-  const flash = scene.add.circle(x, y, 6, 0xffffff, 1);
-  flash.setDepth(VFX.depth + 2);
-  flash.setBlendMode(Phaser.BlendModes.ADD);
-  scene.tweens.add({
-    targets: flash,
-    scale: 5,
-    alpha: 0,
-    duration: 160,
-    ease: "power3.out",
-    onComplete: () => flash.destroy(),
-  });
-
-  // 방패가 깨져 흩어지는 조각들 — 길이·속도를 조금씩 흔들어 규칙적으로 보이지 않게 한다.
-  const shardCount = 12;
-  for (let i = 0; i < shardCount; i += 1) {
-    const angle = (i / shardCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.15, 0.15);
-    const dist = 40 + Phaser.Math.FloatBetween(-8, 14);
-    const shard = scene.add.graphics({ x, y });
-    shard.setDepth(VFX.depth + 2);
-    shard.setBlendMode(Phaser.BlendModes.ADD);
-    shard.lineStyle(2, i % 2 === 0 ? 0xffe066 : 0xfff6c8, 0.9);
-    shard.lineBetween(0, 0, Math.cos(angle) * 6, Math.sin(angle) * 6);
-    shard.setRotation(angle);
-    scene.tweens.add({
-      targets: shard,
-      x: x + Math.cos(angle) * dist,
-      y: y + Math.sin(angle) * dist,
-      alpha: 0,
-      duration: 260 + Phaser.Math.Between(-40, 60),
-      ease: "power2.out",
-      onComplete: () => shard.destroy(),
-    });
-  }
+export const perfectParryBurst = (scene: Phaser.Scene, x: number, y: number, scale: number): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.parryPerfect);
+  fx.setDepth(VFX.depth + 2);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("parryPerfectBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
 };
 
 /**

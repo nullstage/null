@@ -82,23 +82,58 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     element: "FIRE",
     description: "근거리 공격에 화염이 깃든다. 적중한 대상은 잠시 불타며 추가 피해를 입는다.",
   },
+  /*
+   * 칼/총/대쉬 슬롯형 액티브 스킬. 각 슬롯(Q/R/F)엔 하나만 장착되고, 같은 슬롯의
+   * 다른 스킬을 새로 얻으면 지금 것을 대체한다(`types/game.ts`의 SKILL_CATEGORY,
+   * `RunState.addUpgrade`). 설명 끝의 "교체된다" 문구는 그래서 붙는다.
+   */
   MELEE_SWORD_WAVE: {
     id: "MELEE_SWORD_WAVE",
     category: "MELEE",
     name: "검기",
-    description: "스킬 해금 — Q를 눌러 전방으로 날아가는 참격을 사용한다. 재사용 대기시간 4초.",
+    description: "스킬 해금 — Q를 눌러 전방으로 날아가는 참격을 사용한다. 재사용 대기시간 4초. 이미 칼 스킬을 가졌다면 교체된다.",
   },
   MELEE_SPIKE_ERUPTION: {
     id: "MELEE_SPIKE_ERUPTION",
     category: "MELEE",
     name: "검극(劍棘)",
-    description: "스킬 해금 — R를 눌러 전방의 지면에서 검의 가시를 연속으로 솟구치게 한다. 재사용 대기시간 6초.",
+    description: "스킬 해금 — Q를 눌러 전방의 지면에서 검의 가시를 연속으로 솟구치게 한다. 재사용 대기시간 6초. 이미 칼 스킬을 가졌다면 교체된다.",
   },
   MELEE_BLADE_CYCLONE: {
     id: "MELEE_BLADE_CYCLONE",
     category: "MELEE",
     name: "검무(劍舞)",
-    description: "스킬 해금 — F를 눌러 몸 주변을 휩쓰는 검의 폭풍을 일으킨다. 재사용 대기시간 8초.",
+    description: "스킬 해금 — Q를 눌러 몸 주변을 휩쓰는 검의 폭풍을 일으킨다. 재사용 대기시간 8초. 이미 칼 스킬을 가졌다면 교체된다.",
+  },
+  RANGED_PIERCE_SHOT: {
+    id: "RANGED_PIERCE_SHOT",
+    category: "RANGED",
+    name: "관통탄",
+    description: "스킬 해금 — R를 눌러 관통하는 강력한 일격을 쏜다. 재사용 대기시간 4.5초. 이미 총 스킬을 가졌다면 교체된다.",
+  },
+  RANGED_BAYONET_THRUST: {
+    id: "RANGED_BAYONET_THRUST",
+    category: "RANGED",
+    name: "총검돌격",
+    description: "스킬 해금 — R를 눌러 총검을 길게 내질러 꿰뚫는다. 재사용 대기시간 6초. 이미 총 스킬을 가졌다면 교체된다.",
+  },
+  RANGED_SPREAD_SHOT: {
+    id: "RANGED_SPREAD_SHOT",
+    category: "RANGED",
+    name: "확산탄",
+    description: "스킬 해금 — R를 눌러 부채꼴로 여러 발을 흩뿌린다. 재사용 대기시간 5초. 이미 총 스킬을 가졌다면 교체된다.",
+  },
+  DASH_RUSH_TRAIL: {
+    id: "DASH_RUSH_TRAIL",
+    category: "MOBILITY",
+    name: "질주의 잔영",
+    description: "스킬 해금 — F를 눌러 전방으로 짓쳐들며 잔상으로 베어낸다. 재사용 대기시간 6초. 이미 대쉬 스킬을 가졌다면 교체된다.",
+  },
+  DASH_ABYSS_LEAP: {
+    id: "DASH_ABYSS_LEAP",
+    category: "MOBILITY",
+    name: "심연의 도약",
+    description: "스킬 해금 — F를 눌러 짧은 거리를 순간이동하며 시작·도착 지점에 충격을 남긴다. 재사용 대기시간 7초. 이미 대쉬 스킬을 가졌다면 교체된다.",
   },
   RANGED_BULLET_SIZE_UP: {
     id: "RANGED_BULLET_SIZE_UP",
