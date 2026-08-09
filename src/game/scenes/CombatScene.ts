@@ -1010,13 +1010,21 @@ export class CombatScene extends Phaser.Scene {
     this.shopChoices = pool.slice(0, SHOP.choiceCount);
   }
 
-  /** 기본 줌. 서 있으면 곧바로 다가가 있고, 움직이거나 적이 나타나면 즉시 물러난다. */
+  /**
+   * 기본 줌. 서 있으면 곧바로 다가가 있고, 움직이거나 전투가 남아 있으면 즉시 물러난다.
+   *
+   * "적이 지금 화면에 있는가"로 판단하면 안 된다. 웨이브 사이에는 이전 웨이브가 전멸하고
+   * 다음 웨이브가 아직 안 나온 1.2초의 공백이 있는데(`RoomController`의 WAVE_GAP_MS),
+   * 그때 잔적 수가 0이라 서 있기만 해도 화면이 확 당겨졌다가 다음 웨이브에 도로 물러났다.
+   * 기준은 "방이 끝났는가"다 — 방이 끝나야 비로소 숨 돌리는 장면이 된다.
+   */
   private updateIdleZoom(_time: number): void {
     const body = this.player.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body || this.player.isDead) return;
 
     const busy =
-      this.room.enemiesRemaining > 0 ||
+      !this.room.isCleared ||
+      this.liveEnemyCount > 0 ||
       Math.abs(body.velocity.x) > 4 ||
       Math.abs(body.velocity.y) > 4;
 
