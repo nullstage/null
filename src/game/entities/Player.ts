@@ -99,92 +99,31 @@ const PARRY_COOLDOWN_MS = 900;
 const PARRY_BLOCK_DAMAGE_RATIO = 0.25;
 
 /**
- * 잡화 아티팩트 55종. 이름·설명은 저마다 다르지만 기계적 효과는 12가지 축(카테고리마다
- * 3개)을 재사용한다 — 스컬(Skul: The Hero Slayer)의 실제 아이템 목록도 상당수가 이런
- * "같은 축, 다른 이름" 구성이다. 같은 축을 여럿 가지면 개수만큼 겹쳐 쌓인다.
+ * 잡화 아티팩트 55종. 각자 다른 효과를 가진다 — 이름·설명·속성 태그는 `data/upgrades.ts`가
+ * 정본이다. 적중 시 속성을 확률로 붙이는 아이템(근접/원거리 각 7종)만 표로 묶어 둔다.
  */
-const MELEE_DMG_IDS: readonly UpgradeId[] = [
-  "ITEM_RED_STAR_SHARD",
-  "ITEM_BLUE_POTION",
-  "ITEM_TEAL_RING",
-  "ITEM_GOLD_SCROLL",
-  "ITEM_RED_LANTERN",
+export interface ItemProc {
+  id: UpgradeId;
+  element: UpgradeElement;
+  chance: number;
+}
+const MELEE_PROC_ITEMS: readonly ItemProc[] = [
+  { id: "ITEM_BEAST_FANG", element: "BLEED", chance: 0.25 },
+  { id: "ITEM_BLOOD_NECKLACE", element: "DARK", chance: 0.2 },
+  { id: "ITEM_BAT_AXE", element: "SHOCK", chance: 0.15 },
+  { id: "ITEM_RED_SEAL", element: "FIRE", chance: 0.2 },
+  { id: "ITEM_VIOLET_WHIRL_ORB", element: "FROST", chance: 0.2 },
+  { id: "ITEM_OLD_SCROLL", element: "POISON", chance: 0.2 },
+  { id: "ITEM_GOLD_RING", element: "HOLY", chance: 0.1 },
 ];
-const MELEE_REACH_IDS: readonly UpgradeId[] = [
-  "ITEM_BLOOD_NECKLACE",
-  "ITEM_VIOLET_WHIRL_ORB",
-  "ITEM_RED_SPELLBOOK",
-  "ITEM_VIOLET_DAGGER",
-  "ITEM_VIOLET_FLAME_ORB",
-];
-const MELEE_FINISHER_IDS: readonly UpgradeId[] = [
-  "ITEM_RED_SEAL",
-  "ITEM_RED_RING",
-  "ITEM_GREEN_SPELLBOOK",
-  "ITEM_VIOLET_SHURIKEN",
-];
-
-const RANGED_DMG_IDS: readonly UpgradeId[] = [
-  "ITEM_GREED_EYE_ORB",
-  "ITEM_GOLD_POTION",
-  "ITEM_BEAST_FANG",
-  "ITEM_WINGED_STAR",
-  "ITEM_THORN_CROWN",
-];
-const RANGED_MAG_IDS: readonly UpgradeId[] = [
-  "ITEM_BAT_AXE",
-  "ITEM_TEAL_GEM",
-  "ITEM_VIOLET_SPELLBOOK",
-  "ITEM_BLOOD_SCYTHE",
-  "ITEM_RED_WHIRL_ORB",
-];
-const RANGED_CD_IDS: readonly UpgradeId[] = [
-  "ITEM_VIOLET_GEM_PENDANT",
-  "ITEM_VIOLET_RING",
-  "ITEM_OLD_SCROLL",
-  "ITEM_GREEN_STAFF",
-];
-
-const MOBILITY_SPEED_IDS: readonly UpgradeId[] = [
-  "ITEM_RUNNER_STAR",
-  "ITEM_TEAL_POTION",
-  "ITEM_BLOOD_CAPE",
-  "ITEM_RED_ARROW",
-  "ITEM_VIOLET_LANTERN",
-];
-const MOBILITY_DASH_CD_IDS: readonly UpgradeId[] = [
-  "ITEM_NIGHT_MASK",
-  "ITEM_GOLD_CROSS_STAR",
-  "ITEM_BLUE_SPELLBOOK",
-  "ITEM_STAR_MACE",
-  "ITEM_CRACKED_ORB",
-];
-const MOBILITY_INVULN_IDS: readonly UpgradeId[] = [
-  "ITEM_RED_POTION",
-  "ITEM_BLUE_RING",
-  "ITEM_VIOLET_SCROLL",
-  "ITEM_BLACK_HOURGLASS",
-];
-
-/** RunState.addUpgrade가 즉시 최대 체력을 올릴 때도 같은 목록을 써야 한다. */
-export const HEALTH_HP_IDS: readonly UpgradeId[] = [
-  "ITEM_VIOLET_DIAMOND_PENDANT",
-  "ITEM_GEAR_HEART",
-  "ITEM_GOLD_SPELLBOOK",
-  "ITEM_BLACK_SHURIKEN",
-];
-const HEALTH_ARMOR_IDS: readonly UpgradeId[] = [
-  "ITEM_SHADOWFLAME_RING",
-  "ITEM_RED_SHARD",
-  "ITEM_SPIKED_STAR",
-  "ITEM_OLD_RIFLE",
-  "ITEM_GLASS_ORB",
-];
-const HEALTH_LIFE_IDS: readonly UpgradeId[] = [
-  "ITEM_VIOLET_POTION",
-  "ITEM_GOLD_RING",
-  "ITEM_BLOODY_SCROLL",
-  "ITEM_VIOLET_HOURGLASS",
+const RANGED_PROC_ITEMS: readonly ItemProc[] = [
+  { id: "ITEM_VIOLET_DAGGER", element: "BLEED", chance: 0.2 },
+  { id: "ITEM_VIOLET_GEM_PENDANT", element: "DARK", chance: 0.18 },
+  { id: "ITEM_TEAL_GEM", element: "SHOCK", chance: 0.12 },
+  { id: "ITEM_RED_WHIRL_ORB", element: "FIRE", chance: 0.18 },
+  { id: "ITEM_WINGED_STAR", element: "FROST", chance: 0.18 },
+  { id: "ITEM_GREEN_STAFF", element: "POISON", chance: 0.18 },
+  { id: "ITEM_BLOODY_SCROLL", element: "HOLY", chance: 0.08 },
 ];
 
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
@@ -310,22 +249,80 @@ export const TUNING = {
     vampireChance: 0.15,
     vampireHeal: 1,
 
-    /**
-     * 잡화 아티팩트 55종 — 12개 효과 축의 단위 수치(스택당). `*_IDS` 배열(위)의
-     * 소속 개수를 곱해서 쓴다. 하나짜리 전용 아티팩트보다 낮게 잡았다 — 최대 4~5개까지
-     * 겹쳐 쌓일 수 있어서다.
-     */
-    itemMeleeDmgPer: 0.12,
-    itemMeleeReachPer: 8,
-    itemMeleeFinisherPer: 0.15,
-    itemRangedDmgPer: 0.12,
-    itemRangedCdPer: 0.08,
-    itemMoveSpeedPer: 0.05,
-    itemDashCdPer: 0.06,
-    itemDashInvulnPer: 40,
-    itemHpBonus: 8,
-    itemArmorPer: 0.05,
-    itemLifestealChancePer: 0.04,
+    // ── 잡화 아티팩트 55종. 하나씩 전용 효과를 가진다 — data/upgrades.ts §A~I 참고. ──
+
+    // A. 스탯 축 12종.
+    itemMeleeDmgBonus: 0.15,
+    itemMeleeReachBonus: 10,
+    itemMeleeFinisherBonus: 0.2,
+    itemRangedDmgBonus: 0.15,
+    itemMagazineBonus2: 2,
+    itemRangedCdBonus: 0.12,
+    itemMoveSpeedBonus: 0.08,
+    itemDashCdBonus: 0.15,
+    itemDashInvulnBonus: 100,
+    itemHpBonus: 20,
+    itemArmorBonus: 0.1,
+    itemLifestealChance: 0.06,
+    itemLifestealHeal: 1,
+
+    // B. 적중 시 속성 부여 14종 — 상세 표는 MELEE_PROC_ITEMS/RANGED_PROC_ITEMS(위) 참고.
+    itemBleedTickDamage: 2,
+    itemBleedTickCount: 5,
+    itemBleedTickIntervalMs: 400,
+    itemDarkBonusDamage: 4,
+    itemShockRadiusPx: 90,
+    itemShockDamage: 3,
+    itemHolyProcHeal: 2,
+
+    // C. 처치 시 발동 6종.
+    itemKillHealAmount: 1,
+    itemKillShardAmount: 1,
+    itemKillBurstDamage: 10,
+    itemKillBurstRadiusPx: 90,
+    itemKillSpeedBurstMultiplier: 1.4,
+    itemKillSpeedBurstMs: 2000,
+    itemKillAtkSpeedBurstMultiplier: 0.65,
+    itemKillAtkSpeedBurstMs: 2000,
+    itemKillDashRefundChance: 0.15,
+
+    // D. 대시 시 발동 6종.
+    itemDashTrailDamage: 6,
+    itemDashChargeSaveChance: 0.2,
+    itemDashExtraInvulnMs: 200,
+    itemDashShardChance: 0.1,
+    itemDashDistanceBonus: 60,
+
+    // E. 방 클리어 시 발동 4종.
+    itemRoomClearHeal: 6,
+    itemRoomClearShards: 2,
+    itemRoomMeleeDamageBonus: 0.1,
+
+    // F. 일정 시간마다 발동 4종.
+    itemHealTickMs: 8000,
+    itemHealTickAmount: 1,
+    itemBankedAttackIntervalMs: 10000,
+    itemBankedAttackMultiplier: 1.5,
+    itemPulseIntervalMs: 5000,
+    itemPulseDamage: 4,
+    itemPulseRadiusPx: 80,
+    itemShardTickMs: 10000,
+
+    // G. 완벽한 막기 시 발동 4종.
+    itemParryDamageBuffMultiplier: 1.2,
+    itemParryDamageBuffMs: 4000,
+    itemParryHeal: 2,
+    itemParryWindowBonusMs: 120,
+    itemParryReflectBonusDamage: 4,
+
+    // H. 체력 30% 이하 조건부 3종.
+    itemLowHpDamageReduction: 0.2,
+    itemLowHpLifestealChance: 0.25,
+    lowHpThresholdRatio: 0.3,
+
+    // I. 그 외 2종.
+    itemThornReflectDamage: 5,
+    itemShardGainBonus: 0.2,
 
     /** 화염 — 적중 후 이 간격으로 이 횟수만큼 화상 틱이 들어간다. */
     fireTickDamage: 3,
@@ -462,6 +459,12 @@ export interface PlayerDeps {
   upgrades: readonly UpgradeId[];
   /** 그림자 조각 잔액. HUD 표시용 — Player가 RunState를 직접 참조하지 않게 함수로 받는다. */
   getShards: () => number;
+  /** 아티팩트 발동으로 조각을 얻을 때 쓴다(처치·대시·주기 발동 등). */
+  gainShards: (amount: number) => void;
+  /** 붉은 마법서의 방어막. 있으면 이번 피격을 완전히 막고 소모한다. */
+  consumeRoomShield: () => boolean;
+  /** 보라 마법서 — 방을 클리어한 뒤부터 근접 공격력에 곱해진다. */
+  roomMeleeDamageBuffActive: () => boolean;
   onDamaged: (amount: number) => void;
   onDeath: () => void;
 }
@@ -519,6 +522,25 @@ export class Player {
   private reloadingUntilMs = 0;
   /** 사냥꾼의 리볼버 — 재장전이 막 끝났는지. 다음 한 발에만 보너스를 주고 곧바로 꺼진다. */
   private freshReload = false;
+
+  // ── 잡화 아티팩트 55종의 상태. 그룹 이름은 data/upgrades.ts §A~I를 그대로 따른다. ──
+  /** C. 핏빛 망토 — 처치 직후 이동 속도 버프가 남아 있는 시각. */
+  private killSpeedBurstUntilMs = 0;
+  /** C. 청록 물약 — 처치 직후 공격 속도 버프가 남아 있는 시각. */
+  private killAtkSpeedBurstUntilMs = 0;
+  /** E. 붉은 마법서 — 다음 피격 한 번을 완전히 막는 방어막을 갖고 있는지. */
+  private hasRoomShield = false;
+  /** F. 검은 수리검 — 다음 근접 공격 한 방에 적립된 보너스가 있는지. */
+  private bankedMeleeBonus = false;
+  /** F. 주기 발동 4종의 마지막 발동 시각. 0이면 아직 시작 전(첫 프레임엔 쏘지 않는다). */
+  private nextHealTickAtMs = 0;
+  private nextBankedAttackAtMs = 0;
+  private nextPulseAtMs = 0;
+  private nextShardTickAtMs = 0;
+  /** G. 보랏빛 반지 — 완벽한 막기 직후 공격력 버프가 남아 있는 시각. */
+  private parryDamageBuffUntilMs = 0;
+  /** H. 보랏빛 두루마리 — 체력 30% 이하로 떨어질 때의 1회용 무적을 이미 썼는지(방마다 리셋). */
+  private lowHpInvulnUsed = false;
 
   private dashCharges: number = PLAYER.dashCharges;
   private dashEndsAtMs = 0;
@@ -644,6 +666,7 @@ export class Player {
     this.updateShadow(sprite, body);
     this.cullProjectiles(time);
     if (this.isDead) return;
+    this.updatePeriodicItems(time);
 
     // 기상 연출 중에는 조작도 애니메이션 갱신도 하지 않는다.
     if (time < this.introUntilMs) {
@@ -787,29 +810,40 @@ export class Player {
     if (!sprite || !body || this.isDashing || this.dashCharges <= 0) return;
 
     const now = this.scene.time.now;
+    const { upgrade } = TUNING;
     const rechargeMs = TUNING.dash.rechargeMs * this.dashCooldownMultiplier;
-    this.dashCharges -= 1;
-    // 충전이 가득 찼다가 처음 빠진 순간부터 재충전 타이머를 돌린다.
-    if (this.dashRechargeAtMs <= now) this.dashRechargeAtMs = now + rechargeMs;
+    // 균열난 구슬 — 이따금 충전을 소모하지 않는다.
+    const savedCharge = this.hasUpgrade("ITEM_CRACKED_ORB") && Math.random() < upgrade.itemDashChargeSaveChance;
+    if (!savedCharge) {
+      this.dashCharges -= 1;
+      // 충전이 가득 찼다가 처음 빠진 순간부터 재충전 타이머를 돌린다.
+      if (this.dashRechargeAtMs <= now) this.dashRechargeAtMs = now + rechargeMs;
+    }
+    // 보라 모래시계 — 대시할 때마다 이따금 조각을 얻는다.
+    if (this.hasUpgrade("ITEM_VIOLET_HOURGLASS") && Math.random() < upgrade.itemDashShardChance) {
+      this.deps.gainShards(1);
+    }
 
     this.telemetry.recordDash();
     playSfx(this.scene, AUDIO.dash);
 
     this.isDashing = true;
     this.dashEndsAtMs = now + TUNING.dash.durationMs;
-    this.dashFollowupUntilMs = now + TUNING.upgrade.dashFollowupWindowMs;
+    this.dashFollowupUntilMs = now + upgrade.dashFollowupWindowMs;
     const invulnMs =
       PLAYER.dashInvulnerabilityMs +
-      (this.hasUpgrade("DASH_INVULN_UP") ? TUNING.upgrade.dashInvulnBonusMs : 0) +
-      TUNING.upgrade.itemDashInvulnPer * this.countOwned(MOBILITY_INVULN_IDS);
+      (this.hasUpgrade("DASH_INVULN_UP") ? upgrade.dashInvulnBonusMs : 0) +
+      (this.hasUpgrade("ITEM_RED_POTION") ? upgrade.itemDashInvulnBonus : 0);
     this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, now + invulnMs);
 
     // 스케일 펀치가 남아 있으면 대시 중에 충돌 박스가 계속 흔들린다(punch 주석 참고).
     this.clearPunch();
 
     // 거리와 시간으로 속도를 역산한다. dashDistance가 바뀌어도 체감 거리가 유지된다.
-    const speed = PLAYER.dashDistance / (TUNING.dash.durationMs / 1000);
+    const distance = PLAYER.dashDistance + (this.hasUpgrade("ITEM_RED_ARROW") ? upgrade.itemDashDistanceBonus : 0);
+    const speed = distance / (TUNING.dash.durationMs / 1000);
     this.dashGrounded = this.isGrounded;
+    const startX = sprite.x;
     body.setVelocity(this.facing * speed, this.isGrounded ? 0 : -TUNING.dash.airLiftVelocity);
     if (this.isGrounded) {
       /**
@@ -826,11 +860,34 @@ export class Player {
     this.lockAnim("dash");
     this.lastAfterimageAtMs = 0;
     this.trailAfterimage(now);
+
+    // 별의 철퇴 / 보랏빛 등불 — 지나간 자리에 잠깐 피해 판정이 남는다.
+    const trailElement: UpgradeElement | undefined = this.hasUpgrade("ITEM_VIOLET_LANTERN") ? "FIRE" : undefined;
+    if (this.hasUpgrade("ITEM_STAR_MACE") || this.hasUpgrade("ITEM_VIOLET_LANTERN")) {
+      this.scene.time.delayedCall(TUNING.dash.durationMs, () => {
+        this.spawnProcHitbox(
+          startX + (this.facing * distance) / 2,
+          sprite.y,
+          Math.abs(distance),
+          TUNING.melee.hitboxHeight,
+          upgrade.itemDashTrailDamage,
+          220,
+          trailElement,
+        );
+      });
+    }
   }
 
   private endDash(): void {
     this.isDashing = false;
     this.dashGrounded = false;
+    // 검은 모래시계 — 대시가 끝난 직후 짧은 무적 시간이 한 번 더 주어진다.
+    if (this.hasUpgrade("ITEM_BLACK_HOURGLASS")) {
+      this.invulnerableUntilMs = Math.max(
+        this.invulnerableUntilMs,
+        this.scene.time.now + TUNING.upgrade.itemDashExtraInvulnMs,
+      );
+    }
     const body = this.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body) return;
     // 지상 대시는 이제 중력을 끄지 않지만, 예전 상태나 공중 대시에서 넘어올 수 있어
@@ -847,9 +904,12 @@ export class Player {
     if (!sprite || this.isDead || this.isDashing) return;
     if (now < this.parryCooldownUntilMs) return;
 
+    // 푸른 반지 — 막기 판정이 유지되는 시간이 늘어난다.
+    const activeMs =
+      PARRY_ACTIVE_MS + (this.hasUpgrade("ITEM_BLUE_RING") ? TUNING.upgrade.itemParryWindowBonusMs : 0);
     this.parrying = true;
     this.parryStartedAtMs = now;
-    this.parryEndsAtMs = now + PARRY_ACTIVE_MS;
+    this.parryEndsAtMs = now + activeMs;
     this.parryCooldownUntilMs = now + PARRY_COOLDOWN_MS;
 
     // 소리는 성공했을 때만 낸다(takeDamage의 퍼펙트 분기) — 자세를 잡는 순간에 매번
@@ -923,32 +983,41 @@ export class Player {
     // 콤보 창이 끊기면 1타부터 다시 시작한다.
     this.comboStep = now > this.comboExpiresAtMs ? 1 : (this.comboStep % 3) + 1;
     this.comboExpiresAtMs = now + TUNING.melee.comboWindowMs;
-    this.nextAttackAtMs = now + PLAYER.meleeCooldownMs;
+    this.nextAttackAtMs = now + PLAYER.meleeCooldownMs * this.attackCooldownMultiplier;
 
     this.telemetry.recordMeleeAttack();
     if (!this.isGrounded) this.telemetry.recordAirAttack();
 
     const isFinisher = this.comboStep === 3;
-    const { melee } = TUNING;
+    const { melee, upgrade } = TUNING;
     // 벼린 검은 더 길다. 그림과 판정이 함께 늘어야 닿아 보이는데 안 맞는 일이 없다.
     const reforgedBlade = this.hasUpgrade("BLADE_REFORGED");
     const reach =
       (isFinisher ? melee.finisherReach : melee.reach) +
       (isFinisher && this.hasUpgrade("MELEE_FINISHER_RANGE_UP") ? melee.finisherRangeBonus : 0) +
-      (reforgedBlade ? TUNING.upgrade.bladeReachBonus : 0) +
-      (this.hasUpgrade("MELEE_BLADE_SIZE_UP") ? TUNING.upgrade.bladeSizeReachBonus : 0) +
-      TUNING.upgrade.itemMeleeReachPer * this.countOwned(MELEE_REACH_IDS);
+      (reforgedBlade ? upgrade.bladeReachBonus : 0) +
+      (this.hasUpgrade("MELEE_BLADE_SIZE_UP") ? upgrade.bladeSizeReachBonus : 0) +
+      (this.hasUpgrade("ITEM_BLUE_POTION") ? upgrade.itemMeleeReachBonus : 0);
 
     let damage: number = melee.damage;
-    if (this.hasUpgrade("MELEE_DAMAGE_UP")) damage *= TUNING.upgrade.meleeDamageMultiplier;
-    if (reforgedBlade) damage *= TUNING.upgrade.bladeDamageMultiplier;
-    damage *= 1 + TUNING.upgrade.itemMeleeDmgPer * this.countOwned(MELEE_DMG_IDS);
+    if (this.hasUpgrade("MELEE_DAMAGE_UP")) damage *= upgrade.meleeDamageMultiplier;
+    if (reforgedBlade) damage *= upgrade.bladeDamageMultiplier;
+    if (this.hasUpgrade("ITEM_RED_STAR_SHARD")) damage *= 1 + upgrade.itemMeleeDmgBonus;
     if (isFinisher) {
       damage *= melee.finisherDamageMultiplier;
-      damage *= 1 + TUNING.upgrade.itemMeleeFinisherPer * this.countOwned(MELEE_FINISHER_IDS);
+      if (this.hasUpgrade("ITEM_TEAL_RING")) damage *= 1 + upgrade.itemMeleeFinisherBonus;
     }
-    if (this.hasUpgrade("MELEE_BERSERK") && this.hp <= this.maxHp * TUNING.upgrade.berserkHpRatio) {
-      damage *= TUNING.upgrade.berserkDamageMultiplier;
+    if (this.hasUpgrade("MELEE_BERSERK") && this.hp <= this.maxHp * upgrade.berserkHpRatio) {
+      damage *= upgrade.berserkDamageMultiplier;
+    }
+    // 보라 마법서 — 방 클리어 뒤부터 근접 공격력이 오른다.
+    if (this.deps.roomMeleeDamageBuffActive()) damage *= 1 + upgrade.itemRoomMeleeDamageBonus;
+    // 보랏빛 반지 — 완벽한 막기 직후 짧게 오른다.
+    if (now < this.parryDamageBuffUntilMs) damage *= upgrade.itemParryDamageBuffMultiplier;
+    // 검은 수리검 — 10초마다 적립되는 다음 근접 공격 보너스. 한 번 쓰면 곧바로 꺼진다.
+    if (this.bankedMeleeBonus) {
+      damage *= upgrade.itemBankedAttackMultiplier;
+      this.bankedMeleeBonus = false;
     }
     damage = this.applyDashFollowup(damage);
 
@@ -968,6 +1037,7 @@ export class Player {
     hitbox.setData("mode", "MELEE" satisfies AttackMode);
     // consumeOnHit을 걸지 않는다. 한 번 휘두르면 범위 안의 적을 모두 벤다.
     if (this.hasUpgrade("MELEE_FIRE_EDGE")) hitbox.setData("element", "FIRE" satisfies UpgradeElement);
+    this.attachItemProcs(hitbox, MELEE_PROC_ITEMS);
 
     this.scene.time.delayedCall(melee.hitboxLifeMs, () => hitbox.destroy());
 
@@ -1206,7 +1276,8 @@ export class Player {
     const cooldown =
       PLAYER.rangedCooldownMs *
       (this.hasUpgrade("RANGED_COOLDOWN_DOWN") ? TUNING.upgrade.rangedCooldownMultiplier : 1) *
-      Math.max(0.4, 1 - TUNING.upgrade.itemRangedCdPer * this.countOwned(RANGED_CD_IDS));
+      (this.hasUpgrade("ITEM_GREED_EYE_ORB") ? 1 - TUNING.upgrade.itemRangedCdBonus : 1) *
+      this.attackCooldownMultiplier;
     this.nextAttackAtMs = now + cooldown;
     // 검을 놓았으니 근접 콤보는 끊긴다.
     this.comboStep = 0;
@@ -1232,7 +1303,7 @@ export class Player {
         ranged.damage *
           (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1) *
           (reloadBurst ? TUNING.upgrade.reloadBurstMultiplier : 1) *
-          (1 + TUNING.upgrade.itemRangedDmgPer * this.countOwned(RANGED_DMG_IDS)),
+          (this.hasUpgrade("ITEM_GOLD_SCROLL") ? 1 + TUNING.upgrade.itemRangedDmgBonus : 1),
       ),
     );
 
@@ -1291,6 +1362,7 @@ export class Player {
             ? "FROST"
             : null;
       if (element) projectile.setData("element", element);
+      this.attachItemProcs(projectile, RANGED_PROC_ITEMS);
       // 관통이 없으면 씬이 첫 적중에서 없애준다. 관통이 있으면 여기서 횟수를 센다.
       projectile.setData("consumeOnHit", maxHits <= 1);
       projectile.setData("maxHits", maxHits);
@@ -1393,20 +1465,29 @@ export class Player {
       this.hasUpgrade("HEALTH_VAMPIRE") &&
       Math.random() < TUNING.upgrade.vampireChance
     ) {
-      this.hp = Math.min(this.maxHp, this.hp + TUNING.upgrade.vampireHeal);
-      this.emitHud();
+      this.heal(TUNING.upgrade.vampireHeal);
     }
-    // 잡화 아티팩트(근접 흡혈 축) — 가진 개수만큼 확률이 쌓인다.
-    const itemLifeCount = this.countOwned(HEALTH_LIFE_IDS);
+    // 보라 물약 — 근접 적중 시 낮은 확률로 체력을 되찾는다.
     if (
       mode === "MELEE" &&
       !this.isDead &&
-      itemLifeCount > 0 &&
-      Math.random() < TUNING.upgrade.itemLifestealChancePer * itemLifeCount
+      this.hasUpgrade("ITEM_VIOLET_POTION") &&
+      Math.random() < TUNING.upgrade.itemLifestealChance
     ) {
-      this.hp = Math.min(this.maxHp, this.hp + 1);
-      this.emitHud();
+      this.heal(TUNING.upgrade.itemLifestealHeal);
     }
+    // 핏빛 낫 — 체력이 낮을 때는 훨씬 높은 확률로 되찾는다.
+    if (
+      mode === "MELEE" &&
+      !this.isDead &&
+      this.hasUpgrade("ITEM_BLOOD_SCYTHE") &&
+      this.hp <= this.maxHp * TUNING.upgrade.lowHpThresholdRatio &&
+      Math.random() < TUNING.upgrade.itemLowHpLifestealChance
+    ) {
+      this.heal(1);
+    }
+    // 적중 시 속성 부여 14종 — 실제 상태 이상 적용과 홀리 회복은 CombatScene이 처리한다
+    // (Player는 적을 직접 참조하지 않는다, DEC-011). 여기서는 아무것도 하지 않는다.
 
     this.scene.cameras.main.shake(
       TUNING.feedback.hitShakeMs,
@@ -1454,9 +1535,16 @@ export class Player {
     // 적 본체와 겹쳐 있는 동안 매 프레임 호출된다. 무적 시간이 없으면 즉사한다.
     if (this.isDead || now < this.invulnerableUntilMs) return { parried: false, perfect: false };
 
+    // 붉은 마법서 — 방을 클리어하면 얻는 방어막. 있으면 이번 피격을 통째로 막는다.
+    if (this.deps.consumeRoomShield()) {
+      this.flash();
+      return { parried: false, perfect: false };
+    }
+
     if (this.parrying) {
       const elapsed = now - this.parryStartedAtMs;
       if (elapsed <= PARRY_PERFECT_MS) {
+        const { upgrade } = TUNING;
         // 퍼펙트 — 완전 무효화. 반사는 씬이 처리한다.
         this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
         this.endParry();
@@ -1470,6 +1558,12 @@ export class Player {
         const baseZoom = cam.zoom;
         cam.zoomTo(baseZoom * 1.07, 60, "Sine.easeOut");
         this.scene.time.delayedCall(110, () => cam.zoomTo(baseZoom, 160, "Sine.easeInOut"));
+        // 보랏빛 반지 — 짧게 공격력이 오른다.
+        if (this.hasUpgrade("ITEM_VIOLET_RING")) {
+          this.parryDamageBuffUntilMs = now + upgrade.itemParryDamageBuffMs;
+        }
+        // 붉은 반지 — 체력을 조금 되찾는다.
+        if (this.hasUpgrade("ITEM_RED_RING")) this.heal(upgrade.itemParryHeal);
         return { parried: true, perfect: true };
       }
       // 늦은 막기 — 피해를 크게 깎는다. 창은 계속 열어 둔다(연속 공격도 받아낼 수 있게).
@@ -1479,9 +1573,25 @@ export class Player {
     if (this.hasUpgrade("HEALTH_ARMOR")) {
       amount = Math.round(amount * TUNING.upgrade.armorDamageMultiplier);
     }
-    const itemArmorCount = this.countOwned(HEALTH_ARMOR_IDS);
-    if (itemArmorCount > 0) {
-      amount = Math.round(amount * Math.max(0.4, 1 - TUNING.upgrade.itemArmorPer * itemArmorCount));
+    if (this.hasUpgrade("ITEM_SHADOWFLAME_RING")) {
+      amount = Math.round(amount * (1 - TUNING.upgrade.itemArmorBonus));
+    }
+    // 낡은 소총 — 체력이 낮을 때만 추가로 깎는다.
+    if (this.hasUpgrade("ITEM_OLD_RIFLE") && this.hp <= this.maxHp * TUNING.upgrade.lowHpThresholdRatio) {
+      amount = Math.round(amount * (1 - TUNING.upgrade.itemLowHpDamageReduction));
+    }
+
+    // 보랏빛 두루마리 — 이 피격으로 체력이 30% 밑으로 처음 떨어지면, 맞는 대신 무적이 된다(방마다 1회).
+    if (
+      this.hasUpgrade("ITEM_VIOLET_SCROLL") &&
+      !this.lowHpInvulnUsed &&
+      this.hp > this.maxHp * TUNING.upgrade.lowHpThresholdRatio &&
+      this.hp - amount <= this.maxHp * TUNING.upgrade.lowHpThresholdRatio
+    ) {
+      this.lowHpInvulnUsed = true;
+      this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs * 2;
+      this.flash();
+      return { parried: false, perfect: false };
     }
 
     const invulnMs =
@@ -1753,20 +1863,30 @@ export class Player {
     return this.deps.upgrades.includes(id);
   }
 
-  /** 잡화 아티팩트 55종처럼 여러 개가 같은 축을 공유할 때, 가진 개수를 센다. */
-  private countOwned(ids: readonly UpgradeId[]): number {
-    return ids.filter((id) => this.hasUpgrade(id)).length;
+  /** 질주자의 별 / 핏빛 망토(처치 직후 한시적) — 이동 속도에 곱한다. */
+  private get moveSpeed(): number {
+    const now = this.scene.time.now;
+    let mult = 1;
+    if (this.hasUpgrade("ITEM_RUNNER_STAR")) mult += TUNING.upgrade.itemMoveSpeedBonus;
+    if (this.hasUpgrade("ITEM_BLOOD_CAPE") && now < this.killSpeedBurstUntilMs) {
+      mult *= TUNING.upgrade.itemKillSpeedBurstMultiplier;
+    }
+    return PLAYER.moveSpeed * mult;
   }
 
-  private get moveSpeed(): number {
-    return PLAYER.moveSpeed * (1 + TUNING.upgrade.itemMoveSpeedPer * this.countOwned(MOBILITY_SPEED_IDS));
+  /** 근접·원거리 공격 쿨타임에 곱한다. 청록 물약(처치 직후 한시적)이 유일한 요인이다. */
+  private get attackCooldownMultiplier(): number {
+    if (this.hasUpgrade("ITEM_TEAL_POTION") && this.scene.time.now < this.killAtkSpeedBurstUntilMs) {
+      return TUNING.upgrade.itemKillAtkSpeedBurstMultiplier;
+    }
+    return 1;
   }
 
   /** 대시 재충전 시간에 곱한다 — 두 군데(충전 시작·대시 즉시 재충전)가 같은 값을 써야 한다. */
   private get dashCooldownMultiplier(): number {
     return (
       (this.hasUpgrade("DASH_COOLDOWN_DOWN") ? TUNING.upgrade.dashCooldownMultiplier : 1) *
-      Math.max(0.4, 1 - TUNING.upgrade.itemDashCdPer * this.countOwned(MOBILITY_DASH_CD_IDS))
+      (this.hasUpgrade("ITEM_NIGHT_MASK") ? 1 - TUNING.upgrade.itemDashCdBonus : 1)
     );
   }
 
@@ -1783,7 +1903,7 @@ export class Player {
       TUNING.ranged.magazineSize +
       (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0) +
       (hasEngraving("SPARE_SHELL") ? ENGRAVING_EFFECT.magazineBonus : 0) +
-      this.countOwned(RANGED_MAG_IDS)
+      (this.hasUpgrade("ITEM_RED_LANTERN") ? TUNING.upgrade.itemMagazineBonus2 : 0)
     );
   }
 
@@ -1795,7 +1915,112 @@ export class Player {
     return damage * TUNING.upgrade.dashFollowupMultiplier;
   }
 
+  /** 체력을 회복하고 HUD를 갱신한다. 최대치를 넘기지 않는다. */
+  heal(amount: number): void {
+    if (this.isDead) return;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.emitHud();
+  }
+
+  /**
+   * 적을 처치했을 때 호출한다(직격·틱·낙사 모두). 처치 시 발동 아티팩트 6종을 여기서 처리한다.
+   */
+  notifyKill(x: number, y: number): void {
+    const { upgrade } = TUNING;
+    if (this.hasUpgrade("ITEM_GEAR_HEART")) this.heal(upgrade.itemKillHealAmount);
+    if (this.hasUpgrade("ITEM_GOLD_CROSS_STAR")) this.deps.gainShards(upgrade.itemKillShardAmount);
+    if (this.hasUpgrade("ITEM_SPIKED_STAR")) {
+      this.spawnProcHitbox(x, y, upgrade.itemKillBurstRadiusPx, upgrade.itemKillBurstRadiusPx, upgrade.itemKillBurstDamage, 120);
+    }
+    if (this.hasUpgrade("ITEM_BLOOD_CAPE")) {
+      this.killSpeedBurstUntilMs = this.scene.time.now + upgrade.itemKillSpeedBurstMs;
+    }
+    if (this.hasUpgrade("ITEM_TEAL_POTION")) {
+      this.killAtkSpeedBurstUntilMs = this.scene.time.now + upgrade.itemKillAtkSpeedBurstMs;
+    }
+    if (this.hasUpgrade("ITEM_GOLD_POTION") && Math.random() < upgrade.itemKillDashRefundChance) {
+      this.dashCharges = Math.min(this.maxDashCharges, this.dashCharges + 1);
+    }
+  }
+
+  /** 보유한 적중 시 속성 부여 아이템을 공격체에 실어 둔다. 실제 판정은 CombatScene이 한다. */
+  private attachItemProcs(attack: Phaser.GameObjects.GameObject, table: readonly ItemProc[]): void {
+    const owned = table.filter((proc) => this.hasUpgrade(proc.id));
+    if (owned.length > 0) {
+      attack.setData("itemProcs", owned.map(({ element, chance }) => ({ element, chance })));
+    }
+  }
+
+  /**
+   * 대시 흔적·처치 폭발처럼 즉석에서 만드는 피해 판정. 기존 스킬 히트박스와 같은 방식으로
+   * `arena.playerAttacks`에 넣는다 — 적중 처리는 CombatScene.wireCollisions()가 그대로 맡는다.
+   */
+  private spawnProcHitbox(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    damage: number,
+    lifeMs: number,
+    element?: UpgradeElement,
+  ): void {
+    const box = this.scene.physics.add.image(x, y, TEXTURE.playerAttack);
+    box.setDisplaySize(Math.max(4, width), Math.max(4, height));
+    box.setDepth(TUNING.depth.attack);
+    box.setAlpha(0);
+    this.deps.arena.playerAttacks.add(box);
+    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    box.setData("damage", damage);
+    box.setData("mode", "MELEE" satisfies AttackMode);
+    if (element) box.setData("element", element);
+    this.scene.time.delayedCall(lifeMs, () => box.destroy());
+  }
+
   /** 화면을 벗어났거나 관통 한도를 넘긴 투사체를 없앤다. 방치하면 계속 쌓인다. */
+  /**
+   * F. 일정 시간마다 발동 4종. `next*AtMs`가 0이면 아직 방을 시작한 첫 프레임이라
+   * 곧바로 발동시키지 않고 기준 시각만 잡아 둔다(안 그러면 방마다 입장하자마자 한 번씩 튄다).
+   */
+  private updatePeriodicItems(now: number): void {
+    const { upgrade } = TUNING;
+
+    if (this.hasUpgrade("ITEM_GOLD_SPELLBOOK")) {
+      if (this.nextHealTickAtMs === 0) this.nextHealTickAtMs = now + upgrade.itemHealTickMs;
+      else if (now >= this.nextHealTickAtMs) {
+        this.heal(upgrade.itemHealTickAmount);
+        this.nextHealTickAtMs = now + upgrade.itemHealTickMs;
+      }
+    }
+    if (this.hasUpgrade("ITEM_BLACK_SHURIKEN")) {
+      if (this.nextBankedAttackAtMs === 0) this.nextBankedAttackAtMs = now + upgrade.itemBankedAttackIntervalMs;
+      else if (now >= this.nextBankedAttackAtMs) {
+        this.bankedMeleeBonus = true;
+        this.nextBankedAttackAtMs = now + upgrade.itemBankedAttackIntervalMs;
+      }
+    }
+    if (this.hasUpgrade("ITEM_VIOLET_SHURIKEN") && this.sprite) {
+      if (this.nextPulseAtMs === 0) this.nextPulseAtMs = now + upgrade.itemPulseIntervalMs;
+      else if (now >= this.nextPulseAtMs) {
+        this.spawnProcHitbox(
+          this.sprite.x,
+          this.sprite.y,
+          upgrade.itemPulseRadiusPx,
+          upgrade.itemPulseRadiusPx,
+          upgrade.itemPulseDamage,
+          120,
+        );
+        this.nextPulseAtMs = now + upgrade.itemPulseIntervalMs;
+      }
+    }
+    if (this.hasUpgrade("ITEM_GLASS_ORB")) {
+      if (this.nextShardTickAtMs === 0) this.nextShardTickAtMs = now + upgrade.itemShardTickMs;
+      else if (now >= this.nextShardTickAtMs) {
+        this.deps.gainShards(1);
+        this.nextShardTickAtMs = now + upgrade.itemShardTickMs;
+      }
+    }
+  }
+
   private cullProjectiles(nowMs: number): void {
     if (this.projectiles.length === 0) return;
     const { width } = this.deps.arena.bounds;

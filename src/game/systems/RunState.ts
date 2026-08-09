@@ -13,7 +13,7 @@ import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
 import { ENGRAVING_EFFECT } from "../data/engravings";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { hasEngraving } from "./Engravings";
-import { HEALTH_HP_IDS, TUNING } from "../entities/Player";
+import { TUNING } from "../entities/Player";
 import type {
   BossPattern,
   BossPatternWeights,
@@ -69,6 +69,11 @@ export class RunState {
 
   /** 이번 시도(런 시작 또는 마지막 부활 이후)에 처치한 적 수. 사망 결과창에 쓴다. */
   kills = 0;
+
+  /** 붉은 마법서 — 방을 클리어할 때마다 다시 채워지는 1회용 방어막. */
+  hasRoomShield = false;
+  /** 보라 마법서 — 첫 방을 클리어한 뒤부터 계속 켜진다. */
+  roomMeleeDamageBuffActive = false;
   /** 이번 시도가 시작된 시각. 사망 결과창의 생존 시간 계산 기준. */
   private attemptStartedAtMs = 0;
 
@@ -96,6 +101,8 @@ export class RunState {
     this.hp = this.maxHp;
     this.rooms = [];
     this.skipTutorialIntro = false;
+    this.hasRoomShield = false;
+    this.roomMeleeDamageBuffActive = false;
     this.shards = hasEngraving("MEMORY") ? ENGRAVING_EFFECT.startShards : 0;
     this.kills = 0;
     this.attemptStartedAtMs = nowMs;
@@ -132,6 +139,8 @@ export class RunState {
     this.maxHp = PLAYER.maxHp + (hasEngraving("VIGOR") ? ENGRAVING_EFFECT.hpBonus : 0);
     this.hp = this.maxHp;
     this.skipTutorialIntro = true;
+    this.hasRoomShield = false;
+    this.roomMeleeDamageBuffActive = false;
     this.kills = 0;
     this.attemptStartedAtMs = nowMs;
   }
@@ -141,7 +150,18 @@ export class RunState {
   }
 
   addShards(amount: number): void {
-    this.shards += amount;
+    // 보랏빛 화염구 — 조각 획득량이 늘어난다.
+    const mult = this.selectedUpgrades.includes("ITEM_VIOLET_FLAME_ORB")
+      ? 1 + TUNING.upgrade.itemShardGainBonus
+      : 1;
+    this.shards += Math.round(amount * mult);
+  }
+
+  /** 붉은 마법서의 방어막을 있으면 소모하고 true를 돌려준다. Player.takeDamage가 부른다. */
+  consumeRoomShield(): boolean {
+    if (!this.hasRoomShield) return false;
+    this.hasRoomShield = false;
+    return true;
   }
 
   /** 잔액이 모자라면 아무것도 하지 않고 false. 구매 검증의 유일한 관문이다. */
@@ -195,6 +215,11 @@ export class RunState {
     this.currentTelemetry = telemetry;
 
     if (this.selectedUpgrades.includes("HEALTH_REGEN")) this.heal(TUNING.upgrade.healthRegenAmount);
+    // 초록 마법서 / 푸른 마법서 / 붉은 마법서 / 보라 마법서 — 방 클리어마다 발동하는 4종.
+    if (this.selectedUpgrades.includes("ITEM_GREEN_SPELLBOOK")) this.heal(TUNING.upgrade.itemRoomClearHeal);
+    if (this.selectedUpgrades.includes("ITEM_BLUE_SPELLBOOK")) this.addShards(TUNING.upgrade.itemRoomClearShards);
+    if (this.selectedUpgrades.includes("ITEM_RED_SPELLBOOK")) this.hasRoomShield = true;
+    if (this.selectedUpgrades.includes("ITEM_VIOLET_SPELLBOOK")) this.roomMeleeDamageBuffActive = true;
 
     eventBus.emit("room:clear", { roomIndex: this.roomIndex, telemetry });
     return true;
@@ -219,8 +244,8 @@ export class RunState {
       this.maxHp += TUNING.upgrade.healthMaxBonus;
       this.heal(TUNING.upgrade.healthMaxBonus);
     }
-    // 잡화 아티팩트(최대 체력 축) — 하나 주울 때마다 그 자리에서 즉시 늘고 채워진다.
-    if (HEALTH_HP_IDS.includes(upgradeId)) {
+    // 보랏빛 심핵 — 줍는 즉시 최대 체력이 늘고 늘어난 만큼 채워진다.
+    if (upgradeId === "ITEM_VIOLET_DIAMOND_PENDANT") {
       this.maxHp += TUNING.upgrade.itemHpBonus;
       this.heal(TUNING.upgrade.itemHpBonus);
     }
