@@ -1,6 +1,6 @@
 "use client";
 
-import { css } from "@emotion/react";
+import { css, keyframes } from "@emotion/react";
 import styled from "@emotion/styled";
 import gsap from "gsap";
 import { useEffect, useRef, useState, type ReactElement } from "react";
@@ -135,11 +135,15 @@ const pctY = (px: number) => `${(px / IMG_H) * 100}%`;
 
 type TabId = "ALL" | UpgradeCategory | "ARTIFACT";
 
-/** 탭 아이콘(검·투구·물약·반지·좌대·주사위)은 그림에 이미 그려져 있다 — 좌표와 분류만 정한다. */
+/**
+ * 탭 아이콘(검·투구·물약·반지·좌대·주사위)은 그림에 이미 그려져 있다 — 좌표와 분류만 정한다.
+ * 물약=생존(회복), 반지=기동(민첩)은 직관적으로 맞아떨어지지만, 이 6개 아이콘 세트엔
+ * "총/화살" 그림이 없다 — 원거리는 남는 투구가 대신 맡는다.
+ */
 const TABS: { id: TabId; label: string; cx: number; match: (id: UpgradeId) => boolean }[] = [
   { id: "MELEE", label: "근접", cx: 215, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MELEE" },
-  { id: "HEALTH", label: "생존", cx: 343, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "HEALTH" },
-  { id: "RANGED", label: "원거리", cx: 475, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "RANGED" },
+  { id: "RANGED", label: "원거리", cx: 343, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "RANGED" },
+  { id: "HEALTH", label: "생존", cx: 475, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "HEALTH" },
   { id: "MOBILITY", label: "기동", cx: 606, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MOBILITY" },
   { id: "ARTIFACT", label: "아티팩트", cx: 742, match: (id) => id.startsWith("ITEM_") },
   { id: "ALL", label: "전체", cx: 878, match: () => true },
@@ -171,12 +175,30 @@ const TabHit = styled.button<{ active: boolean }>`
   border: none;
   background: none;
   cursor: pointer;
+  filter: brightness(1);
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    filter: brightness(1.35);
+  }
 
   ${({ active }) =>
     active &&
     css`
       box-shadow: inset 0 0 0 2px rgba(240, 215, 138, 0.85), 0 0 10px rgba(240, 215, 138, 0.35);
     `}
+`;
+
+/** 탭을 바꿀 때마다 그리드가 아주 살짝 떠오르며 들어온다 — 클릭이 먹혔다는 즉각적인 신호. */
+const gridFadeIn = keyframes`
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const GridFade = styled.div`
+  position: absolute;
+  inset: 0;
+  animation: ${gridFadeIn} 0.2s ease;
 `;
 
 const GridSlot = styled.button<{ filled: boolean; selected: boolean }>`
@@ -353,29 +375,31 @@ export default function StatusPanel({ hud }: StatusPanelProps) {
             />
           ))}
 
-          {cells.map((id, i) => {
-            const col = i % GRID.cols;
-            const row = Math.floor(i / GRID.cols);
-            const filled = id !== null;
-            return (
-              <GridSlot
-                key={id ?? `empty-${i}`}
-                type="button"
-                filled={filled}
-                selected={filled && id === selected}
-                onClick={() => id && setSelected(id)}
-                style={{
-                  left: pctX(GRID.left + col * CELL_W),
-                  top: pctY(GRID.top + row * CELL_H),
-                  width: pctX(CELL_W),
-                  height: pctY(CELL_H),
-                }}
-              >
-                {id && iconFor(id)}
-                {id && UPGRADES[id].element && <ElementDot color={ELEMENT_COLOR[UPGRADES[id].element]} />}
-              </GridSlot>
-            );
-          })}
+          <GridFade key={activeTab}>
+            {cells.map((id, i) => {
+              const col = i % GRID.cols;
+              const row = Math.floor(i / GRID.cols);
+              const filled = id !== null;
+              return (
+                <GridSlot
+                  key={id ?? `empty-${i}`}
+                  type="button"
+                  filled={filled}
+                  selected={filled && id === selected}
+                  onClick={() => id && setSelected(id)}
+                  style={{
+                    left: pctX(GRID.left + col * CELL_W),
+                    top: pctY(GRID.top + row * CELL_H),
+                    width: pctX(CELL_W),
+                    height: pctY(CELL_H),
+                  }}
+                >
+                  {id && iconFor(id)}
+                  {id && UPGRADES[id].element && <ElementDot color={ELEMENT_COLOR[UPGRADES[id].element]} />}
+                </GridSlot>
+              );
+            })}
+          </GridFade>
 
           <PortraitHit
             style={{
