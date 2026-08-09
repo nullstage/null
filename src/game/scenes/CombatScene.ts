@@ -30,12 +30,16 @@ import { RangedEnemy } from "../entities/enemies/RangedEnemy";
 import {
   ashRise,
   attachAmbientLight,
+  attachGlitchFx,
   attachHitFx,
+  castPlatformShadows,
   damageNumber,
   portalWipeOut,
+  pulseGlitchFx,
   shardDrop,
   startAmbientParticles,
   startBloodRain,
+  startDreamMist,
   updateAmbientLightCenter,
 } from "../systems/CombatVfx";
 import { playSfx, startRoomBgm } from "../systems/audio";
@@ -286,6 +290,9 @@ export class CombatScene extends Phaser.Scene {
     // (실험) 상시 조명 셰이더 — 캐릭터 주변만 밝고 나머지는 붉은 그림자로 가라앉는다.
     // 중심 좌표는 `update()`에서 매 프레임 캐릭터 화면 위치로 갱신한다.
     attachAmbientLight(this);
+    // 상시 글리치 — 마지막에 붙여 화면 전체 위에 얹는다. 방 진입 순간 한 번 크게 튄다.
+    attachGlitchFx(this);
+    pulseGlitchFx(this, 0.55, 500);
 
     // 방 1·2는 화면보다 넓게 잡는다. 전투가 있어도 없어도 끝까지 걸어가 게이트를 찾는 구성이라
     // 화면 하나보다는 길어야 진행하는 느낌이 산다. 무한 스크롤은 아니다 — 폭이 고정값이라 끝이 있다.
@@ -316,6 +323,9 @@ export class CombatScene extends Phaser.Scene {
     // (실험) 방 전체에 떠다니는 잔불 입자. 모든 일반 전투방에 건다.
     startAmbientParticles(this, roomWidth, this.arena.bounds.floorY);
     startBloodRain(this, roomWidth, this.arena.bounds.floorY);
+    // 몽환 안개 3겹 + 달빛 사광 그림자 — 화면의 공기 밀도를 만든다.
+    startDreamMist(this, roomWidth, this.arena.bounds.floorY);
+    castPlatformShadows(this, this.arena.platforms, this.arena.bounds.floorY);
 
     if (isTutorialRoom) {
       for (const decor of ROOM_ONE_DECOR) {
@@ -842,6 +852,7 @@ export class CombatScene extends Phaser.Scene {
         const { x, y } = wanderer;
         wanderer.destroy();
         this.cameras.main.shake(140, 0.008);
+        pulseGlitchFx(this, 0.6, 450);
         ashRise(this, x, y - 40, 0xff2a3a);
 
         // 방 클리어 카운트와 분리된 매복 — RoomController를 거치지 않는 전용 콜백을 쓴다.
@@ -1230,6 +1241,8 @@ export class CombatScene extends Phaser.Scene {
    * 닫으면 체력을 채워 튜토리얼 방으로 돌려보낸다. (사용자 확정)
    */
   private handlePlayerDeath(): void {
+    // 세계가 크게 일그러진다 — 침식에 삼켜지는 순간의 글리치.
+    pulseGlitchFx(this, 1, 700);
     eventBus.emit("respawn:summary", {
       survivedMs: runState.attemptDurationMs(this.time.now),
       kills: runState.kills,

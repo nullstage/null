@@ -25,6 +25,7 @@ import {
   enemySlash,
   groundDust,
   hitStop,
+  pulseGlitchFx,
 } from "../systems/CombatVfx";
 import { pickBossPattern } from "../systems/DirectorPolicy";
 import { BOSS_FRAME, SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
@@ -813,6 +814,7 @@ export class Boss {
     hitStop(this.scene, 120);
     this.scene.cameras.main.shake(220, 0.01);
     this.scene.cameras.main.flash(160, 120, 10, 30);
+    pulseGlitchFx(this.scene, next === 2 ? 0.65 : 0.9, 550);
     bossShockwave(this.scene, sprite.x, this.arena.bounds.floorY - 6, 300);
     groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
 
@@ -851,6 +853,7 @@ export class Boss {
     sprite.clearTint();
     // 런의 마지막 타격이다. 시간이 잠깐 멎고, 화면이 하얗게 번쩍이며, 재가 오래 떠오른다.
     hitStop(this.scene, 300);
+    pulseGlitchFx(this.scene, 1, 900);
     const cam = this.scene.cameras.main;
     cam.shake(320, 0.012);
     cam.flash(260, 255, 235, 220);
