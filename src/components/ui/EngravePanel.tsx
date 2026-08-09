@@ -120,6 +120,21 @@ const Hex = styled.button<{ state: "unlocked" | "available" | "locked" }>`
   }
 `;
 
+/**
+ * 비용 표시. 조각이 모자라면 붉게 물든다 — 눌러도 아무 일이 없는 이유가
+ * 설명을 읽기 전에 값에서 먼저 보여야 한다.
+ */
+const Cost = styled.small<{ short: boolean }>`
+  color: ${({ short }) => (short ? "#e05055" : "inherit")};
+`;
+
+/** 설명 아래 한 줄. 왜 새길 수 없는지를 말해 준다. */
+const Shortage = styled.small`
+  display: block;
+  margin-top: 6px;
+  color: #e05055;
+`;
+
 const Info = styled.div`
   min-height: 58px;
   margin-top: ${theme.space(4)};
@@ -172,7 +187,10 @@ export interface EngravePanelProps {
 }
 
 export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngravePanelProps) {
-  const [focused, setFocused] = useState<EngravingView | null>(null);
+  // 노드 객체가 아니라 id만 들고 있는다. 각인을 새기면 부모가 갱신된 `nodes`를
+  // 다시 내려주는데, 객체를 붙잡고 있으면 방금 새긴 각인이 계속 "잠김"으로 남는다.
+  const [focusedId, setFocusedId] = useState<EngravingId | null>(null);
+  const focused = nodes.find((node) => node.id === focusedId) ?? null;
 
   return (
     <Panel title="「기록 제단」">
@@ -191,14 +209,16 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
               type="button"
               state={state}
               style={{ left: node.col * STEP_X, top: node.row * STEP_Y }}
-              onMouseEnter={() => setFocused(node)}
+              onMouseEnter={() => setFocusedId(node.id)}
               onClick={() => {
-                setFocused(node);
+                setFocusedId(node.id);
                 if (state === "available" && affordable) onBuy(node.id);
               }}
             >
               {NODE_ICON[node.id]}
-              {!node.unlocked && <small>◆ {node.cost}</small>}
+              {!node.unlocked && (
+                <Cost short={state === "available" && !affordable}>◆ {node.cost}</Cost>
+              )}
             </Hex>
           );
         })}
@@ -212,6 +232,9 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
               {focused.unlocked ? " — 새겨짐" : focused.available ? "" : " — 잠김"}
             </strong>
             <small>{focused.description}</small>
+            {focused.available && shards < focused.cost && (
+              <Shortage>그림자 조각이 모자라다.</Shortage>
+            )}
           </>
         ) : (
           // 안내는 설명식으로, 플레이버 한 줄만 남긴다. (사용자 결정)

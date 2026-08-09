@@ -246,7 +246,10 @@ export class RunState {
       cleared,
       totalTimeMs: Math.max(0, this.runEndedAtMs - this.runStartedAtMs),
       rooms: this.rooms.map((room) => ({ ...room })),
-      finalStyle: this.latestAnalysis?.style ?? "MIXED",
+      // 방 3에서 실제로 어떻게 싸웠는지가 확정돼 있으면 그것이 최종이다.
+      // latestAnalysis는 방 2 시점의 '예측'이라, 역기만에 성공한 런에서는
+      // 리포트가 "예측대로 싸웠다 + 속였다"로 자기모순이 된다.
+      finalStyle: this.deception?.actualStyle ?? this.latestAnalysis?.style ?? "MIXED",
       deception: this.deception,
       bossWeights: { ...this.bossWeights },
       bossPatternUsage: { ...this.bossPatternUsage },

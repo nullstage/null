@@ -24,6 +24,11 @@ const SPAWN_POP_SCALE = 0.6;
 /** 피격 흰색 플래시 유지 시간(ms). 짧아야 타격이 "찍히듯" 보인다. */
 const HIT_FLASH_MS = 90;
 
+/** 발판 충돌체 높이의 절반. `createArena`가 발판을 18px 높이로 만든다. */
+const PLATFORM_HALF_HEIGHT = 9;
+/** 이 오차 안이면 그 발판 위에 서 있는 것으로 본다. */
+const PLATFORM_SNAP = 14;
+
 /** 죽을 때 터지는 파편의 색. 역할과 무관하게 검게 산화하는 것으로 통일한다. */
 const DEATH_COLOR = 0x0a0a0a;
 /** 피격 스케일 펀치. 도형뿐이라 크기 변화가 유일한 타격감이다. */
@@ -67,6 +72,8 @@ export abstract class BaseEnemy {
   private stateTint: number | null = null;
   /** 냉기 속성 피격 시 낮아진다. 이동 속도를 쓰는 곳(하위 클래스)이 여기 곱해서 읽는다. */
   protected speedMultiplier = 1;
+  /** 슬로우가 실제로 풀려야 하는 시각(ms). 겹쳐 걸릴 때 먼저 건 타이머가 조기에 풀지 않게 막는다. */
+  private slowUntilMs = 0;
 
   protected constructor(type: EnemyType, deps: EnemyDeps) {
     this.definition = ENEMIES[type];
@@ -161,20 +168,36 @@ export abstract class BaseEnemy {
   }
 
   /**
-   * 이 x좌표 아래에 바닥 조각이 있는지. 없으면 낭떠러지 위다.
-   * 랜덤 지형(낭떠러지) 도입 이후 적이 앞뒤 안 보고 쫓아오다 스스로 빠지는 것을
-   * 막는 데 쓴다 — 플레이어처럼 점프해서 건너지 못하니 아예 멈춰야 한다.
+   * 이 x좌표 아래에 발밑이 있는지. 없으면 낭떠러지 위다.
+   * 적은 플레이어처럼 점프해서 건너지 못하니 그 앞에서 멈춰야 한다.
+   *
+   * 바닥과 발판을 높이 없이 합쳐 보면 안 된다 — 바닥에 선 적이 머리 위 발판을 믿고
+   * 낭떠러지로 걸어 들어간다. 서 있는 높이로 어느 쪽을 볼지 먼저 가른다.
    */
   protected hasFloorBelow(x: number): boolean {
-    return this.arena.floorSegments.some((segment) => x >= segment.x && x <= segment.x + segment.width);
+    const bottom = this.sprite?.body?.bottom;
+    if (bottom !== undefined && bottom < this.arena.bounds.floorY - 24) {
+      return this.arena.platforms.some(
+        (platform) =>
+          Math.abs(bottom - (platform.y - PLATFORM_HALF_HEIGHT)) <= PLATFORM_SNAP &&
+          x >= platform.x &&
+          x <= platform.x + platform.width,
+      );
+    }
+    return this.arena.floorSegments.some(
+      (segment) => x >= segment.x && x <= segment.x + segment.width,
+    );
   }
 
-  /** 냉기 속성 적중. 이동 속도를 잠시 낮춘다. 겹쳐 걸리면 마지막 것으로 덮어쓴다. */
+  /** 냉기 속성 적중. 이동 속도를 잠시 낮춘다. 겹쳐 걸리면 더 늦게 끝나는 쪽까지 유지된다. */
   applySlow(factor: number, durationMs: number): void {
     if (this.defeated) return;
     this.speedMultiplier = factor;
+    // 나중에 걸린 슬로우가 더 길면, 먼저 걸린 타이머가 그것을 조기에 풀어서는 안 된다.
+    this.slowUntilMs = Math.max(this.slowUntilMs, this.scene.time.now + durationMs);
     this.scene.time.delayedCall(durationMs, () => {
-      if (!this.defeated) this.speedMultiplier = 1;
+      if (this.defeated) return;
+      if (this.scene.time.now >= this.slowUntilMs) this.speedMultiplier = 1;
     });
   }
 

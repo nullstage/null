@@ -17,6 +17,7 @@ import { CombatScene } from "./scenes/CombatScene";
 import { ReadyScene } from "./scenes/ReadyScene";
 import { AmbientLightPipeline, HitFxPipeline } from "./systems/CombatVfx";
 import { runState } from "./systems/RunState";
+import { stopRoomBgm } from "./systems/audio";
 
 /** 일시정지가 의미 있는 씬. 시작 화면은 멈출 것이 없다. */
 const PAUSABLE_SCENES = ["Combat", "Boss"] as const;
@@ -43,6 +44,9 @@ const wireLifecycle = (game: Phaser.Game): void => {
         game.scene.resume(key);
         game.scene.stop(key);
       });
+      // Phaser의 사운드 매니저는 게임 전역이라 씬을 stop해도 BGM이 계속 돈다.
+      // 그대로 두면 시작 화면에서 전투 BGM과 타이틀 BGM이 겹쳐 울린다.
+      stopRoomBgm(game);
       runState.reset(game.loop.time);
       game.scene.start("Ready");
     }),

@@ -32,6 +32,13 @@ const bgmVolume = (): number => {
 type LoopKind = "bgm" | "footstep";
 
 /**
+ * BGM 제어에 필요한 건 사운드 매니저뿐이다. Phaser의 사운드 매니저는 게임 전역이라
+ * (씬의 `sound`는 `game.sound`를 그대로 가리킨다) 씬과 게임 인스턴스 양쪽에서
+ * 같은 대상을 만진다 — 구조로 받아 둘 다 넘길 수 있게 한다.
+ */
+type SoundHost = { sound: Phaser.Sound.BaseSoundManager };
+
+/**
  * BGM·발소리처럼 재생 중에 오래 살아있는 루프만 여기 등록한다.
  * 한 번 쏘고 끝나는 효과음(playSfx)은 재생 시점에 볼륨을 읽으므로 등록할 필요가 없다.
  */
@@ -67,21 +74,21 @@ export const playSfx = (
  * 이미 같은 트랙이 재생 중이면 다시 시작하지 않는다 — 방 전환마다 끊겼다 재생되면 거슬린다.
  * 방 1(마을)에서 방 2(전투)로 넘어가는 것처럼 트랙이 바뀌는 경우엔 이전 트랙을 먼저 끈다.
  */
-export const startRoomBgm = (scene: Phaser.Scene, key: string): void => {
+export const startRoomBgm = (host: SoundHost, key: string): void => {
   // `.get()`은 멈춘 소리도 매니저에 남아있는 한 계속 돌려준다 — 재생 중인지는
   // `isPlaying`으로 따로 확인해야 한다. 여기서 존재만 보고 넘어가면, 한 번이라도
   // stopRoomBgm을 거친 뒤엔 이 트랙이 다시는 재생되지 않는다.
-  const existing = scene.sound.get(key) as Phaser.Sound.BaseSound | undefined;
+  const existing = host.sound.get(key) as Phaser.Sound.BaseSound | undefined;
   if (existing?.isPlaying) return;
-  stopRoomBgm(scene);
-  const sound = scene.sound.add(key, { loop: true, volume: bgmVolume() });
+  stopRoomBgm(host);
+  const sound = host.sound.add(key, { loop: true, volume: bgmVolume() });
   activeLoops.set(sound, "bgm");
   sound.play();
 };
 
-export const stopRoomBgm = (scene: Phaser.Scene): void => {
+export const stopRoomBgm = (host: SoundHost): void => {
   for (const key of [AUDIO.bgmCombat, AUDIO.bgmVillage]) {
-    const sound = scene.sound.get(key);
+    const sound = host.sound.get(key);
     if (!sound) continue;
     activeLoops.delete(sound);
     // stop만 하면 매니저에 죽은 소리로 남아 다음 startRoomBgm의 "이미 있음" 판정을 속인다.

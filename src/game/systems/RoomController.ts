@@ -19,8 +19,6 @@ export interface RoomControllerDeps {
   telemetry: CombatTelemetryRecorder;
   /** 전투 담당이 구현한다. 적 하나를 만들고 사망 시 `onEnemyDefeated`를 호출해야 한다. */
   spawnEnemy: (spawn: EnemySpawn, preset: RoomPreset) => void;
-  /** 장판 함정 활성화. 전투 담당이 구현한다. */
-  enableHazards?: (preset: RoomPreset) => void;
   onRoomClear: (telemetry: CombatTelemetry) => void;
   /** 방 종료 시 기록할 남은 체력을 돌려준다. */
   getRemainingHp: () => number;
@@ -63,8 +61,6 @@ export class RoomController {
     this.waveOverride = null;
 
     this.deps.telemetry.begin(this.deps.scene.time.now);
-
-    if (preset.hazardsEnabled) this.deps.enableHazards?.(preset);
 
     this.spawnWave(preset);
 

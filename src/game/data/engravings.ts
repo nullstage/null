@@ -68,7 +68,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "SPARE_SHELL",
     name: "여분의 탄피",
-    description: "새로운 기록을 시작할 때 탄창 용량이 1발 증가한다.",
+    description: "탄창 용량이 1발 증가한다.",
     cost: 8,
     col: 0,
     row: 2,
@@ -86,7 +86,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "AFTERIMAGE",
     name: "잔영",
-    description: "새로운 기록을 시작할 때 대시 충전 횟수가 1 증가한다.",
+    description: "대시 충전 횟수가 1 증가한다.",
     cost: 12,
     col: 1,
     row: 3,
