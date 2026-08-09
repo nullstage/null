@@ -14,7 +14,7 @@ import { theme } from "@/styles/theme";
  * `prefers-reduced-motion`을 존중한다.
  */
 
-const Backdrop = styled.div`
+export const Backdrop = styled.div`
   position: absolute;
   inset: 0;
   z-index: ${theme.z.panel};
