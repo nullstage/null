@@ -1167,13 +1167,25 @@
 
 #### 검증
 
-- `npm run typecheck`, `npm run lint` 통과.
-- 실브라우저에서 방 2·보스전 양쪽에 화염/맹독 속성탄으로 적을 서서히 죽이는 상황을
-  재현해 크래시가 없는지와 사망 순간 데미지 숫자 위치가 올바른지는 사용자 확인 대기.
-
-#### 남은 작업
-
-- `npm run build`는 아직 실행하지 않았다.
+- `npm run typecheck`, `npm run lint`, `npm run build` 통과.
+- Playwright 헤드리스로 실제 코드 경로를 결정적으로 검증했다. `?fast=1`로 dev 서버에
+  접속해 `window.phaserGame` 훅으로 `CombatScene.applyElement`/`BossScene.applyElement`를
+  직접 호출하는 방식이다 — 실시간 대기 방식(`scene.time.delayedCall`이 이 헤드리스
+  환경에서 실행되지 않는 문제를 먼저 발견함, 순수 JS `setTimeout`은 정상 동작해
+  Phaser Clock 쪽에 한정된 환경 제약으로 확인)은 버리고, `delayedCall`을 즉시 실행
+  스텁으로 바꿔 타이밍에 의존하지 않고 같은 코드를 그대로 태웠다.
+  - `CombatScene`: 실제 `BaseEnemy`(CHASER)를 `hp=1`로 스폰 후 FIRE·POISON 각각
+    `applyElement` 호출 → 첫 틱이 마무리타가 되는 상황에서 예외 없음, `isDefeated`
+    `true`, `sprite`는 `null`(BaseEnemy는 죽는 즉시 sprite를 지움)로 정상 확인.
+  - `BossScene`: 실제 `Boss` 인스턴스를 `hp=1`로 만들고 동일하게 검증 → 예외 없음,
+    `isDefeated` `true`, `sprite`는 살아 있음(Boss는 죽음 연출 동안 sprite를 유지)로
+    정상 확인. 각 원소마다 새 페이지로 시작해 죽은 보스가 있는 씬을 재시작할 때 걸리는
+    별개의 기존 버그(`Boss.clearScheduled`가 스텁이 반환한 값이 real TimerEvent가
+    아니면 `.remove()`에서 죽는 문제 — 처음엔 실제 버그로 착각했으나 스텁이 `null`을
+    반환한 내 테스트 하니스 결함이었음, `{ remove: () => {} }`로 고쳐 확인)을 피했다.
+- 실제 조작감·타이밍 체감(속성 틱 데미지 숫자가 뜨는 위치, 히트펀치 연출과의 합)은
+  여전히 사람이 실브라우저에서 한 번 봐야 한다 — 위 검증은 "크래시하지 않는다"만
+  결정적으로 증명한다.
 
 ---
 
