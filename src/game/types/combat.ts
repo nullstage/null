@@ -81,6 +81,12 @@ export const TEXTURE = {
   clouds: "tex_clouds",
   /** 시작·부활 시 앉았다 일어나는 인트로 4프레임. */
   playerIntro: "player_intro_sheet",
+  /** 보스 체력바 장식 프레임. 위 문장(이름)·아래 문장(부제)·가운데 띠(게이지 창)를 담는다. */
+  bossHpFrame: "tex_boss_hp_frame",
+  /** 보스방 전용 배경 — 고딕 성당 옥좌. 다른 방과 다른 실내 그림이라 구름 없이 한 장만 깐다. */
+  bossThrone: "tex_boss_throne",
+  /** 보스방 전용 바닥 타일 — 제공받은 붉은 고딕 타일시트에서 잘라낸 벽돌 한 칸(52px). */
+  bossFloorTile: "tex_boss_floor_tile",
 } as const;
 
 /**
@@ -129,6 +135,8 @@ export const AUDIO = {
   bgmCombat: "bgm_combat",
   /** 방 1(튜토리얼) 전용 — 아직 전투가 없는 마을 분위기라 전투 BGM과 다르게 튼다. */
   bgmVillage: "bgm_village",
+  /** 보스방 전용. */
+  bgmBoss: "bgm_boss",
 } as const;
 
 /**
