@@ -20,10 +20,11 @@ import {
 import Panel from "./Panel";
 
 /**
- * 상태창(E) — 스컬식 시트. (참고 스크린샷 반영, 에셋 없이 CSS만)
+ * 상태창(E) — 스컬식 시트.
  *
  * 왼쪽: 스킬·아티팩트 아이콘 슬롯 그리드. 오른쪽: 선택한 것의 상세
  * (원형 초상 프레임 + 이름 배너 + 분류·속성 태그 + 설명).
+ * 내용은 CSS로 그리고, 테두리만 참고 시트(ui/inventory-frame.png)를 잘라 쓴다.
  * 조회 전용이다 — 아무것도 고르지 않는다.
  */
 
@@ -338,7 +339,21 @@ export default function StatusPanel({ hud }: StatusPanelProps) {
   ];
 
   return (
-    <Panel title="「남아 있는 것」">
+    <Panel
+      title="「남아 있는 것」"
+      frameImage={assetPath("ui/inventory-frame.png")}
+      /*
+       * 원본(1536x1024)은 인벤토리 화면 통짜 목업이라 가운데에 칸 격자·초상화가
+       * 그려져 있다. 바깥 장식 띠가 끝나는 지점(위 185 / 오른쪽 150 / 아래 140 /
+       * 왼쪽 150)에서 잘라 테두리로만 쓰고, 안쪽 목업은 버린다 — 격자와 상세는
+       * 아래 CSS 슬롯이 이미 그리고 있다.
+       */
+      frameSlice="185 150 140 150"
+      frameWidth="54px 44px 42px 44px"
+      framePadding="68px 44px 52px"
+      /* 장식 띠가 좌우 44px씩 먹으므로 기본 560px면 상세 설명 칸이 깨져 접힌다. */
+      maxWidth="640px"
+    >
       <Sheet>
         <LeftCol>
           <HpRow>
