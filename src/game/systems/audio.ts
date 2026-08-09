@@ -80,7 +80,7 @@ export const startRoomBgm = (scene: Phaser.Scene, key: string): void => {
 };
 
 export const stopRoomBgm = (scene: Phaser.Scene): void => {
-  for (const key of [AUDIO.bgmCombat, AUDIO.bgmVillage]) {
+  for (const key of [AUDIO.bgmCombat, AUDIO.bgmVillage, AUDIO.bgmBoss]) {
     const sound = scene.sound.get(key);
     if (!sound) continue;
     activeLoops.delete(sound);

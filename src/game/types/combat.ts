@@ -131,6 +131,8 @@ export const AUDIO = {
   bgmCombat: "bgm_combat",
   /** 방 1(튜토리얼) 전용 — 아직 전투가 없는 마을 분위기라 전투 BGM과 다르게 튼다. */
   bgmVillage: "bgm_village",
+  /** 보스방 전용. */
+  bgmBoss: "bgm_boss",
 } as const;
 
 /**

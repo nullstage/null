@@ -48,7 +48,7 @@ export class BossScene extends Phaser.Scene {
     this.subscriptions = [];
     this.cameras.main.fadeIn(300);
     runState.setPhase("BOSS");
-    startRoomBgm(this, AUDIO.bgmCombat);
+    startRoomBgm(this, AUDIO.bgmBoss);
 
     this.cameras.main.setBackgroundColor("#140b10");
     // 전투방과 같은 피격 셰이더. 보스전만 연출이 빠지면 격이 낮아 보인다.
@@ -238,7 +238,7 @@ export class BossScene extends Phaser.Scene {
 
     // 이름 밑의 부제 — 세계관(그림자 침식)과 이 보스의 역할을 한 줄로 잇는다.
     const subtitle = this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height * 0.315, "삼켜진 이름들을 거두는 자", {
+      .text(VIEWPORT.width / 2, VIEWPORT.height * 0.315, "이름들을 거두는 자", {
         fontFamily: "'Pretendard', sans-serif",
         fontSize: "17px",
         color: "rgba(243, 223, 227, 0.75)",
