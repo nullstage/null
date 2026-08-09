@@ -137,26 +137,26 @@ type TabId = "ALL" | UpgradeCategory | "ARTIFACT";
 
 /** 탭 아이콘(검·투구·물약·반지·좌대·주사위)은 그림에 이미 그려져 있다 — 좌표와 분류만 정한다. */
 const TABS: { id: TabId; label: string; cx: number; match: (id: UpgradeId) => boolean }[] = [
-  { id: "MELEE", label: "근접", cx: 222, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MELEE" },
-  { id: "HEALTH", label: "생존", cx: 352, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "HEALTH" },
-  { id: "RANGED", label: "원거리", cx: 482, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "RANGED" },
-  { id: "MOBILITY", label: "기동", cx: 612, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MOBILITY" },
+  { id: "MELEE", label: "근접", cx: 215, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MELEE" },
+  { id: "HEALTH", label: "생존", cx: 343, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "HEALTH" },
+  { id: "RANGED", label: "원거리", cx: 475, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "RANGED" },
+  { id: "MOBILITY", label: "기동", cx: 606, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MOBILITY" },
   { id: "ARTIFACT", label: "아티팩트", cx: 742, match: (id) => id.startsWith("ITEM_") },
-  { id: "ALL", label: "전체", cx: 872, match: () => true },
+  { id: "ALL", label: "전체", cx: 878, match: () => true },
 ];
-const TAB_TOP = 205;
-const TAB_H = 57;
-const TAB_W = 115;
+const TAB_TOP = 195;
+const TAB_H = 68;
+const TAB_W = 125;
 
-const GRID = { left: 122, top: 288, width: 805, height: 545, cols: 7, rows: 5 };
+const GRID = { left: 166, top: 304, width: 738, height: 535, cols: 7, rows: 5 };
 const CELL_W = GRID.width / GRID.cols;
 const CELL_H = GRID.height / GRID.rows;
 
-const PORTRAIT = { cx: 1178, cy: 380, size: 150 };
+const PORTRAIT = { cx: 1180, cy: 407, size: 150 };
 
-const GAUGE = { left: 1038, width: 250, height: 20, rows: [567, 612, 657] };
+const GAUGE = { left: 1051, width: 189, height: 26, rows: [567.5, 613.75, 656.25] };
 
-const DESC = { left: 975, top: 705, width: 410, height: 120 };
+const DESC = { left: 983, top: 720, width: 405, height: 135 };
 
 const Frame = styled.div`
   position: relative;
