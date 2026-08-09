@@ -459,8 +459,11 @@ export class CombatScene extends Phaser.Scene {
     if (!sprite?.body || this.player.isDead) return;
     if (sprite.y <= VIEWPORT.height + 40) return;
 
-    this.player.takeDamage(FALL_DAMAGE);
-    if (this.player.isDead) return;
+    // 떨어지지 않는 깃털 — 낙사 자리는 그대로 되돌리되 피해만 면한다.
+    if (!runState.selectedUpgrades.includes("MOBILITY_FEATHER")) {
+      this.player.takeDamage(FALL_DAMAGE);
+      if (this.player.isDead) return;
+    }
 
     sprite.setPosition(this.arena.bounds.width * 0.15, this.arena.bounds.floorY - 80);
     (sprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);

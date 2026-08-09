@@ -73,7 +73,15 @@ export type UpgradeId =
    * 아티팩트 — 이름 없는 낯. 그림자에게 이름을 삼켜진 자가 남긴 가면.
    * 이름이 없으면 침식도 오래 붙잡지 못한다 — 피격 직후 무적 시간이 늘어난다.
    */
-  | "HEALTH_MASK";
+  | "HEALTH_MASK"
+  /** 아티팩트 — 분노한 칼날. 체력이 낮을수록 날이 사납게 운다. 체력 30% 이하에서 근접 공격력이 오른다. */
+  | "MELEE_BERSERK"
+  /** 아티팩트 — 사냥꾼의 리볼버. 재장전 직후 첫 발에 힘이 실린다. */
+  | "RANGED_RELOAD_BURST"
+  /** 아티팩트 — 떨어지지 않는 깃털. 낭떠러지에 떨어져도 다치지 않는다. */
+  | "MOBILITY_FEATHER"
+  /** 아티팩트 — 멈추지 않는 심장. 근접 공격이 스민 상대에게서 이따금 숨을 되찾는다. */
+  | "HEALTH_VAMPIRE";
 
 export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
 
