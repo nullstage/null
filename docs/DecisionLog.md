@@ -461,6 +461,195 @@ React   --emit-->  EventBus  --subscribe-->  Phaser
 
 ---
 
+## DEC-015 — 강화를 3회 지급한다(방 1·방 2·방 3 후)
+
+> 번호 안내: main에 병합된 팀원 커밋이 이미 DEC-013을 다른 결정(방 1 무전투화)에
+> 썼다. 같은 날짜에 독립적으로 번호가 겹쳐 병합 시점에 DEC-015로 다시 매겼다.
+
+- 날짜: 2026-08-08
+- 상태: ACCEPTED
+- 관련 질문: OQ-016 (RESOLVED)
+
+### 결정
+
+강화 지급 횟수를 2회에서 **3회**로 늘린다. 방 1·방 2 클리어 후는 기존과 같고,
+방 3(카운터 방) 클리어 후 역기만 판정 결과를 닫으면 보스 진입 직전에 세 번째 강화를 지급한다.
+
+### 이유
+
+역기만 시연(원거리 위주로 방 1·2를 치르고 방 3에서 근거리로 전환)을 하려면 그 직전에
+근거리 강화를 확보할 기회가 있어야 설득력이 생긴다. 2회 지급으로는 방 3 진입 전에
+스타일 전환에 쓸 강화를 추가로 얻을 기회가 없었다.
+
+### 검토한 대안
+
+- 2회 유지 — DEC-012에서 이미 보류했던 안. 강화 후보가 8종으로 늘어 특정 강화를
+  만날 확률이 낮아진 상황과 맞물려 역기만 시연이 더 어려워지는 쪽으로 남는다.
+
+### 영향 범위
+
+- `src/game/scenes/CombatScene.ts` — `offerUpgrade`가 다음 단계를 결정하는 콜백과
+  `final` 플래그를 받도록 바뀜. `resolveDeception`이 `ui:continue` 이후 보스로 바로
+  가지 않고 `offerUpgrade(() => this.scene.start("Boss"), true)`를 거친다.
+- `src/game/EventBus.ts` — `upgrade:offer` 페이로드에 `final?: boolean` 추가.
+- `src/components/HUDOverlay.tsx` — `final`이 참이면 강화 선택 시 방 전환 로딩
+  오버레이(`roomLoading`)를 띄우지 않는다. 보스전은 `scene.restart`가 아니라
+  `scene.start`라 `room:start`가 발생하지 않아, 기존처럼 로딩을 걸면 걷히지 않고
+  멈춘 채로 남기 때문이다.
+- `src/game/systems/UpgradeSystem.ts` — 주석만 갱신. 지급 횟수는 호출부(`CombatScene`)
+  책임이라 `rollUpgradeChoices` 자체는 손대지 않았다.
+- 강화 후보 중복 제외 규칙(OQ-017)은 이번 결정과 무관하게 아직 미결정이다.
+
+---
+
+## DEC-016 — 방 2 구성이 방 1 분석 결과를 축소판 카운터로 반영한다
+
+> 번호 안내: main에 병합된 팀원 커밋이 이미 DEC-014를 다른 결정(패링·아티팩트 등
+> 확장 시스템 범위 승인)에 썼다. 병합 시점에 DEC-016으로 다시 매겼다. 아래 결정
+> 자체도 병합 이후 전제가 바뀌었다 — 맨 아래 "병합 후 갱신" 참고.
+
+- 날짜: 2026-08-08
+- 상태: ACCEPTED
+- 관련 질문: OQ-010 (RESOLVED), OQ-009 (방 1 구성은 계속 OPEN)
+
+### 결정
+
+방 2를 방 1 텔레메트리만으로 분류한 스타일에 따라 **축소판(2기) 소프트 카운터**로
+바꾼다. 방 3용 카운터 조합(§5)에서 다수 그룹(2기)만 남기고 소수 그룹(1기)은 뺀다.
+
+```text
+RANGED 감지 → 추격형 2 (견제형 제외) — room_2_soft_ranged
+MELEE  감지 → 견제형 2 (추격형 제외) — room_2_soft_melee
+MOBILE 감지 → 기동 카운터형 2 (추격형 제외, 지연 장판 유지) — room_2_soft_mobile
+MIXED  감지 → 기존 중립 방(room_2) 그대로 유지
+```
+
+### 이유
+
+방 2를 고정 구성으로 두면 런당 "분석→카운터" 체감이 방 3 한 번뿐이라 5~8분 안에
+인지되기 어렵다는 우려가 Plan.md에 이미 있었다. 세 가지 반영 방식(스폰 순서 조정만 /
+적 1종 교체 / 축소판 카운터방)을 놓고 사용자가 가장 체감이 확실한 축소판을 선택했다.
+
+방 2 텔레메트리가 방 3 분석의 35% 가중치를 그대로 차지하므로(§4), 축소판이라도
+방 2를 과도하게 특정 스타일로 몰면 방 1 분석이 방 3 분석에 되먹임되는 위험이 있다.
+다수 그룹만 남기고 소수 그룹은 완전히 빼는 대신, 방 3 하드 카운터(3기)보다 적은
+2기로 제한해 그 위험을 낮췄다. MIXED(신뢰할 신호 없음)일 때는 아예 손대지 않는다.
+
+### 검토한 대안
+
+- 스폰 순서·타이밍만 조정(적 종류·수 유지) — 피드백 루프 위험이 가장 낮지만
+  플레이어가 "방 2가 방 1을 반영했다"를 체감하기 어렵다고 판단해 채택하지 않음.
+- 적 1종만 교체 — 중간 강도. 축소판 대비 구현·검증 이점이 크지 않아 채택하지 않음.
+
+### 영향 범위
+
+- `MVP_PLAN.md` §5에 "방 2 소프트 카운터" 절 추가.
+- `src/game/data/rooms.ts` — `room_2_soft_ranged`·`room_2_soft_melee`·`room_2_soft_mobile`
+  3개 프리셋 추가. 기존 `room_2`는 MIXED·미분석용 중립 방으로 의미가 좁혀졌다.
+- `src/game/data/directorRules.ts` — `SOFT_COUNTER_ROOM_2_BY_STYLE` 매핑 추가.
+- `src/game/scenes/CombatScene.ts` — `goToNextRoom`이 `resolveRoomId(nextIndex)`로
+  분리되고, 방 2 진입 시 `runState.predictedStyle`(방 1 클리어 직후 `analyze()`가
+  세팅한, 방 1 단독 분류 값)로 프리셋을 고른다.
+
+### 검증 (병합 전, 방 1이 아직 전투방이던 시점)
+
+Playwright 헤드리스로 실제 원거리 전투를 재현: 모드 전환(K) → 원거리 사격(J)으로
+방 1 텔레메트리를 원거리 100%로 만든 뒤 분석 팝업에서 "거리를 두는 자"(RANGED) 확정을
+확인 → 강화 선택 후 방 2가 "남은 적 2"(축소판)로 시작하고 스폰된 두 적이 동일한
+추격형 실루엣임을 스크린샷으로 확인. MELEE·MOBILE 분기는 동일한 `resolveRoomId` 함수와
+매핑 테이블을 타므로 문자열 id 일치를 코드 대조로 확인했다(빌드·타입체크 통과 포함).
+
+### 병합 후 갱신 (2026-08-09)
+
+팀원의 방 1 전면 개편(main의 DEC-013)이 방 1을 무전투 튜토리얼로 바꾸면서, 위
+"방 1 텔레메트리로 분류" 전제가 사라졌다. 사용자와 다시 협의해 **방 2 자신의
+1웨이브 텔레메트리로 2·3웨이브 구성을 정하는 방식**(방 2도 팀원 쪽 변경으로 이미
+3웨이브가 됨)으로 조정했다. 개념(축소판 소프트 카운터, MIXED는 손대지 않음)은
+그대로고 "무엇의 텔레메트리를 보는가"만 방 1 → 방 2 1웨이브로 바뀌었다.
+
+- `src/game/scenes/CombatScene.ts` — `resolveRoomId`를 제거하고 `goToNextRoom`을
+  원래(고정 순서)대로 되돌렸다. 대신 `resolveWaveOverride(telemetrySoFar, waveIndex)`를
+  신설해 방 2 2웨이브 진입 직전에 1웨이브 텔레메트리로 분류, `RoomController`에 주입한다.
+- `src/game/systems/RoomController.ts` — `resolveWaveOverride` 훅 신설. 웨이브
+  전환 시 이 훅이 돌려준 프리셋을 캐시해 다음 웨이브(들)에도 재사용한다.
+- `src/components/ui/AnalysisPanel.tsx`, `src/components/HUDOverlay.tsx` — 방1/방2
+  예고 문구를 강약으로 나눴던 `counterStrength` 분기를 되돌렸다. 분석 팝업이 이제
+  방 2 클리어 후 한 번만 뜨는 게 유일한 지점이라("hard" 고정) 분기 자체가 죽은
+  코드가 됐기 때문이다. `COUNTER_DIALOGUE_SOFT`/`COUNTER_SUMMARY_SOFT`도 함께 제거.
+- 검증: 헤드리스로 튜토리얼 게이트 → 방 2 진입까지 실제로 관통했고, 보스는
+  `window.runState.setBossWeights`로 SLAM 100%를 강제해 45초간 낙사 미재현을
+  확인했다. 방 2의 실제 웨이브 전환(MELEE·MOBILE 포함)은 팀원 쪽 새 전투
+  난이도(4기 웨이브, 부활 루프)에서 자동화가 계속 사망해 재확인하지 못했다 —
+  사람 실플레이로 남겨둔다(Plan.md P-034 참고).
+
+---
+
+## DEC-017 — 방 단위 함정 플래그(`hazardsEnabled`)를 제거한다
+
+- 날짜: 2026-08-09
+- 상태: ACCEPTED
+- 관련 질문: OQ-032
+
+### 결정
+
+`RoomPreset.hazardsEnabled`와 `RoomControllerDeps.enableHazards`, `CombatScene.enableHazards`를
+전부 걷어낸다. 장판은 기동 카운터형(`MobilityCounterEnemy`)이 스스로 까는 것만 남긴다.
+
+### 이유
+
+플래그는 있었지만 `enableHazards`가 빈 스텁이라 어떤 방에서도 아무 일이 일어나지 않았다.
+`counter_mobile`과 `room_2_soft_mobile`이 `hazardsEnabled: true`를 선언해 두고도 실제로는
+함정이 없었으니, 계약만 있고 구현이 없는 상태가 "구현된 척"으로 읽혔다.
+게다가 `RoomController.start()`는 최초 프리셋의 플래그만 읽어서, 웨이브 오버라이드
+(DEC-016)로 바뀐 2·3웨이브의 함정은 구현하더라도 켜지지 않는 구조였다.
+
+3일 차 이후 신규 핵심 기능을 추가하지 않는다는 규칙(CLAUDE.md 5)에 따라, 지금 방 단위
+함정을 새로 만들지 않고 죽은 계약을 지우는 쪽을 택했다.
+
+### 대안
+
+- **지연 폭발 장판을 실제로 구현한다** — MVP_PLAN §2를 충족하지만 신규 기능이라 범위가
+  커지고 밸런스 재검증이 필요하다. 사용자 판단으로 제외했다.
+- **플래그를 남기고 배선만 고친다** — 구현이 없는 한 상태가 그대로다.
+
+### 영향
+
+- `src/game/types/game.ts` — `RoomPreset.hazardsEnabled` 삭제
+- `src/game/data/rooms.ts` — 9개 프리셋에서 플래그 삭제, 함정 관련 주석 정리
+- `src/game/systems/RoomController.ts` — `enableHazards` 의존성과 호출 삭제
+- `src/game/scenes/CombatScene.ts` — `enableHazards` 스텁과 배선 삭제
+- `MVP_PLAN.md` §2 방 변수 목록과 §5 MOBILE·MIXED 구성에서 함정 항목 삭제
+- 다시 넣으려면 계약(`RoomPreset` 필드)부터 되살려야 한다
+
+---
+
+## DEC-018 — 디버그 방 스킵(F2)을 `?debug=1`로 가둔다
+
+- 날짜: 2026-08-09
+- 상태: ACCEPTED
+
+### 결정
+
+`CombatScene`·`BossScene`의 F2(방·보스 즉시 클리어) 키 등록을 `debugFlag("debug")`가
+참일 때만 붙인다. `?boss=1`(보스전 직행)은 지금처럼 배포본에도 남긴다.
+
+### 이유
+
+F2에는 아무 가드가 없어 배포본에서도 한 번 누르면 방이 통째로 넘어갔다. 심사 중
+오조작 한 번이 런을 무의미하게 만든다. 반면 `?boss=1`은 주소를 알아야만 켜지고
+심사·시연에서 보스전만 바로 보여줘야 할 이유가 분명해 그대로 둔다.
+
+`NODE_ENV`로 완전히 제거하는 안은 배포 URL로 시연할 길이 막혀서 택하지 않았다.
+
+### 영향
+
+- `src/game/scenes/CombatScene.ts`, `src/game/scenes/BossScene.ts`
+- 시연 시 `?debug=1`을 붙여야 F2가 동작한다
+- 같은 작업에서 F2 스킵이 남은 적을 정리하도록 고쳤다 — 이전에는 클리어된 방에서
+  적만 계속 공격했다
+
+---
+
 ## 새 결정 템플릿
 
 ```md

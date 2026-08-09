@@ -173,7 +173,16 @@ export class RunState {
       telemetry,
       analysis: null,
     });
-    this.previousTelemetry = this.currentTelemetry;
+    // 방 1(튜토리얼)처럼 전투가 없던 방은 "이전 방" 데이터로 넘기지 않는다. 그대로
+    // 넘기면 다음 방 분석의 65/35 가중 평균이 실제로 없는 데이터로 희석된다. (OQ-031)
+    // 적중이 전혀 없어도 대시만 있었다면 MOBILE 판정에 의미가 있으므로 신호로 인정한다.
+    const previousHadSignal =
+      this.currentTelemetry !== null &&
+      this.currentTelemetry.meleeHits +
+        this.currentTelemetry.rangedHits +
+        this.currentTelemetry.dashCount >
+        0;
+    this.previousTelemetry = previousHadSignal ? this.currentTelemetry : null;
     this.currentTelemetry = telemetry;
 
     if (this.selectedUpgrades.includes("HEALTH_REGEN")) this.heal(TUNING.upgrade.healthRegenAmount);
@@ -240,7 +249,10 @@ export class RunState {
       cleared,
       totalTimeMs: Math.max(0, this.runEndedAtMs - this.runStartedAtMs),
       rooms: this.rooms.map((room) => ({ ...room })),
-      finalStyle: this.latestAnalysis?.style ?? "MIXED",
+      // 방 3에서 실제로 어떻게 싸웠는지가 확정돼 있으면 그것이 최종이다.
+      // latestAnalysis는 방 2 시점의 '예측'이라, 역기만에 성공한 런에서는
+      // 리포트가 "예측대로 싸웠다 + 속였다"로 자기모순이 된다.
+      finalStyle: this.deception?.actualStyle ?? this.latestAnalysis?.style ?? "MIXED",
       deception: this.deception,
       bossWeights: { ...this.bossWeights },
       bossPatternUsage: { ...this.bossPatternUsage },

@@ -49,7 +49,7 @@ const CATEGORY_LABEL: Record<UpgradeCategory, string> = {
   MELEE: "근접",
   RANGED: "원거리",
   MOBILITY: "기동",
-  HEALTH: "체력",
+  HEALTH: "생존",
 };
 
 const ELEMENT_LABEL: Record<string, string> = { FIRE: "화염", FROST: "냉기", POISON: "맹독" };
@@ -261,7 +261,7 @@ export default function StatusPanel({ hud }: StatusPanelProps) {
   ];
 
   return (
-    <Panel title="「가진 것」">
+    <Panel title="「남아 있는 것」">
       <Sheet>
         <LeftCol>
           <HpRow>
@@ -321,9 +321,9 @@ export default function StatusPanel({ hud }: StatusPanelProps) {
             </>
           ) : (
             <Empty>
-              획득한 스킬과 아티팩트가 여기에 표시됩니다.
+              아직 남겨진 스킬이나 아티팩트가 없습니다.
               <br />
-              슬롯을 선택하면 자세한 설명을 볼 수 있습니다.
+              슬롯을 선택하면 자세한 내용을 확인할 수 있습니다.
             </Empty>
           )}
         </Detail>

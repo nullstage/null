@@ -11,7 +11,7 @@
 import Phaser from "phaser";
 
 import { eventBus, type GameEventMap } from "../EventBus";
-import { VIEWPORT } from "../config/gameConfig";
+import { debugFlag, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Boss } from "../entities/Boss";
@@ -97,8 +97,10 @@ export class BossScene extends Phaser.Scene {
     // 확정된 가중치를 UI(F1 디버그 패널)에 한 번 더 알린다.
     eventBus.emit("boss:weights", { weights: runState.bossWeights });
 
-    // 개발·시연 전용 보스 스킵.
-    this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () => this.finish(true));
+    // 개발·시연 전용 보스 스킵. 배포본에서 실수로 눌리지 않도록 `?debug=1`일 때만 붙인다.
+    if (debugFlag("debug")) {
+      this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () => this.finish(true));
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
 
@@ -167,8 +169,11 @@ export class BossScene extends Phaser.Scene {
       for (let i = 1; i <= upgrade.fireTickCount; i += 1) {
         this.time.delayedCall(i * upgrade.fireTickIntervalMs, () => {
           if (target.isDefeated || !target.sprite) return;
+          // takeDamage가 이 틱으로 대상을 죽이면 그 안에서 sprite가 null이 된다.
+          // 좌표는 죽기 전에 먼저 읽어 둔다.
+          const { x, y } = target.sprite;
           target.takeDamage(upgrade.fireTickDamage);
-          damageNumber(this, target.sprite.x, target.sprite.y - 30, upgrade.fireTickDamage);
+          damageNumber(this, x, y - 30, upgrade.fireTickDamage);
         });
       }
     } else if (element === "FROST") {
@@ -178,8 +183,9 @@ export class BossScene extends Phaser.Scene {
       for (let i = 1; i <= upgrade.poisonTickCount; i += 1) {
         this.time.delayedCall(i * upgrade.poisonTickIntervalMs, () => {
           if (target.isDefeated || !target.sprite) return;
+          const { x, y } = target.sprite;
           target.takeDamage(upgrade.poisonTickDamage);
-          damageNumber(this, target.sprite.x, target.sprite.y - 30, upgrade.poisonTickDamage);
+          damageNumber(this, x, y - 30, upgrade.poisonTickDamage);
         });
       }
     }

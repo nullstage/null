@@ -196,7 +196,7 @@ export default function LoadingScreen({
       ))}
 
       <Mark src={TITLE_ASSETS.ornament} alt="" draggable={false} />
-      <Caption>LOADING</Caption>
+      <Caption>기록을 읽는 중…</Caption>
       {verdict && <Verdict>{verdict}</Verdict>}
     </Screen>
   );

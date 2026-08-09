@@ -83,27 +83,27 @@ export default function AnalysisPanel({ analysis, dashCount, onContinue }: Analy
   const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
 
   return (
-    <Panel title="너는 이렇게 싸웠다">
+    <Panel title="「기록 분석」">
       <Title>{STYLE_TITLE[analysis.style]}</Title>
       <TitleNote>
-        {STYLE_LABEL[analysis.style]} 위주로 싸웠다고 {Math.round(analysis.confidence)}% 확신한다
+        {STYLE_LABEL[analysis.style]} 성향으로 판단 — 확신도 {Math.round(analysis.confidence)}%
       </TitleNote>
 
       <PanelRow>
-        <span>가까이서 맞힌 비율</span>
+        <span>근거리 적중</span>
         <span>{percent(analysis.meleeRatio)}</span>
       </PanelRow>
       <PanelRow>
-        <span>멀리서 맞힌 비율</span>
+        <span>원거리 적중</span>
         <span>{percent(analysis.rangedRatio)}</span>
       </PanelRow>
       <PanelRow>
-        <span>물러선 정도</span>
+        <span>기동 의존도</span>
         <span>{dashReliance(dashCount)}</span>
       </PanelRow>
 
       {/* 분석보다 이 줄이 중요하다. 다음 방이 왜 달라지는지가 여기서만 전해진다. */}
-      <Counter>다음 방 — {COUNTER_SUMMARY[analysis.style]}</Counter>
+      <Counter>다음 시험 — {COUNTER_SUMMARY[analysis.style]}</Counter>
 
       <Dialogue>
         “{DIRECTOR_DIALOGUE[analysis.dialogueId]}”
@@ -112,7 +112,7 @@ export default function AnalysisPanel({ analysis, dashCount, onContinue }: Analy
 
       <PanelActions>
         <PanelButton type="button" onClick={onContinue} autoFocus>
-          더 나아간다
+          기록을 이어간다
         </PanelButton>
       </PanelActions>
     </Panel>

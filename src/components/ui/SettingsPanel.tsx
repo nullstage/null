@@ -31,11 +31,11 @@ const ACTION_LABELS: Record<GameAction, string> = {
   JUMP: "점프",
   DASH: "대시",
   ATTACK: "공격",
-  SWITCH_MODE: "모드 전환",
+  SWITCH_MODE: "무기 전환",
   PARRY: "패링",
-  SKILL: "스킬 (검기)",
-  SKILL_2: "스킬 (검극)",
-  SKILL_3: "스킬 (검무)",
+  SKILL: "검기",
+  SKILL_2: "검극",
+  SKILL_3: "검무",
   INTERACT: "상호작용",
   CONFIRM: "확인",
   TOGGLE_DEBUG: "디버그 패널",
@@ -373,14 +373,14 @@ export default function SettingsPanel({
           {category === "sound" ? (
             <>
               <SectionTitle>사운드</SectionTitle>
-              {volumeRow("마스터 볼륨", "master")}
+              {volumeRow("전체 음량", "master")}
               {volumeRow("배경음악", "bgm")}
               {volumeRow("효과음", "sfx")}
-              <Note>효과음은 지금 메뉴 소리에만 적용됩니다. 전투 소리는 추가되는 대로 함께 따릅니다.</Note>
+              <Note>효과음 설정은 현재 메뉴와 전투 효과음에 적용됩니다.</Note>
             </>
           ) : (
             <>
-              <SectionTitle>조작키</SectionTitle>
+              <SectionTitle>조작</SectionTitle>
               {REBINDABLE_ACTIONS.map((action) => (
                 <Row key={`${action}-${bindingVersion}`}>
                   <RowLabel>{ACTION_LABELS[action]}</RowLabel>
@@ -390,14 +390,14 @@ export default function SettingsPanel({
                       listening={listening === action}
                       onClick={() => setListening(action)}
                     >
-                      {listening === action ? "키 입력…" : KEY_BINDINGS[action]}
+                      {listening === action ? "새 키 입력…" : KEY_BINDINGS[action]}
                     </KeyCap>
                   </RowControl>
                 </Row>
               ))}
               <Note>
-                바꿀 키를 눌러 새 키를 입력하세요. Esc를 누르면 취소됩니다. 이미 쓰는 키를 고르면 두
-                동작이 서로 자리를 바꿉니다. 디버그 키(F1·F2)는 고정입니다.
+                변경할 키를 선택한 뒤 새 키를 입력하세요. Esc를 누르면 취소됩니다. 이미 사용 중인
+                키를 선택하면 두 동작의 키가 서로 바뀝니다. 디버그 키(F1·F2)는 변경할 수 없습니다.
               </Note>
               <ResetButton
                 type="button"

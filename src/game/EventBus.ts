@@ -35,7 +35,8 @@ export interface GameEventMap {
   };
   "room:clear": { roomIndex: number; telemetry: CombatTelemetry };
   "analysis:ready": { analysis: DirectorAnalysis };
-  "upgrade:offer": { choices: UpgradeDefinition[] };
+  /** `final`이 true면 방 3 클리어 후 보스 진입 직전의 마지막 지급이다 — 표시 문구용 신호다. */
+  "upgrade:offer": { choices: UpgradeDefinition[]; final?: boolean };
   "deception:result": { result: DeceptionResult };
   "boss:weights": { weights: BossPatternWeights };
   "hud:update": { hud: HudState };

@@ -127,8 +127,8 @@ type ItemId = "resume" | "settings" | "save" | "giveup" | "exit";
 const ITEMS: { id: ItemId; label: string; disabled: boolean }[] = [
   { id: "resume", label: "계속하기", disabled: false },
   { id: "settings", label: "설정", disabled: false },
-  { id: "save", label: "저장", disabled: true },
-  { id: "giveup", label: "포기하기", disabled: false },
+  { id: "save", label: "기록 저장", disabled: true },
+  { id: "giveup", label: "이번 기록 포기", disabled: false },
   { id: "exit", label: "나가기", disabled: false },
 ];
 
@@ -214,7 +214,7 @@ export default function PauseMenu({
   return (
     <Screen ref={rootRef}>
       <Panel>
-        <Title>일시정지</Title>
+        <Title>기록 일시 정지</Title>
         <Rule />
 
         <Menu>
