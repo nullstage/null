@@ -81,6 +81,8 @@ export const TEXTURE = {
   clouds: "tex_clouds",
   /** 시작·부활 시 앉았다 일어나는 인트로 4프레임. */
   playerIntro: "player_intro_sheet",
+  /** 보스 체력바 장식 프레임. 위 문장(이름)·아래 문장(부제)·가운데 띠(게이지 창)를 담는다. */
+  bossHpFrame: "tex_boss_hp_frame",
 } as const;
 
 /**

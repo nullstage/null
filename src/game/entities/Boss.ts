@@ -100,8 +100,28 @@ const FEEDBACK = {
   deathMs: 420,
 } as const;
 
-/** 보스 체력 바. 방 폭에 대한 비율로 둬서 해상도가 바뀌어도 잘리지 않는다. */
-const HP_BAR = { widthRatio: 0.52, height: 14, topMargin: 26 } as const;
+/**
+ * 보스 체력 바. 제공된 장식 프레임(`ui/boss-hp-frame.png`, 1545×364)을 그대로 잘라 썼다 —
+ * 가운데 띠가 게이지 창, 위/아래 검은 문장이 이름·부제 자리다. 이미지를 분석해서 얻은
+ * 각 영역의 비율(원본 대비 %)을 그대로 쓴다 — 해상도가 바뀌어도 프레임 안에서 어긋나지 않는다.
+ * `widthRatio`는 플레이어 체력바(화면 왼쪽 위)와 겹치지 않을 만큼 가운데로 좁혀 잡았다.
+ */
+const HP_BAR = {
+  widthRatio: 0.46,
+  topMargin: 16,
+  /** 프레임 원본 비율(가로/세로). 배율을 키워도 이 비율을 유지해야 그림이 안 찌그러진다. */
+  frameAspect: 1545 / 364,
+  /** 게이지 창(가운데 흰 띠) — 프레임 기준 좌/우/중심Y/높이 비율. */
+  window: { left: 0.0375, right: 0.9596, centerY: 0.5742, height: 0.1319 },
+  /** 위 문장(이름) 중심 Y 비율. */
+  nameY: 0.2775,
+  /** 아래 문장(부제) 중심 Y 비율. */
+  titleY: 0.7789,
+} as const;
+
+/** 체력바 위 문장(이름)·아래 문장(부제). 보스 인트로 배너(BossScene)와 같은 문구를 쓴다. */
+const BOSS_NAME = "「 집 행 자 」";
+const BOSS_TITLE = "삼켜진 이름들을 거두는 자";
 
 const DEPTH = { telegraph: 1, attack: 5, boss: 10, hud: 100 } as const;
 
@@ -225,6 +245,9 @@ export class Boss {
 
   private hpBarBack: Phaser.GameObjects.Image | null = null;
   private hpBarFill: Phaser.GameObjects.Image | null = null;
+  private hpFrame: Phaser.GameObjects.Image | null = null;
+  private hpNameText: Phaser.GameObjects.Text | null = null;
+  private hpTitleText: Phaser.GameObjects.Text | null = null;
 
   constructor(deps: BossDeps) {
     this.deps = deps;
@@ -911,8 +934,14 @@ export class Boss {
     this.clearScheduled();
     this.hpBarBack?.destroy();
     this.hpBarFill?.destroy();
+    this.hpFrame?.destroy();
+    this.hpNameText?.destroy();
+    this.hpTitleText?.destroy();
     this.hpBarBack = null;
     this.hpBarFill = null;
+    this.hpFrame = null;
+    this.hpNameText = null;
+    this.hpTitleText = null;
     this.followHitbox = null;
     this.sprite?.destroy();
     this.sprite = null;
@@ -1015,35 +1044,80 @@ export class Boss {
     );
   }
 
+  /**
+   * 장식 프레임(`ui/boss-hp-frame.png`) 위에 이름·부제·게이지를 얹는다.
+   * 프레임을 원점(0.5, 0)으로 중앙 상단에 두고, 나머지는 전부 프레임 크기에 대한
+   * 비율(`HP_BAR`)로 계산한다 — 화면 크기가 바뀌어도 프레임 안 자리가 안 어긋난다.
+   * `widthRatio`를 플레이어 체력바(화면 왼쪽 위, ~24% 지점)보다 확실히 좁혀 겹치지 않는다.
+   */
   private createHpBar(): void {
     const { width } = this.arena.bounds;
-    const barWidth = width * HP_BAR.widthRatio;
-    const left = (width - barWidth) / 2;
-    const y = HP_BAR.topMargin;
+    const frameWidth = width * HP_BAR.widthRatio;
+    const frameHeight = frameWidth / HP_BAR.frameAspect;
+    const frameLeft = (width - frameWidth) / 2;
+    const frameTop = HP_BAR.topMargin;
+    const centerX = width / 2;
+
+    const barLeft = frameLeft + HP_BAR.window.left * frameWidth;
+    const barWidth = (HP_BAR.window.right - HP_BAR.window.left) * frameWidth;
+    const barY = frameTop + HP_BAR.window.centerY * frameHeight;
+    const barHeight = HP_BAR.window.height * frameHeight;
 
     this.hpBarBack = this.scene.add
-      .image(left, y, TEXTURE.solid)
+      .image(barLeft, barY, TEXTURE.solid)
       .setOrigin(0, 0.5)
-      .setDisplaySize(barWidth, HP_BAR.height)
+      .setDisplaySize(barWidth, barHeight)
       .setTint(0x1a0d12)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
 
     // fill이 TEXTURE.boss로 잡혀 있던 버그 — 보스 그림 한 장이 바 폭으로 늘어나 있었다.
     this.hpBarFill = this.scene.add
-      .image(left, y, TEXTURE.solid)
+      .image(barLeft, barY, TEXTURE.solid)
       .setOrigin(0, 0.5)
-      .setDisplaySize(barWidth, HP_BAR.height)
+      .setDisplaySize(barWidth, barHeight)
       .setTint(0xe04848)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud + 1);
+
+    // 프레임을 게이지 위에 얹는다 — 테두리·가시 장식이 채움 막대 위로 겹쳐 그려져야 깔끔하다.
+    this.hpFrame = this.scene.add
+      .image(centerX, frameTop, TEXTURE.bossHpFrame)
+      .setOrigin(0.5, 0)
+      .setDisplaySize(frameWidth, frameHeight)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 2);
+
+    this.hpNameText = this.scene.add
+      .text(centerX, frameTop + HP_BAR.nameY * frameHeight, BOSS_NAME, {
+        fontFamily: "'Pretendard', sans-serif",
+        fontSize: "15px",
+        fontStyle: "bold",
+        color: "#f3dfe3",
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 3);
+
+    this.hpTitleText = this.scene.add
+      .text(centerX, frameTop + HP_BAR.titleY * frameHeight, BOSS_TITLE, {
+        fontFamily: "'Pretendard', sans-serif",
+        fontSize: "9px",
+        color: "rgba(243, 223, 227, 0.75)",
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 3);
   }
 
   private refreshHpBar(): void {
     const fill = this.hpBarFill;
     if (!fill) return;
 
-    const barWidth = this.arena.bounds.width * HP_BAR.widthRatio;
+    const frameWidth = this.arena.bounds.width * HP_BAR.widthRatio;
+    const barWidth = (HP_BAR.window.right - HP_BAR.window.left) * frameWidth;
     this.tweens.push(
       this.scene.tweens.add({
         targets: fill,
