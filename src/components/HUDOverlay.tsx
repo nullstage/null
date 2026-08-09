@@ -408,6 +408,8 @@ export default function HUDOverlay() {
   const [dialogueOpen, setDialogueOpen] = useState(false);
   /** 기록자 대화 종료 직후, 최초 1회만 뜨는 키맵 모달. (DEC-020) */
   const [keymapOpen, setKeymapOpen] = useState(false);
+  /** H로 언제든 다시 열어 보는 키맵 도움말. 최초 1회 자동 노출(keymapOpen)과는 별도 상태다. */
+  const [helpOpen, setHelpOpen] = useState(false);
   const [roomReady, setRoomReady] = useState(false);
 
   /** 사망·포기 직후 뜨는 이번 시도 요약. 닫으면 튜토리얼 부활이 이어진다. */
@@ -555,6 +557,7 @@ export default function HUDOverlay() {
       roomLoading ||
       dialogueOpen ||
       keymapOpen ||
+      helpOpen ||
       respawnSummary !== null
     )
       return;
@@ -569,7 +572,7 @@ export default function HUDOverlay() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePanel, dialogueOpen, keymapOpen, phase, respawnSummary, roomLoading, transition]);
+  }, [activePanel, dialogueOpen, helpOpen, keymapOpen, phase, respawnSummary, roomLoading, transition]);
 
   /**
    * E 상태창(가진 것). ESC 일시정지와 같은 조건에서 열리지만 별도 상태다 —
@@ -585,6 +588,7 @@ export default function HUDOverlay() {
       roomLoading ||
       dialogueOpen ||
       keymapOpen ||
+      helpOpen ||
       respawnSummary !== null ||
       (activePanel !== "none" && !isStatusOpen)
     )
@@ -600,6 +604,36 @@ export default function HUDOverlay() {
         setActivePanel("status");
         emitGameEvent("game:pause", {});
       }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePanel, dialogueOpen, helpOpen, keymapOpen, paused, phase, respawnSummary, roomLoading, transition]);
+
+  /**
+   * H 키맵 도움말. 최초 1회 자동 노출(keymapOpen)과 달리 언제든 다시 열 수 있다.
+   * 상태창(E)과 같은 조건에서 열리고 닫히며, 다른 패널이 떠 있으면 받지 않는다.
+   */
+  useEffect(() => {
+    const pausable = phase === "COMBAT" || phase === "BOSS";
+    if (
+      !pausable ||
+      paused ||
+      transition !== "none" ||
+      roomLoading ||
+      dialogueOpen ||
+      keymapOpen ||
+      respawnSummary !== null ||
+      activePanel !== "none"
+    )
+      return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "h" && event.key !== "H") return;
+      event.preventDefault();
+      setHelpOpen((open) => {
+        emitGameEvent(open ? "game:resume" : "game:pause", {});
+        return !open;
+      });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -671,6 +705,7 @@ export default function HUDOverlay() {
     setRoomReady(false);
     setDialogueOpen(false);
     setKeymapOpen(false);
+    setHelpOpen(false);
   }, []);
 
   const restartRun = useCallback(() => {
@@ -704,7 +739,12 @@ export default function HUDOverlay() {
   const inCombat = phase === "COMBAT" || phase === "BOSS";
   // 대사·키맵 모달이 열려 있는 동안엔 HUD를 통째로 숨긴다 — 첫 만남의 서사 위에 게이지가 떠 있으면 깬다.
   const showCombatHud =
-    hud !== null && inCombat && activePanel === "none" && !dialogueOpen && !keymapOpen;
+    hud !== null &&
+    inCombat &&
+    activePanel === "none" &&
+    !dialogueOpen &&
+    !keymapOpen &&
+    !helpOpen;
 
   // 로딩 화면에서 시작해 시작 화면까지 흐르고, 전투로 넘어가는 순간 꺼진다.
   // 첫 방문 안내가 떠 있는 동안은 어차피 브라우저가 소리를 막으므로 켜지 않는다.
@@ -765,6 +805,16 @@ export default function HUDOverlay() {
           onDone={() => {
             markKeymapSeen();
             setKeymapOpen(false);
+            emitGameEvent("game:resume", {});
+          }}
+        />
+      )}
+
+      {/* H로 언제든 다시 여는 키맵 도움말. 위 최초 1회 노출과 같은 컴포넌트를 재사용한다. */}
+      {helpOpen && (
+        <KeyMapModal
+          onDone={() => {
+            setHelpOpen(false);
             emitGameEvent("game:resume", {});
           }}
         />

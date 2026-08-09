@@ -10,11 +10,13 @@ import { theme } from "@/styles/theme";
 import { SFX, playSfx } from "./sfx";
 
 /**
- * 방 1 기록자 대화(서사) 종료 직후, 최초 1회만 뜨는 키맵 안내. (DEC-020)
+ * 키맵 안내. (DEC-020)
  *
- * 서사에는 키 이름을 넣지 않는다는 기존 원칙(DialogueBox 참고)은 그대로 두고,
- * 대화가 끝난 뒤 별도로 이 모달을 끼운다. 아티팩트로 나중에 풀리는 스킬 슬롯과
- * 메뉴·디버그 키는 목록에서 뺀다 — 아직 갖지 않은 키까지 보여주면 첫 진입에 헷갈린다.
+ * 방 1 기록자 대화(서사) 종료 직후 최초 1회 자동으로 뜨고, 이후에는 H로 언제든
+ * 다시 열 수 있다(HUDOverlay의 `helpOpen`). 서사에는 키 이름을 넣지 않는다는
+ * 기존 원칙(DialogueBox 참고)은 그대로 두고, 이 모달은 대화 밖에서만 관여한다.
+ * 아티팩트로 나중에 풀리는 스킬 슬롯과 디버그 키는 목록에서 뺀다 — 아직 갖지 않은
+ * 키까지 보여주면 오히려 헷갈린다.
  */
 
 const SEEN_KEY = "null:keymapSeen";
@@ -36,7 +38,12 @@ export const markKeymapSeen = (): void => {
   }
 };
 
-/** 런 시작 시점에 바로 쓸 수 있는 동작만 나열한다. 잠금 해제 전 스킬·디버그 키는 뺀다. */
+/**
+ * 런 시작 시점에 바로 쓸 수 있는 동작만 나열한다. 잠금 해제 전 스킬·디버그 키는 뺀다.
+ *
+ * "상태창(인벤토리)"의 E와 "도움말"의 H는 `KEY_BINDINGS`에 없다 — 설정에서 바꿀 수 있는
+ * 전투 조작이 아니라 HUDOverlay가 직접 듣는 UI 토글 키라 여기서만 하드코딩한다.
+ */
 const buildRows = (): Array<{ label: string; keys: string }> => [
   { label: "이동", keys: `${KEY_BINDINGS.MOVE_LEFT} / ${KEY_BINDINGS.MOVE_RIGHT}` },
   { label: "점프", keys: KEY_BINDINGS.JUMP },
@@ -45,6 +52,8 @@ const buildRows = (): Array<{ label: string; keys: string }> => [
   { label: "무기 전환", keys: KEY_BINDINGS.SWITCH_MODE },
   { label: "패링", keys: KEY_BINDINGS.PARRY },
   { label: "상호작용", keys: KEY_BINDINGS.INTERACT },
+  { label: "상태창(인벤토리)", keys: "E" },
+  { label: "도움말(이 화면)", keys: "H" },
 ];
 
 const prefersReducedMotion = (): boolean =>
