@@ -53,6 +53,7 @@ import ScreenFade from "./ui/ScreenFade";
 import { setSfxVolume } from "./ui/sfx";
 import ShopPanel from "./ui/ShopPanel";
 import StatusPanel from "./ui/StatusPanel";
+import ZoneBanner from "./ui/ZoneBanner";
 import {
   DEFAULT_AUDIO,
   loadAudioSettings,
@@ -771,6 +772,10 @@ export default function HUDOverlay() {
   const titleBgmPlaying =
     !needsFirstVisit && (loadingVisible || (phase === "READY" && transition === "none"));
 
+  // 지역 배너용 이름. 보스는 scene.start라 room:start가 안 와 phase로 따로 잡는다.
+  const zoneName =
+    phase === "BOSS" ? "침식의 옥좌" : roomId === "room_1" ? "이름 없는 마을" : roomId ? "잊혀진 폐허" : null;
+
   return (
     <Layer>
       {/* 마스터는 다른 소리에도 곱해질 값이라 여기서 함께 반영한다. */}
@@ -854,6 +859,8 @@ export default function HUDOverlay() {
           onDone={hideRoomLoading}
         />
       )}
+
+      <ZoneBanner name={zoneName} />
 
       {showCombatHud && (
         <CombatHud>
