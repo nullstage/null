@@ -375,7 +375,7 @@ export class CombatScene extends Phaser.Scene {
    * 상호작용 안내 프롬프트. [키캡] + "들어가기"를 어두운 알약 위에 얹는다.
    * 컨테이너 원점은 알약의 가운데 아래 — 캐릭터 머리 위에 세울 때의 기준점이다.
    */
-  private buildInteractPrompt(labelText = "들어가기"): Phaser.GameObjects.Container {
+  private buildInteractPrompt(labelText = "문 열기"): Phaser.GameObjects.Container {
     const label = this.add.text(0, 0, labelText, {
       fontFamily: "'Pretendard', sans-serif",
       fontSize: "16px",
@@ -774,7 +774,7 @@ export class CombatScene extends Phaser.Scene {
     });
 
     this.wanderer = wanderer;
-    this.wandererPrompt = this.buildInteractPrompt("말 걸기");
+    this.wandererPrompt = this.buildInteractPrompt("말을 건다");
   }
 
   private updateWandererPrompt(): void {
@@ -978,7 +978,7 @@ export class CombatScene extends Phaser.Scene {
     });
 
     this.merchant = merchant;
-    this.merchantPrompt = this.buildInteractPrompt("거래하기");
+    this.merchantPrompt = this.buildInteractPrompt("거래한다");
 
     const pool = UPGRADE_IDS.filter((id) => !runState.selectedUpgrades.includes(id));
     Phaser.Utils.Array.Shuffle(pool);
@@ -1037,7 +1037,7 @@ export class CombatScene extends Phaser.Scene {
     base.setDepth(3);
 
     this.altar = container;
-    this.altarPrompt = this.buildInteractPrompt("각인 새기기");
+    this.altarPrompt = this.buildInteractPrompt("기록을 새긴다");
   }
 
   private updateAltarPrompt(): void {

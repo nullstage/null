@@ -144,7 +144,7 @@ export default function ShopPanel({ choices, shards, price, onBuy, onClose }: Sh
         <span>◆ {shards}</span>
       </Balance>
 
-      {choices.length === 0 && <Empty>더 팔 것이 없다. …전부 가져갔군.</Empty>}
+      {choices.length === 0 && <Empty>더 남은 것은 없다. 네가 모두 가져갔군.</Empty>}
 
       <Choices>
         {choices.map((choice) => (
@@ -162,7 +162,7 @@ export default function ShopPanel({ choices, shards, price, onBuy, onClose }: Sh
       </Choices>
 
       <Leave type="button" onClick={onClose}>
-        떠나기
+        거래를 마친다
       </Leave>
     </Panel>
   );

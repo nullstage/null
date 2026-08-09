@@ -20,9 +20,9 @@ import Panel, { PanelActions, PanelButton, PanelRow } from "./Panel";
 /** 패턴 키를 그대로 노출하면 기록이 아니라 로그로 보인다. */
 const PATTERN_LABEL: Record<BossPattern, string> = {
   slash: "베기",
-  dash: "짓쳐듦",
-  projectile: "던짐",
-  slam: "내리침",
+  dash: "돌진",
+  projectile: "투사체",
+  slam: "내려찍기",
 };
 
 const Verdict = styled.p<{ cleared: boolean }>`
@@ -56,34 +56,34 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
 
   return (
-    <Panel title="이번 런">
+    <Panel title="「남겨진 기록」">
       <Verdict cleared={result.cleared}>
-        {result.cleared ? "시험을 지났다" : "돌아오지 못했다"}
+        {result.cleared ? "이름을 남겼다" : "기록이 여기서 끊겼다"}
       </Verdict>
 
       <PanelRow>
-        <span>걸린 시간</span>
+        <span>생존 시간</span>
         <span>
           {minutes}분 {seconds}초
         </span>
       </PanelRow>
       <PanelRow>
-        <span>끝내 싸운 방식</span>
+        <span>마지막 전투 방식</span>
         <span>{STYLE_LABEL[result.finalStyle]}</span>
       </PanelRow>
       <PanelRow>
-        <span>예측을 속였는가</span>
+        <span>기록자를 속였는가</span>
         <span>
           {result.deception
             ? result.deception.succeeded
               ? "속였다"
               : "읽혔다"
-            : "기록이 끊겼다"}
+            : "판단되지 않음"}
         </span>
       </PanelRow>
 
       <Section>
-        <SectionTitle>방마다 어떻게 봤는가</SectionTitle>
+        <SectionTitle>방마다 남긴 기록</SectionTitle>
         {result.rooms.map((room) => (
           <PanelRow key={room.roomIndex}>
             <span>{room.roomIndex}번째 방</span>
@@ -93,7 +93,7 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
       </Section>
 
       <Section>
-        <SectionTitle>보스가 쓴 패턴</SectionTitle>
+        <SectionTitle>마지막 시험의 패턴</SectionTitle>
         {(Object.entries(result.bossPatternUsage) as [BossPattern, number][]).map(
           ([pattern, count]) => (
             <PanelRow key={pattern}>
@@ -108,7 +108,7 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
 
       <PanelActions>
         <PanelButton type="button" onClick={onRestart} autoFocus>
-          다시 선다
+          다시 기록한다
         </PanelButton>
       </PanelActions>
     </Panel>

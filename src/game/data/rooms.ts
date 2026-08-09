@@ -147,6 +147,6 @@ export const FIXED_ROOM_SEQUENCE: RoomId[] = ["room_1", "room_2"];
 
 export const getRoomPreset = (id: RoomId): RoomPreset => {
   const preset = ROOM_PRESETS[id];
-  if (!preset) throw new Error(`알 수 없는 방 프리셋: ${id}`);
+  if (!preset) throw new Error(`존재하지 않는 시험 구역입니다: ${id}`);
   return preset;
 };

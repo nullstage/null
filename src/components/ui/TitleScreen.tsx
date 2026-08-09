@@ -138,8 +138,8 @@ type MenuId = "new" | "continue" | "settings";
  * 세이브·로드는 MVP 범위 밖이라 임의로 구현하지 않는다. (CLAUDE.md 규칙 3, OQ-028)
  */
 const MENU_ITEMS: { id: MenuId; label: string; disabled: boolean }[] = [
-  { id: "new", label: "처음부터", disabled: false },
-  { id: "continue", label: "이어하기", disabled: true },
+  { id: "new", label: "새 기록", disabled: false },
+  { id: "continue", label: "이어서 기록하기", disabled: true },
   { id: "settings", label: "설정", disabled: false },
 ];
 

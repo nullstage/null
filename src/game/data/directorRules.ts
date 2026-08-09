@@ -84,16 +84,16 @@ export const DEFAULT_BOSS_WEIGHTS: BossPatternWeights = BOSS_WEIGHTS_BY_STYLE.MI
  * OQ-021 해소 — 영문 헤더는 쓰지 않고 「기록」/「판결」 계열 한국어 표기로 통일한다.
  */
 export const DIRECTOR_DIALOGUE: Record<string, string> = {
-  analysis_ranged: "가까이 오는 법을 잊었군.",
-  analysis_melee: "주먹을 믿는 자였나.",
-  analysis_mobile: "멈추지 않는다고 닿지 않는 것은 아니다.",
-  analysis_mixed: "아직 네 이름을 적을 자리를 찾지 못했다.",
-  counter_ranged: "다음 방에는 네가 설 거리가 남지 않을 것이다.",
-  counter_melee: "다음 방에서는 그 거리를 좁히기 어려울 것이다.",
-  counter_mobile: "네가 지나갈 자리를 먼저 적어 두었다.",
-  counter_mixed: "판단을 미루겠다. 더 보여라.",
-  deception_success: "기록이 어긋났다. 다시 본다.",
-  deception_failed: "적어 둔 그대로였다.",
+  analysis_ranged: "거리를 두는 습관이 기록되었다.",
+  analysis_melee: "칼끝을 믿는 자로군.",
+  analysis_mobile: "발을 멈추는 법을 모르는군.",
+  analysis_mixed: "아직 하나의 이름으로 묶기 어렵다.",
+  counter_ranged: "다음 기록에는 숨을 거리가 부족할 것이다.",
+  counter_melee: "다음에는 그 칼끝이 닿기 어려울 것이다.",
+  counter_mobile: "네가 달아날 자리부터 지워 두었다.",
+  counter_mixed: "아직 판단하지 않겠다. 조금 더 보여라.",
+  deception_success: "……기록과 다르군. 네가 나를 속였다.",
+  deception_failed: "예상대로다. 기록은 틀리지 않았다.",
 };
 
 /**
@@ -105,18 +105,18 @@ export const DIRECTOR_DIALOGUE: Record<string, string> = {
  * 대사(`analysis_*`)와 같은 관찰을 짧게 줄인 것이라 어조를 맞춘다.
  */
 export const STYLE_TITLE: Record<PlayStyle, string> = {
-  MELEE: "주먹을 믿는 자",
-  RANGED: "거리를 두는 자",
-  MOBILE: "붙잡히지 않는 자",
-  MIXED: "아직 이름 없는 자",
+  MELEE: "칼끝을 믿는 자",
+  RANGED: "거리를 지키는 자",
+  MOBILE: "멈추지 않는 자",
+  MIXED: "아직 기록되지 않은 자",
 };
 
 /** 다음 방이 어떻게 달라지는지 한 줄로 알려 준다. 카운터가 안 보이면 시스템이 없는 것과 같다. */
 export const COUNTER_SUMMARY: Record<PlayStyle, string> = {
-  MELEE: "다가서기 어려운 자들이 기다린다",
-  RANGED: "거리를 지우는 자들이 기다린다",
-  MOBILE: "지나갈 자리를 막는 자들이 기다린다",
-  MIXED: "아직 정해지지 않았다",
+  MELEE: "칼끝이 닿기 어려운 시험이 기다린다",
+  RANGED: "거리를 허락하지 않는 시험이 기다린다",
+  MOBILE: "움직임을 읽는 시험이 기다린다",
+  MIXED: "아직 시험은 정해지지 않았다",
 };
 
 export const analysisDialogueId = (style: PlayStyle): string =>

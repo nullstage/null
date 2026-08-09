@@ -40,8 +40,8 @@ export const ENGRAVING_EFFECT = {
 export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "ROOT",
-    name: "첫 각인",
-    description: "기록자가 네 이름의 첫 글자를 새겼다. 모든 각인은 여기서 뻗는다.",
+    name: "첫 글자",
+    description: "기록자가 지워진 이름의 첫 글자를 다시 새겼다. 모든 각인은 여기에서 시작된다.",
     cost: 0,
     col: 1,
     row: 1,
@@ -50,7 +50,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "VIGOR",
     name: "견딤",
-    description: "최대 체력이 10 오른 채로 깨어난다.",
+    description: "새로운 기록을 시작할 때 최대 체력이 10 증가한다.",
     cost: 8,
     col: 0,
     row: 0,
@@ -59,7 +59,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "MEMORY",
     name: "기억 갈무리",
-    description: "새 여정을 그림자 조각 4개와 함께 시작한다.",
+    description: "새로운 기록을 그림자 조각 4개와 함께 시작한다.",
     cost: 10,
     col: 2,
     row: 0,
@@ -68,7 +68,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "SPARE_SHELL",
     name: "여분의 탄피",
-    description: "탄창이 1발 늘어난 채로 깨어난다.",
+    description: "새로운 기록을 시작할 때 탄창 용량이 1발 증가한다.",
     cost: 8,
     col: 0,
     row: 2,
@@ -77,7 +77,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "SWORD_PATH",
     name: "검로(劍路)",
-    description: "스킬 재사용 대기시간이 12% 짧아진다.",
+    description: "스킬 재사용 대기시간이 12% 감소한다.",
     cost: 12,
     col: 2,
     row: 2,
@@ -86,7 +86,7 @@ export const ENGRAVINGS: readonly EngravingDef[] = [
   {
     id: "AFTERIMAGE",
     name: "잔영",
-    description: "대시 충전이 1 늘어난 채로 깨어난다.",
+    description: "새로운 기록을 시작할 때 대시 충전 횟수가 1 증가한다.",
     cost: 12,
     col: 1,
     row: 3,

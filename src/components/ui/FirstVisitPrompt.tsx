@@ -133,12 +133,12 @@ export default function FirstVisitPrompt({ onConfirm }: { onConfirm: () => void 
       <Card ref={cardRef}>
         <Title>NOTICE</Title>
         <Body>
-          첫 접속입니다.
+          처음 기록을 시작합니다.
           <br />
-          원활한 진행을 위해 아래 버튼을 눌러 주세요.
+          원활한 플레이를 위해 아래 버튼을 눌러 오디오와 입력을 활성화해 주세요.
         </Body>
         <Confirm ref={buttonRef} type="button" onClick={confirm}>
-          시작하기
+          기록 시작
         </Confirm>
       </Card>
     </Backdrop>

@@ -39,17 +39,17 @@ export interface DeceptionPanelProps {
 
 export default function DeceptionPanel({ result, onContinue }: DeceptionPanelProps) {
   return (
-    <Panel title={result.succeeded ? "예측이 빗나갔다" : "예측대로였다"}>
+    <Panel title={result.succeeded ? "기록이 어긋났다" : "기록대로였다"}>
       <Verdict succeeded={result.succeeded}>
-        {result.succeeded ? "속이는 데 성공했다" : "읽힌 대로 싸웠다"}
+        {result.succeeded ? "기록자를 속였다" : "기록자에게 읽혔다"}
       </Verdict>
 
       <PanelRow>
-        <span>예측한 방식</span>
+        <span>예측된 방식</span>
         <span>{STYLE_LABEL[result.predictedStyle]}</span>
       </PanelRow>
       <PanelRow>
-        <span>실제로 싸운 방식</span>
+        <span>실제 전투 방식</span>
         <span>{STYLE_LABEL[result.actualStyle]}</span>
       </PanelRow>
       {result.succeeded && (
@@ -65,7 +65,7 @@ export default function DeceptionPanel({ result, onContinue }: DeceptionPanelPro
 
       <PanelActions>
         <PanelButton type="button" onClick={onContinue} autoFocus>
-          보스에게로
+          마지막 시험으로
         </PanelButton>
       </PanelActions>
     </Panel>

@@ -1189,6 +1189,67 @@
 
 ---
 
+### `docs/GameText.md` 작성 및 전체 대사·UI 문구 교체
+
+- 상태: DONE
+- 관련 계획: 없음(콘텐츠 폴리싱, 별도 DEC 없이 처리)
+- 관련 AI 로그: 없음(대표 프롬프트만 아래 요약)
+
+#### 작업
+
+- 사용자 요청으로 게임 내 모든 대사·강화/각인/스킬 설명·UI 문구를 코드베이스 전체에서
+  추출해 `docs/GameText.md`에 출처 파일과 함께 정리했다(Director 대사, 튜토리얼 대화,
+  프롤로그, NPC 대사, 강화 8종+확장, 각인 6종, 보스 패턴 라벨, 패널별 타이틀/버튼/안내
+  문구, 상호작용 프롬프트, 로딩 캡션, 에러 메시지 등 11개 섹션).
+- 사용자가 그 문서를 직접 편집해 "기록 · 이름 · 침식 · 시험 · 예측" 어휘로 톤을
+  통일한 새 문구를 적어 두었고, 문서 내용대로 실제 코드를 갱신해 달라고 요청했다.
+  문서에 반영된 변경을 하나씩 대조해 아래 파일에 적용했다:
+  `game/data/directorRules.ts`(DIRECTOR_DIALOGUE·STYLE_TITLE·COUNTER_SUMMARY),
+  `game/data/upgrades.ts`(강화 23종 이름·설명 전체), `game/data/engravings.ts`(각인
+  6종), `game/data/npcEvents.ts`(방랑자 우호/적대 대사), `game/data/rooms.ts`(에러
+  메시지), `components/ui/PrologueText.tsx`, `components/ui/DialogueBox.tsx`(9줄 →
+  12줄로 재작성), `components/ui/AnalysisPanel.tsx`, `DeceptionPanel.tsx`,
+  `ResultPanel.tsx`(PATTERN_LABEL 포함), `UpgradePanel.tsx`, `ShopPanel.tsx`,
+  `EngravePanel.tsx`, `StatusPanel.tsx`(CATEGORY_LABEL 포함), `TitleScreen.tsx`,
+  `PauseMenu.tsx`, `SettingsPanel.tsx`(ACTION_LABELS 포함), `FirstVisitPrompt.tsx`,
+  `LoadingScreen.tsx`(캡션), `HUDOverlay.tsx`(사망/포기 결과창),
+  `game/scenes/CombatScene.ts`(상호작용 프롬프트 4종).
+
+#### 결정
+
+- 문서에 두 가지 이상의 후보가 병기된 항목 2건은 사용자에게 직접 물어 결정했다:
+  - 로딩 화면 캡션: "RECORDING" / "READING YOUR RECORD..." / "기록을 읽는 중…" 중
+    **"기록을 읽는 중…"**을 선택(문서의 추천과 동일, 전체 UI가 한글 중심이라는 이유).
+  - `rooms.ts`의 방 프리셋 조회 실패 에러 메시지: 기본형과 `[Room Error]` 접두 개발용
+    표기 중 **"존재하지 않는 시험 구역입니다: {id}"**(접두 없는 기본형)를 선택.
+- `SettingsPanel.tsx` 사운드 안내 문구를 "효과음은 지금 메뉴 소리에만 적용됩니다..."에서
+  "효과음 설정은 현재 메뉴와 전투 효과음에 적용됩니다."로 바꾸기 전에 실제 동작을
+  먼저 확인했다 — `game/systems/audio.ts`의 `sfxVolume()`이 이미 `settingsStore`의
+  `master*sfx`를 그대로 읽어 전투 효과음에도 적용되고 있었으므로(기존 문구가 구현을
+  따라가지 못한 낡은 설명이었음), 사실과 다른 문구를 새로 만드는 게 아니라 실제 동작에
+  맞게 고치는 것이었다.
+
+#### 검증
+
+- `npm run build` 통과(TypeScript 컴파일 포함).
+- Playwright 헤드리스로 `npm run dev` 서버를 직접 띠워 스크린샷으로 확인: 첫 방문
+  안내, 로딩 화면(캡션 "기록을 읽는 중…"이 잘리거나 넘치지 않음), 튜토리얼 대화창
+  1번째 줄, 시작 화면(새 기록/이어서 기록하기/설정), 설정 화면 사운드 탭·조작 탭
+  (모든 라벨과 안내 문구 정상 표시, 레이아웃 깨짐 없음). 콘솔 에러 0건.
+- 강화/각인/상점/기록 제단/결과/역기만/일시정지 패널 등 실제 플레이를 거쳐야 뜨는
+  화면은 이번 검증에서 직접 띄우지 못했다 — 코드 대조로 문서 문구와 정확히 일치함을
+  확인했을 뿐, 실제 런 진행을 통한 화면 확인은 다음 플레이 세션에서 필요하다.
+
+#### 남은 작업
+
+- 강화 선택·상점·기록 제단·결과·역기만 패널의 새 문구를 실제 런에서 직접 띄워 줄
+  바꿈이나 길이 초과가 없는지 확인해야 한다(특히 `EngravePanel`의 안내 문구가
+  3줄로 늘어났다).
+- 이번 교체는 텍스트 콘텐츠 전용이며 시스템 계약(`DirectorAnalysis`, `PlayStyle` 등)이나
+  수치 밸런스는 건드리지 않았다.
+
+---
+
 ## 기록 템플릿
 
 ```md

@@ -216,15 +216,17 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
         ) : (
           // 안내는 설명식으로, 플레이버 한 줄만 남긴다. (사용자 결정)
           <small>
-            각인에 마우스를 올리면 설명이 표시됩니다. 해금 가능한 각인은 눌러서 새깁니다.
+            각인에 마우스를 올리면 남겨진 기록을 확인할 수 있습니다.
             <br />
-            <em>침식이 삼키지 못하는, 유일한 기록이다.</em>
+            새길 수 있는 각인을 선택하면 다음 기록에도 그 흔적이 남습니다.
+            <br />
+            <em>침식도 한 번 새겨진 기록까지는 지우지 못한다.</em>
           </small>
         )}
       </Info>
 
       <Leave type="button" onClick={onClose}>
-        물러나기
+        제단에서 물러난다
       </Leave>
     </Panel>
   );

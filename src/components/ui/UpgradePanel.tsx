@@ -89,7 +89,7 @@ export default function UpgradePanel({ choices, onSelect, final = false }: Upgra
   };
 
   return (
-    <Panel title={final ? "「마지막으로 주어진 것」" : "「주어진 것」"}>
+    <Panel title={final ? "「마지막으로 남길 것」" : "「이번 기록에 남길 것」"}>
       <Choices>
         {choices.map((choice) => (
           <Choice
@@ -104,7 +104,7 @@ export default function UpgradePanel({ choices, onSelect, final = false }: Upgra
         ))}
       </Choices>
 
-      {final && <Note>“문 너머에 그가 서 있다.”</Note>}
+      {final && <Note>“마지막 기록을 남길 준비를 해라.”</Note>}
     </Panel>
   );
 }

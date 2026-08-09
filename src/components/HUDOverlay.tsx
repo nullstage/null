@@ -819,7 +819,7 @@ export default function HUDOverlay() {
       {respawnSummary && (
         <RespawnScreen onPointerDown={dismissRespawnSummary}>
           <RespawnPanel>
-            <h1>쓰러졌다</h1>
+            <h1>기록이 끊겼다</h1>
             <dl>
               <dt>생존 시간</dt>
               <dd>
@@ -829,7 +829,7 @@ export default function HUDOverlay() {
               <dt>처치한 적</dt>
               <dd>{respawnSummary.kills}</dd>
             </dl>
-            <p>ENTER — 마을에서 다시 일어난다</p>
+            <p>ENTER — 다시 눈을 뜬다</p>
           </RespawnPanel>
         </RespawnScreen>
       )}
