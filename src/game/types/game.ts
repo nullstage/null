@@ -68,7 +68,12 @@ export type UpgradeId =
   /** 방을 클리어할 때마다 소량 회복한다. 큰 폭은 아니다. */
   | "HEALTH_REGEN"
   /** 받는 피해를 소폭 줄인다(내구력). */
-  | "HEALTH_ARMOR";
+  | "HEALTH_ARMOR"
+  /**
+   * 아티팩트 — 이름 없는 낯. 그림자에게 이름을 삼켜진 자가 남긴 가면.
+   * 이름이 없으면 침식도 오래 붙잡지 못한다 — 피격 직후 무적 시간이 늘어난다.
+   */
+  | "HEALTH_MASK";
 
 export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
 

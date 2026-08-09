@@ -346,7 +346,8 @@ const ShardChip = styled.span`
   color: #c9a8ff;
   font-size: 13px;
 
-  svg {
+  svg,
+  img {
     width: 15px;
     height: 15px;
   }

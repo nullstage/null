@@ -3,6 +3,7 @@
 import styled from "@emotion/styled";
 import { useState, type ReactElement } from "react";
 
+import { assetPath } from "@/game/config/gameConfig";
 import { UPGRADES } from "@/game/data/upgrades";
 import type { HudState, UpgradeCategory, UpgradeId } from "@/game/types/game";
 import { theme } from "@/styles/theme";
@@ -36,6 +37,8 @@ const SKILL_ICON: Partial<Record<UpgradeId, ReactElement>> = {
   MELEE_SWORD_WAVE: <WaveIcon />,
   MELEE_SPIKE_ERUPTION: <SpikeIcon />,
   MELEE_BLADE_CYCLONE: <CycloneIcon />,
+  // eslint-disable-next-line @next/next/no-img-element
+  HEALTH_MASK: <img src={assetPath("ui/items/mask-of-no-name.png")} alt="" />,
 };
 
 const CATEGORY_ICON: Record<UpgradeCategory, ReactElement> = {
@@ -127,7 +130,8 @@ const Slot = styled.button<{ filled: boolean; selected: boolean }>`
   cursor: ${({ filled }) => (filled ? "pointer" : "default")};
   transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
 
-  svg {
+  svg,
+  img {
     width: 22px;
     height: 22px;
   }
@@ -169,7 +173,8 @@ const PortraitRing = styled.div`
   background: radial-gradient(circle, rgba(58, 44, 20, 0.6) 0%, rgba(8, 5, 9, 0.95) 75%);
   color: #f0d78a;
 
-  svg {
+  svg,
+  img {
     width: 34px;
     height: 34px;
   }

@@ -210,6 +210,8 @@ export const TUNING = {
     healthRegenAmount: 12,
     /** 내구 강화 — 받는 피해에 곱한다. */
     armorDamageMultiplier: 0.85,
+    /** 이름 없는 낯 — 피격 직후 무적 시간(PLAYER.invulnerabilityMs)에 더한다. */
+    maskInvulnBonusMs: 250,
 
     /** 화염 — 적중 후 이 간격으로 이 횟수만큼 화상 틱이 들어간다. */
     fireTickDamage: 3,
@@ -1328,7 +1330,10 @@ export class Player {
       amount = Math.round(amount * TUNING.upgrade.armorDamageMultiplier);
     }
 
-    this.invulnerableUntilMs = now + PLAYER.invulnerabilityMs;
+    const invulnMs =
+      PLAYER.invulnerabilityMs +
+      (this.hasUpgrade("HEALTH_MASK") ? TUNING.upgrade.maskInvulnBonusMs : 0);
+    this.invulnerableUntilMs = now + invulnMs;
 
     this.telemetry.recordDamageTaken();
     this.hp = Math.max(0, this.hp - amount);
@@ -1352,7 +1357,7 @@ export class Player {
       this.die();
       return { parried: this.parrying, perfect: false };
     }
-    this.blink();
+    this.blink(invulnMs);
     return { parried: this.parrying, perfect: false };
   }
 
@@ -1400,12 +1405,14 @@ export class Player {
     });
   }
 
-  private blink(): void {
+  /** 깜빡이는 횟수는 실제 무적 시간(각인·아티팩트 보너스 포함)에 맞춘다 — 안 그러면
+   *  무적이 남았는데 깜빡임만 먼저 멎어 "맞을 수도 있겠다"는 착각을 준다. */
+  private blink(durationMs: number = PLAYER.invulnerabilityMs): void {
     const sprite = this.sprite;
     if (!sprite) return;
 
     this.blinkTween?.remove();
-    const halfCycles = Math.max(1, Math.round(PLAYER.invulnerabilityMs / TUNING.feedback.blinkMs));
+    const halfCycles = Math.max(1, Math.round(durationMs / TUNING.feedback.blinkMs));
     this.blinkTween = this.scene.tweens.add({
       targets: sprite,
       alpha: 0.25,
