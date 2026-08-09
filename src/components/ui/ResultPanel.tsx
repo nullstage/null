@@ -46,6 +46,17 @@ const SectionTitle = styled.h3`
   color: ${theme.color.textMuted};
 `;
 
+/** 보스는 번호가 붙는 시험이 아니라 그 끝이다 — 줄 하나로 갈라 놓아야 목록이 그렇게 읽힌다. */
+const BossRow = styled(PanelRow)`
+  margin-top: ${theme.space(2)};
+  padding-top: ${theme.space(3)};
+  border-top: 1px solid ${theme.color.border};
+
+  span:first-of-type {
+    color: ${theme.color.danger};
+  }
+`;
+
 export interface ResultPanelProps {
   result: RunResult;
   onRestart: () => void;
@@ -82,8 +93,13 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
           {minutes}분 {seconds}초
         </span>
       </PanelRow>
+      {/*
+        "마지막 전투 방식"이 아니다 — 마지막에 싸운 건 보스이고, 그건 아래 목록에 따로 있다.
+        이 줄은 기록자가 보스 패턴을 어떤 성향으로 짰는지, 즉 그 시험이 왜 그렇게
+        생겼는지를 말한다. 아래 "보스가 쓴 패턴"의 비중이 이 값에서 나온다.
+      */}
       <PanelRow>
-        <span>마지막 전투 방식</span>
+        <span>기록자가 읽은 성향</span>
         <span>{STYLE_LABEL[result.finalStyle]}</span>
       </PanelRow>
       <PanelRow>
@@ -109,10 +125,17 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
             </PanelRow>
           );
         })}
+        {/* 보스전에서 실제로 어떻게 싸웠는지. 판정에는 안 쓰이고 기록으로만 남는다. */}
+        {result.bossStyle && (
+          <BossRow>
+            <span>보스</span>
+            <span>{STYLE_LABEL[result.bossStyle]}</span>
+          </BossRow>
+        )}
       </Section>
 
       <Section>
-        <SectionTitle>마지막 시험의 패턴</SectionTitle>
+        <SectionTitle>보스가 쓴 패턴</SectionTitle>
         {(Object.entries(result.bossPatternUsage) as [BossPattern, number][]).map(
           ([pattern, count]) => (
             <PanelRow key={pattern}>

@@ -27,6 +27,7 @@ import {
   startDreamMist,
 } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
+import { classify } from "../systems/DirectorPolicy";
 import { runState } from "../systems/RunState";
 import { AUDIO, createArena, DEPTH, TEXTURE, type CombatArena } from "../types/combat";
 import type { AttackMode, UpgradeElement } from "../types/game";
@@ -294,8 +295,11 @@ export class BossScene extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
 
-    this.telemetry.end(this.time.now, this.player.hp);
+    const bossTelemetry = this.telemetry.end(this.time.now, this.player.hp);
     runState.hp = this.player.hp;
+    // 보스전에서 실제로 어떻게 싸웠는지. 표시 전용이라 가중치는 건드리지 않는다 —
+    // 보스전 중 재분석은 하지 않는다는 계약 그대로다. (MVP_PLAN §8)
+    runState.setBossStyle(classify(bossTelemetry).style);
 
     if (!cleared) {
       // 보스전 사망도 런을 끝내지 않는다 — 결과창을 먼저 보여준 뒤 튜토리얼로 돌려보낸다.

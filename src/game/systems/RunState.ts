@@ -53,6 +53,11 @@ export class RunState {
   bossPatternUsage: Record<BossPattern, number> = emptyPatternUsage();
   deception: DeceptionResult | null = null;
 
+  /** 보스 가중치를 정할 때 읽은 성향(방 3 65% + 방 2 35%). 방 3 단독 성향과는 다른 값이다. */
+  bossWeightStyle: PlayStyle | null = null;
+  /** 보스전 텔레메트리로 계산한 성향. 표시 전용. */
+  bossStyle: PlayStyle | null = null;
+
   hp: number = PLAYER.maxHp;
   maxHp: number = PLAYER.maxHp;
 
@@ -84,6 +89,8 @@ export class RunState {
     this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
     this.bossPatternUsage = emptyPatternUsage();
     this.deception = null;
+    this.bossWeightStyle = null;
+    this.bossStyle = null;
     // 각인(영구 해금) 보정 — 새 런의 시작값에만 얹는다. (data/engravings.ts)
     this.maxHp = PLAYER.maxHp + (hasEngraving("VIGOR") ? ENGRAVING_EFFECT.hpBonus : 0);
     this.hp = this.maxHp;
@@ -119,6 +126,8 @@ export class RunState {
     this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
     this.bossPatternUsage = emptyPatternUsage();
     this.deception = null;
+    this.bossWeightStyle = null;
+    this.bossStyle = null;
     this.rooms = [];
     this.maxHp = PLAYER.maxHp + (hasEngraving("VIGOR") ? ENGRAVING_EFFECT.hpBonus : 0);
     this.hp = this.maxHp;
@@ -222,6 +231,16 @@ export class RunState {
     eventBus.emit("boss:weights", { weights: this.bossWeights });
   }
 
+  /** 보스 가중치를 정한 성향 기록. 결과 화면이 buildResult로 받아 간다. */
+  setBossWeightStyle(style: PlayStyle): void {
+    this.bossWeightStyle = style;
+  }
+
+  /** 보스전 성향 기록. 표시 전용이라 가중치를 건드리지 않는다. */
+  setBossStyle(style: PlayStyle): void {
+    this.bossStyle = style;
+  }
+
   recordBossPattern(pattern: BossPattern): void {
     this.bossPatternUsage[pattern] += 1;
   }
@@ -254,14 +273,14 @@ export class RunState {
       cleared,
       totalTimeMs: Math.max(0, this.runEndedAtMs - this.runStartedAtMs),
       rooms: this.rooms.map((room) => ({ ...room })),
-      // 방 3에서 실제로 어떻게 싸웠는지가 확정돼 있으면 그것이 최종이다.
-      // latestAnalysis는 방 2 시점의 '예측'이라, 역기만에 성공한 런에서는
-      // 리포트가 "예측대로 싸웠다 + 속였다"로 자기모순이 된다.
-      finalStyle: this.deception?.actualStyle ?? this.latestAnalysis?.style ?? "MIXED",
+      // 기록자가 보스 패턴을 정할 때 읽은 성향(방 3 65% + 방 2 35%).
+      // 방 3 단독 성향은 `deception.actualStyle`에 따로 있다 — 둘은 다른 값이다.
+      finalStyle: this.bossWeightStyle ?? this.deception?.actualStyle ?? "MIXED",
       deception: this.deception,
       bossWeights: { ...this.bossWeights },
       bossPatternUsage: { ...this.bossPatternUsage },
       selectedUpgrades: [...this.selectedUpgrades],
+      bossStyle: this.bossStyle,
     };
   }
 }

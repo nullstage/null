@@ -61,6 +61,8 @@
 | P-033 | 강화 3회 지급(방 3 후 보스 진입 전 추가) | 시스템 | DONE | P-011, OQ-016 | Playwright로 방1→2→3→강화(3회)→보스 전 구간 관통, 콘솔 에러 0 |
 | P-034 | 방 2 소프트 카운터(축소판) → 방 1 무전투화에 맞춰 방식 조정(P-024와 병합) | 시스템 | DONE | OQ-010(DEC-016), P-024 | `RoomController.resolveWaveOverride` 신설, 방 2 1웨이브 텔레메트리로 2·3웨이브 구성 결정. 보스 SLAM 낙사 버그(팀원 보스 개편본에도 있던 것)를 같은 작업에서 함께 수정. build/lint/typecheck 통과, 헤드리스로 튜토리얼→방2 진입·`window.runState.setBossWeights`로 SLAM 100% 강제 후 45초간 낙사 미재현 확인. MELEE·MOBILE 웨이브 전환과 방 2 실전투 전 구간은 사람 실플레이로 재확인 필요 |
 | P-035 | 코드 리뷰 지적 12건 일괄 수정 | 시스템/전투 | DONE | DEC-017, DEC-018 | HEALTH_REGEN 무효·패널 중 씬 미정지·매복 잔적 불일치·나가기 BGM 누수·상점 HEALTH_MAX_UP 미반영·finalStyle 오표기·슬로우 중첩 조기 해제·기동 카운터형 자멸·F2 무가드·함정 죽은 계약·각인 패널 스냅샷·각인 설명 불일치. build/lint/typecheck 통과 + Playwright 헤드리스 41개 항목 전부 통과 |
+| P-036 | 보스 성향 체인 (OQ-014·OQ-015 확정) | 시스템 | DONE | DEC-019 | 보스 가중치 입력을 방 3 65% + 방 2 35%로 확대, 역기만 판정은 방 3 단독 유지, 버려지던 보스전 텔레메트리를 `bossStyle`로 기록해 결과 화면에 `보스` 줄로 표시. build/lint/typecheck 통과 + 헤드리스 71개 항목 통과(세 성향이 실제로 갈라지는 것까지 확인) |
+| P-037 | 웨이브 사이 카메라 확대 수정 | 시스템 | DONE | - | 유휴 줌의 '전투 중' 판정을 잔적 수에서 방 클리어 여부로 교체. 웨이브 공백(1.2초)과 매복 생존 시 오작동 해소. 수정 전 재현(줌 1.18) → 수정 후 1.000 유지 확인 |
 | P-038 | 방 1 서사 종료 직후 키맵 모달(최초 1회) | 시스템 | DONE | P-022, OQ-026(DEC-020) | `KeyMapModal` 신설, `DialogueBox.onDone` 이후 `game:resume` 전에 삽입. 실제 `KEY_BINDINGS` 반영, 최초 1회만 표시(localStorage). Playwright로 방1 첫 진입→대화→모달→닫기→전투 재개, 재진입 시 미표시 확인. build/lint/typecheck 통과 |
 
 상태는 `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `DROPPED` 중 하나를 사용한다.
