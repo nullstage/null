@@ -164,7 +164,7 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
   const focused = nodes.find((node) => node.id === focusedId) ?? null;
 
   return (
-    <Panel title="「기록 제단」">
+    <Panel title="「기록 제단」" frameImage={assetPath("ui/engrave-frame.png")}>
       <Balance>
         <span>그림자 조각</span>
         <span>◆ {shards}</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import { css } from "@emotion/react";
 import styled from "@emotion/styled";
 import gsap from "gsap";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -27,7 +28,7 @@ const Backdrop = styled.div`
     rgba(6, 5, 6, 0.84);
 `;
 
-const Frame = styled.section`
+const Frame = styled.section<{ frameImage?: string }>`
   position: relative;
   width: min(560px, 100%);
   /* 도트 화면과 맞물리도록 모서리를 깎지 않는다. */
@@ -53,6 +54,28 @@ const Frame = styled.section`
       rgba(200, 56, 60, 0) 100%
     );
   }
+
+  /*
+   * 장식 프레임 이미지가 있으면 테두리를 통째로 그 그림으로 바꾼다. 9-슬라이스로
+   * 늘려서, 패널 크기가 원본 그림 비율과 달라도(이 패널은 원본보다 세로가 훨씬 길다)
+   * 모서리 보석·사슬 장식은 원본 비율 그대로 남고 평평한 가장자리만 늘어난다.
+   */
+  ${({ frameImage }) =>
+    frameImage &&
+    css`
+      border: 0;
+      border-image-source: url(${frameImage});
+      border-image-slice: 230 180 230 180 fill;
+      border-image-width: 34px 44px;
+      border-image-repeat: stretch;
+      background: transparent;
+      box-shadow: none;
+      padding: 46px ${theme.space(7)} ${theme.space(6)};
+
+      &::before {
+        content: none;
+      }
+    `}
 `;
 
 const Heading = styled.h2`
@@ -77,9 +100,11 @@ const Heading = styled.h2`
 export interface PanelProps {
   title: string;
   children: ReactNode;
+  /** 넘기면 이 패널만 기본 테두리 대신 이 그림을 9-슬라이스 장식 프레임으로 쓴다. */
+  frameImage?: string;
 }
 
-export default function Panel({ title, children }: PanelProps) {
+export default function Panel({ title, children, frameImage }: PanelProps) {
   const frameRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -100,7 +125,7 @@ export default function Panel({ title, children }: PanelProps) {
 
   return (
     <Backdrop role="dialog" aria-modal="true" aria-label={title}>
-      <Frame ref={frameRef}>
+      <Frame ref={frameRef} frameImage={frameImage}>
         <Heading>{title}</Heading>
         {children}
       </Frame>
