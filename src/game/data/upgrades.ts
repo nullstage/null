@@ -151,6 +151,12 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     name: "굳은 몸",
     description: "받는 피해가 소폭 감소한다.",
   },
+  HEALTH_MASK: {
+    id: "HEALTH_MASK",
+    category: "HEALTH",
+    name: "이름 없는 낯",
+    description: "피격 직후 무적 시간이 늘어난다.",
+  },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

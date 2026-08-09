@@ -1,9 +1,12 @@
 /**
- * HUD 전용 인라인 SVG 아이콘. (에셋 없이 코드로만 그린다)
+ * HUD 전용 아이콘. 대부분 인라인 SVG(에셋 없이 코드로만 그린다)지만,
+ * 제공받은 그림을 쓰는 것(ShardIcon)도 섞여 있다.
  *
- * 전부 `currentColor`를 쓰므로 색은 부모(styled 슬롯)가 정한다 —
+ * SVG 쪽은 전부 `currentColor`를 쓰므로 색은 부모(styled 슬롯)가 정한다 —
  * 준비/쿨다운 상태 색 전환이 CSS만으로 끝난다.
  */
+
+import { assetPath } from "@/game/config/gameConfig";
 
 const base = {
   viewBox: "0 0 24 24",
@@ -40,12 +43,10 @@ export const GunIcon = () => (
   </svg>
 );
 
-/** 그림자 조각. */
+/** 그림자 조각. 제공받은 그림이라 다른 아이콘과 달리 currentColor를 안 탄다. */
 export const ShardIcon = () => (
-  <svg {...base}>
-    <path d="M12 3 18 12 12 21 6 12 Z" fill="currentColor" stroke="none" opacity={0.9} />
-    <path d="M12 6.5 15.2 12 12 17.5 8.8 12 Z" fill="#fff" stroke="none" opacity={0.35} />
-  </svg>
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src={assetPath("ui/shard-icon.png")} alt="" />
 );
 
 /** 재장전 — 도는 화살표. 회전 애니메이션은 부모가 건다. */
