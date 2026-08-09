@@ -27,12 +27,10 @@ import {
   ashRise,
   BEAM_WINDUP_MS,
   beamLine,
-  bladeVortexBurst,
   clearParryGuard,
   createBulletTrail,
   deathBurst,
   groundDust,
-  groundEruptionBurst,
   hitBurst,
   hitStop,
   MOON_SHADOW_SKEW,
@@ -43,8 +41,6 @@ import {
   rangedSpark,
   slashArc,
   slashFlash,
-  spikeBurst,
-  swordWaveTrail,
 } from "../systems/CombatVfx";
 import { playSfx, startFootsteps, stopFootsteps } from "../systems/audio";
 import type { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
@@ -55,11 +51,13 @@ import {
   PLAYER_SPRITE,
   RANGED_ANIM_BY_STEP,
   SILHOUETTE,
+  SKILL_VFX_TEXTURE,
   TEXTURE,
   comboAnim,
   playerAnimKey,
   type CombatArena,
   type PlayerAnimState,
+  type SkillVfxKey,
 } from "../types/combat";
 import type { AttackMode, UpgradeElement, UpgradeId } from "../types/game";
 
@@ -360,6 +358,11 @@ export const TUNING = {
     swordWaveWidth: 40,
     swordWaveHeight: 46,
     swordWaveLifeMs: 500,
+
+    /** 스킬 이펙트 스프라이트 표시 배율. 원본 셀이 커서 다 축소해서 쓴다. */
+    swordWaveVisualScale: 0.42,
+    eruptionVisualScale: 0.55,
+    cycloneVisualScale: 1.1,
   },
 
   /** 공중에서 입력이 없을 때 수평 속도가 줄어드는 비율(프레임당). 1이면 영원히 날아간다. */
@@ -1133,15 +1136,7 @@ export class Player {
     );
     this.fireSwordWave(sprite, damage);
 
-    // 발동의 "쾅" — 가시 폭발은 이런 스킬급 순간의 언어다. 3스킬 공용 붉은 팔레트.
-    spikeBurst(this.scene, sprite.x + this.facing * 24, sprite.y, {
-      scale: 1.3,
-      spikes: 10,
-      dark: 0x330606,
-      mid: 0xe0263f,
-      bright: 0xffb199,
-      lineColor: 0xff3b3b,
-    });
+    // 스프라이트 0번 프레임 자체가 발동 임팩트(큰 섬광)라 별도 폭발 이펙트가 필요 없다.
     this.scene.cameras.main.shake(110, 0.006);
     this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
   }
@@ -1181,14 +1176,7 @@ export class Player {
         if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
         this.scene.time.delayedCall(140, () => box.destroy());
 
-        // 위쪽 반원으로만 치솟는 붉은 가시 + 바닥 충격 링 + 튀는 잔해 — 가시 혼자서는 약하다.
-        groundEruptionBurst(this.scene, at, floorY - 8, {
-          scale: 1.35,
-          dark: 0x330606,
-          mid: 0xe0263f,
-          bright: 0xffb199,
-          ringColor: 0xff3b3b,
-        });
+        this.burstSkillVfx("skillEruptionBurst", at, floorY - 8, TUNING.upgrade.eruptionVisualScale);
         groundDust(this.scene, at, floorY, "land");
       });
     }
@@ -1219,13 +1207,8 @@ export class Player {
     if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
     this.scene.time.delayedCall(upgrade.cycloneActiveMs, () => box.destroy());
 
-    // 전방위 가시 + 원형 소용돌이 링 + 사방으로 튕기는 칼날 + 양방향 슬래시 — 한 바퀴 돌아 벤 것처럼 읽힌다.
-    bladeVortexBurst(this.scene, sprite.x, sprite.y, upgrade.cycloneRadiusPx * 1.4, {
-      dark: 0x330606,
-      mid: 0xe0263f,
-      bright: 0xffb199,
-      ringColor: 0xff3b3b,
-    });
+    // 회전 폭발 스프라이트 + 양방향 슬래시 — 한 바퀴 돌아 벤 것처럼 읽힌다.
+    this.burstSkillVfx("skillCycloneBurst", sprite.x, sprite.y, TUNING.upgrade.cycloneVisualScale);
     slashArc(this.scene, sprite.x, sprite.y - 6, this.facing, 95, 3, false);
     this.scene.time.delayedCall(110, () => {
       if (this.sprite) {
@@ -1257,7 +1240,48 @@ export class Player {
     wave.setData("mode", "MELEE" satisfies AttackMode);
     this.scene.time.delayedCall(upgrade.swordWaveLifeMs, () => wave.destroy());
 
-    swordWaveTrail(this.scene, wave, facing);
+    this.followSkillVfx("skillWaveFly", wave, facing, upgrade.swordWaveVisualScale);
+  }
+
+  /**
+   * 스킬 이펙트 스프라이트 공용 헬퍼. 검기·검극·검무 세 스킬이 전부 이 둘 중 하나를 쓴다.
+   * 텍스처는 해당 시트 키를, `scale`은 프레임마다 다른 원본 크기를 화면 표시 크기로
+   * 맞추는 배율이다.
+   */
+  private burstSkillVfx(animKey: SkillVfxKey, x: number, y: number, scale: number): void {
+    const fx = this.scene.add.sprite(x, y, SKILL_VFX_TEXTURE[animKey]);
+    fx.setScale(scale);
+    fx.setDepth(TUNING.depth.attack + 1);
+    fx.setBlendMode(Phaser.BlendModes.ADD);
+    fx.play(animKey);
+    fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+  }
+
+  /** 발사체를 따라다니며 매 프레임 위치를 맞추는 스킬 이펙트(검기 전용). */
+  private followSkillVfx(
+    animKey: SkillVfxKey,
+    target: Phaser.GameObjects.Image,
+    facing: 1 | -1,
+    scale: number,
+  ): void {
+    const fx = this.scene.add.sprite(target.x, target.y, SKILL_VFX_TEXTURE[animKey]);
+    fx.setScale(facing * scale, scale);
+    fx.setDepth(TUNING.depth.attack + 1);
+    fx.setBlendMode(Phaser.BlendModes.ADD);
+    fx.play(animKey);
+    fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+
+    const tick = this.scene.time.addEvent({
+      delay: 16,
+      loop: true,
+      callback: () => {
+        if (!target.active || !fx.active) {
+          tick.remove(false);
+          return;
+        }
+        fx.setPosition(target.x, target.y);
+      },
+    });
   }
 
   /** 원거리 공격 입력. 짧은 쿨타임의 투사체. */

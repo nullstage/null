@@ -87,7 +87,55 @@ export const TEXTURE = {
   bossThrone: "tex_boss_throne",
   /** 보스방 전용 바닥 타일 — 제공받은 붉은 고딕 타일시트에서 잘라낸 벽돌 한 칸(52px). */
   bossFloorTile: "tex_boss_floor_tile",
+  /** 검기(Q) 궤적 — 날아가는 초승달 참격이 옅어지는 6프레임. */
+  skillWave: "tex_skill_wave",
+  /** 검극(R) 가시 폭발 — 바닥에서 솟는 6프레임. */
+  skillEruption: "tex_skill_eruption",
+  /** 검무(F) 회전 폭발 — 소용돌이가 흩어지는 8프레임. */
+  skillCyclone: "tex_skill_cyclone",
 } as const;
+
+/**
+ * 스킬 이펙트 스프라이트시트. 사용자가 그려 준 원본에서 프레임마다 크기가 달라
+ * 셀을 그 행의 최댓값 + 여백 6px로 통일해 packing했다. 시트를 다시 뽑으면
+ * 이 값들도 다시 재야 한다.
+ */
+export const SKILL_VFX_SHEET = {
+  wave: { path: "vfx/skill-wave.png", frameWidth: 309, frameHeight: 227, frames: 6 },
+  eruption: { path: "vfx/skill-eruption.png", frameWidth: 261, frameHeight: 345, frames: 6 },
+  cyclone: { path: "vfx/skill-cyclone.png", frameWidth: 198, frameHeight: 226, frames: 8 },
+} as const;
+
+/**
+ * 스킬 이펙트 애니메이션. `registerFrameAnimations`(적·보스와 같은 헬퍼)로 등록한다.
+ * fps는 각 스킬의 지속 시간(`TUNING.upgrade`)에 맞춰 프레임 수를 나눈 값이다.
+ */
+export const SKILL_VFX_ANIM = {
+  skillWaveFly: { key: TEXTURE.skillWave, start: 0, frames: SKILL_VFX_SHEET.wave.frames, fps: 12, loop: false },
+  skillEruptionBurst: {
+    key: TEXTURE.skillEruption,
+    start: 0,
+    frames: SKILL_VFX_SHEET.eruption.frames,
+    fps: 20,
+    loop: false,
+  },
+  skillCycloneBurst: {
+    key: TEXTURE.skillCyclone,
+    start: 0,
+    frames: SKILL_VFX_SHEET.cyclone.frames,
+    fps: 36,
+    loop: false,
+  },
+} as const;
+
+export type SkillVfxKey = keyof typeof SKILL_VFX_ANIM;
+
+/** 애니메이션 키 → 텍스처 키. 스프라이트 생성 시 초기 텍스처를 맞추는 용도. */
+export const SKILL_VFX_TEXTURE: Record<SkillVfxKey, string> = {
+  skillWaveFly: TEXTURE.skillWave,
+  skillEruptionBurst: TEXTURE.skillEruption,
+  skillCycloneBurst: TEXTURE.skillCyclone,
+};
 
 /**
  * 보스 스프라이트시트. 224px 정사각 셀 22칸(가로 한 줄), 상태별 다프레임 애니메이션.
