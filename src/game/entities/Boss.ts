@@ -107,21 +107,25 @@ const FEEDBACK = {
  * `widthRatio`는 플레이어 체력바(화면 왼쪽 위)와 겹치지 않을 만큼 가운데로 좁혀 잡았다.
  */
 const HP_BAR = {
-  widthRatio: 0.46,
+  widthRatio: 0.52,
   topMargin: 16,
   /** 프레임 원본 비율(가로/세로). 배율을 키워도 이 비율을 유지해야 그림이 안 찌그러진다. */
   frameAspect: 1545 / 364,
-  /** 게이지 창(가운데 흰 띠) — 프레임 기준 좌/우/중심Y/높이 비율. */
-  window: { left: 0.0375, right: 0.9596, centerY: 0.5742, height: 0.1319 },
-  /** 위 문장(이름) 중심 Y 비율. */
-  nameY: 0.2775,
+  /**
+   * 게이지 창(가운데 흰 띠) — 프레임 기준 좌/우/중심Y/높이 비율.
+   * 높이는 실제 구멍(0.132)보다 키웠다 — 프레임이 위에 덮이므로 구멍 밖으로 삐져나온
+   * 부분은 프레임 테두리가 그대로 가려준다. "체력바가 잘 안 보인다"는 지적으로 두껍게 키움.
+   */
+  window: { left: 0.0375, right: 0.9596, centerY: 0.5742, height: 0.185 },
+  /** 위 문장(이름) 중심 Y 비율. 플레이트 안에서 살짝 아래로 내려 여백을 준다. */
+  nameY: 0.3,
   /** 아래 문장(부제) 중심 Y 비율. */
   titleY: 0.7789,
 } as const;
 
 /** 체력바 위 문장(이름)·아래 문장(부제). 보스 인트로 배너(BossScene)와 같은 문구를 쓴다. */
 const BOSS_NAME = "「 집 행 자 」";
-const BOSS_TITLE = "삼켜진 이름들을 거두는 자";
+const BOSS_TITLE = "이름들을 거두는 자";
 
 const DEPTH = { telegraph: 1, attack: 5, boss: 10, hud: 100 } as const;
 
@@ -248,6 +252,7 @@ export class Boss {
   private hpFrame: Phaser.GameObjects.Image | null = null;
   private hpNameText: Phaser.GameObjects.Text | null = null;
   private hpTitleText: Phaser.GameObjects.Text | null = null;
+  private hpValueText: Phaser.GameObjects.Text | null = null;
 
   constructor(deps: BossDeps) {
     this.deps = deps;
@@ -937,11 +942,13 @@ export class Boss {
     this.hpFrame?.destroy();
     this.hpNameText?.destroy();
     this.hpTitleText?.destroy();
+    this.hpValueText?.destroy();
     this.hpBarBack = null;
     this.hpBarFill = null;
     this.hpFrame = null;
     this.hpNameText = null;
     this.hpTitleText = null;
+    this.hpValueText = null;
     this.followHitbox = null;
     this.sprite?.destroy();
     this.sprite = null;
@@ -1063,11 +1070,12 @@ export class Boss {
     const barY = frameTop + HP_BAR.window.centerY * frameHeight;
     const barHeight = HP_BAR.window.height * frameHeight;
 
+    // 어둡게 비운 자리와 밝은 채움이 확실히 갈라져야 한눈에 읽힌다 — 색 대비를 키웠다.
     this.hpBarBack = this.scene.add
       .image(barLeft, barY, TEXTURE.solid)
       .setOrigin(0, 0.5)
       .setDisplaySize(barWidth, barHeight)
-      .setTint(0x1a0d12)
+      .setTint(0x140508)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
 
@@ -1076,7 +1084,7 @@ export class Boss {
       .image(barLeft, barY, TEXTURE.solid)
       .setOrigin(0, 0.5)
       .setDisplaySize(barWidth, barHeight)
-      .setTint(0xe04848)
+      .setTint(0xff2438)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud + 1);
 
@@ -1088,10 +1096,25 @@ export class Boss {
       .setScrollFactor(0)
       .setDepth(DEPTH.hud + 2);
 
+    // 수치까지 찍어야 "얼마나 남았는지"가 색만으로 안 헷갈린다.
+    this.hpValueText = this.scene.add
+      .text(barLeft + barWidth / 2, barY, "", {
+        fontFamily: "'Pretendard', sans-serif",
+        fontSize: "12px",
+        fontStyle: "bold",
+        color: "#fff5f0",
+        stroke: "#2a0508",
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 3);
+
     this.hpNameText = this.scene.add
       .text(centerX, frameTop + HP_BAR.nameY * frameHeight, BOSS_NAME, {
         fontFamily: "'Pretendard', sans-serif",
-        fontSize: "15px",
+        fontSize: "18px",
         fontStyle: "bold",
         color: "#f3dfe3",
         resolution: 2,
@@ -1110,6 +1133,8 @@ export class Boss {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud + 3);
+
+    this.refreshHpBar();
   }
 
   private refreshHpBar(): void {
@@ -1121,10 +1146,11 @@ export class Boss {
     this.tweens.push(
       this.scene.tweens.add({
         targets: fill,
-        displayWidth: barWidth * (this.hp / this.maxHp),
+        displayWidth: barWidth * Math.max(0, this.hp / this.maxHp),
         duration: FEEDBACK.punchMs,
       }),
     );
+    this.hpValueText?.setText(`${Math.max(0, this.hp)} / ${this.maxHp}`);
   }
 
   private after(delayMs: number, callback: () => void): void {

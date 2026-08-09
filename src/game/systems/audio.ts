@@ -87,7 +87,7 @@ export const startRoomBgm = (host: SoundHost, key: string): void => {
 };
 
 export const stopRoomBgm = (host: SoundHost): void => {
-  for (const key of [AUDIO.bgmCombat, AUDIO.bgmVillage]) {
+  for (const key of [AUDIO.bgmCombat, AUDIO.bgmVillage, AUDIO.bgmBoss]) {
     const sound = host.sound.get(key);
     if (!sound) continue;
     activeLoops.delete(sound);
