@@ -15,7 +15,7 @@ import { BootScene } from "./scenes/BootScene";
 import { BossScene } from "./scenes/BossScene";
 import { CombatScene } from "./scenes/CombatScene";
 import { ReadyScene } from "./scenes/ReadyScene";
-import { AmbientLightPipeline, HitFxPipeline } from "./systems/CombatVfx";
+import { AmbientLightPipeline, GlitchFxPipeline, HitFxPipeline } from "./systems/CombatVfx";
 import { runState } from "./systems/RunState";
 
 /** 일시정지가 의미 있는 씬. 시작 화면은 멈출 것이 없다. */
@@ -79,6 +79,7 @@ export const createGame = (parent: HTMLElement): Phaser.Game => {
     pipeline: {
       HitFx: HitFxPipeline,
       AmbientLight: AmbientLightPipeline,
+      GlitchFx: GlitchFxPipeline,
     } as unknown as Phaser.Types.Core.PipelineConfig,
     scene: [BootScene, ReadyScene, CombatScene, BossScene],
   });

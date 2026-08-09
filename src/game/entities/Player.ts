@@ -33,6 +33,7 @@ import {
   groundDust,
   hitBurst,
   hitStop,
+  MOON_SHADOW_SKEW,
   muzzleFlash,
   parryGuard,
   perfectParryBurst,
@@ -627,7 +628,8 @@ export class Player {
     const t = Phaser.Math.Clamp(height / shadow.maxHeight, 0, 1);
     const scale = Phaser.Math.Linear(1, shadow.minScale, t);
 
-    this.shadow.setPosition(sprite.x, this.deps.arena.bounds.floorY);
+    // 달빛 사광 — 높이 뜬 만큼 그림자가 입사각 방향으로 비껴 눕는다(플랫폼 그림자와 동일 각).
+    this.shadow.setPosition(sprite.x + height * MOON_SHADOW_SKEW, this.deps.arena.bounds.floorY);
     this.shadow.setScale(scale);
     this.shadow.setAlpha(shadow.maxAlpha * (1 - t * 0.7));
   }
