@@ -147,8 +147,9 @@ const ModeEmblem = styled.span<{ accent: string }>`
   color: ${({ accent }) => accent};
   filter: drop-shadow(0 0 6px currentColor);
 
-  svg {
-    width: 58%;
+  svg,
+  img {
+    width: auto;
     height: 58%;
   }
 `;
@@ -303,6 +304,12 @@ const IconSlot = styled.span<{ accent: string; dim?: boolean }>`
   color: ${({ accent, dim }) => (dim ? "rgba(255,255,255,0.28)" : accent)};
   box-shadow: ${({ accent, dim }) => (dim ? "none" : `0 0 8px ${accent}44`)};
   transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+
+  svg,
+  img {
+    width: auto;
+    height: 22px;
+  }
 `;
 
 /** 슬롯 우하단의 키 뱃지(Q/R/F/K). 아이콘만으로는 어느 키인지 몰라 작게 붙인다. */
@@ -364,7 +371,10 @@ const ReloadSpin = styled.span`
   display: inline-flex;
   color: #ffd9a8;
 
-  svg {
+  svg,
+  img {
+    width: auto;
+    height: 16px;
     animation: ${reloadSpin} 0.9s linear infinite;
   }
 `;

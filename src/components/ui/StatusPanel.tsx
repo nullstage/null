@@ -1,38 +1,28 @@
 "use client";
 
+import { css } from "@emotion/react";
 import styled from "@emotion/styled";
-import { useState, type ReactElement } from "react";
+import gsap from "gsap";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { assetPath } from "@/game/config/gameConfig";
 import { UPGRADES } from "@/game/data/upgrades";
 import type { HudState, UpgradeCategory, UpgradeId } from "@/game/types/game";
 import { theme } from "@/styles/theme";
 
-import {
-  BootIcon,
-  CycloneIcon,
-  GunIcon,
-  HeartIcon,
-  SpikeIcon,
-  SwordIcon,
-  WaveIcon,
-} from "./HudIcons";
-import Panel from "./Panel";
+import { BootIcon, CycloneIcon, GunIcon, HeartIcon, SpikeIcon, SwordIcon, WaveIcon } from "./HudIcons";
+import { Backdrop } from "./Panel";
 
 /**
- * 상태창(E) — 스컬식 시트.
+ * 상태창(E) — 참고 이미지(inventory-frame.png)의 레이아웃 그대로 재현.
  *
- * 왼쪽: 스킬·아티팩트 아이콘 슬롯 그리드. 오른쪽: 선택한 것의 상세
- * (원형 초상 프레임 + 이름 배너 + 분류·속성 태그 + 설명).
- * 내용은 CSS로 그리고, 테두리만 참고 시트(ui/inventory-frame.png)를 잘라 쓴다.
- * 조회 전용이다 — 아무것도 고르지 않는다.
+ * 프레임 그림 하나를 배경으로 깔고, 그 위에 실제 좌표(1536x1024 기준 px를 %로 환산)로
+ * 탭 6칸·7x5 슬롯 그리드·원형 초상·게이지 3줄·설명란을 투명 오버레이로 얹는다.
+ * 슬롯 테두리·탭 아이콘·게이지 눈금(다이아 핍)은 전부 그림 안에 이미 그려져 있어
+ * 따로 그리지 않는다 — 동적으로 바뀌는 부분만 겹친다.
  */
 
-const SKILL_IDS: readonly UpgradeId[] = [
-  "MELEE_SWORD_WAVE",
-  "MELEE_SPIKE_ERUPTION",
-  "MELEE_BLADE_CYCLONE",
-];
+const SKILL_IDS: readonly UpgradeId[] = ["MELEE_SWORD_WAVE", "MELEE_SPIKE_ERUPTION", "MELEE_BLADE_CYCLONE"];
 
 const SKILL_ICON: Partial<Record<UpgradeId, ReactElement>> = {
   MELEE_SWORD_WAVE: <WaveIcon />,
@@ -135,180 +125,164 @@ const ELEMENT_COLOR: Record<string, string> = {
   HOLY: "#f0d78a",
 };
 
-const iconFor = (id: UpgradeId): ReactElement =>
-  SKILL_ICON[id] ?? CATEGORY_ICON[UPGRADES[id].category];
+const iconFor = (id: UpgradeId): ReactElement => SKILL_ICON[id] ?? CATEGORY_ICON[UPGRADES[id].category];
 
-const Sheet = styled.div`
-  display: flex;
-  gap: ${theme.space(5)};
-`;
+/** 참고 그림(1536x1024)에서 잰 좌표. 전부 이 기준의 %로 환산해 오버레이를 얹는다. */
+const IMG_W = 1536;
+const IMG_H = 1024;
+const pctX = (px: number) => `${(px / IMG_W) * 100}%`;
+const pctY = (px: number) => `${(px / IMG_H) * 100}%`;
 
-const LeftCol = styled.div`
-  width: 196px;
-  flex-shrink: 0;
-`;
+type TabId = "ALL" | UpgradeCategory | "ARTIFACT";
 
-const HpRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: ${theme.space(4)};
-  padding-bottom: ${theme.space(3)};
-  border-bottom: 1px solid ${theme.color.border};
+/** 탭 아이콘(검·투구·물약·반지·좌대·주사위)은 그림에 이미 그려져 있다 — 좌표와 분류만 정한다. */
+const TABS: { id: TabId; label: string; cx: number; match: (id: UpgradeId) => boolean }[] = [
+  { id: "MELEE", label: "근접", cx: 215, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MELEE" },
+  { id: "HEALTH", label: "생존", cx: 343, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "HEALTH" },
+  { id: "RANGED", label: "원거리", cx: 475, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "RANGED" },
+  { id: "MOBILITY", label: "기동", cx: 606, match: (id) => !id.startsWith("ITEM_") && UPGRADES[id].category === "MOBILITY" },
+  { id: "ARTIFACT", label: "아티팩트", cx: 742, match: (id) => id.startsWith("ITEM_") },
+  { id: "ALL", label: "전체", cx: 878, match: () => true },
+];
+const TAB_TOP = 195;
+const TAB_H = 68;
+const TAB_W = 125;
 
-  span:first-of-type {
-    color: ${theme.color.textMuted};
-    font-size: 12px;
-    letter-spacing: 0.08em;
-  }
+const GRID = { left: 166, top: 304, width: 738, height: 535, cols: 7, rows: 5 };
+const CELL_W = GRID.width / GRID.cols;
+const CELL_H = GRID.height / GRID.rows;
 
-  span:last-of-type {
-    font-size: 17px;
-    color: #fff;
-  }
-`;
+const PORTRAIT = { cx: 1180, cy: 370, size: 195 };
 
-const SectionLabel = styled.h3`
-  margin: ${theme.space(4)} 0 ${theme.space(2)};
-  font-family: ${theme.font.ui};
-  font-weight: 300;
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: rgba(200, 56, 60, 0.85);
+const GAUGE = { left: 1051, width: 189, height: 26, rows: [567.5, 613.75, 656.25] };
 
-  &:first-of-type {
-    margin-top: 0;
-  }
-`;
+const DESC = { left: 983, top: 720, width: 405, height: 135 };
 
-const SlotGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 44px);
-  gap: 6px;
-`;
-
-const Slot = styled.button<{ filled: boolean; selected: boolean }>`
+const Frame = styled.div`
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: min(1300px, 94vw);
+  aspect-ratio: ${IMG_W} / ${IMG_H};
+  background: url(${assetPath("ui/inventory-frame.png")}) center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+`;
+
+const TabHit = styled.button<{ active: boolean }>`
+  position: absolute;
+  border: none;
+  background: none;
+  cursor: pointer;
+
+  ${({ active }) =>
+    active &&
+    css`
+      box-shadow: inset 0 0 0 2px rgba(240, 215, 138, 0.85), 0 0 10px rgba(240, 215, 138, 0.35);
+    `}
+`;
+
+const GridSlot = styled.button<{ filled: boolean; selected: boolean }>`
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid
-    ${({ selected, filled }) =>
-      selected ? "#f0d78a" : filled ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.1)"};
-  background: ${({ filled }) => (filled ? "rgba(8, 5, 9, 0.8)" : "rgba(255, 255, 255, 0.03)")};
-  color: ${({ selected }) => (selected ? "#f0d78a" : "rgba(255, 255, 255, 0.85)")};
-  box-shadow: ${({ selected }) => (selected ? "0 0 8px rgba(240, 215, 138, 0.35)" : "none")};
+  border: none;
+  background: ${({ selected }) => (selected ? "rgba(240, 215, 138, 0.16)" : "transparent")};
+  box-shadow: ${({ selected }) => (selected ? "inset 0 0 0 2px rgba(240, 215, 138, 0.85)" : "none")};
+  color: rgba(255, 255, 255, 0.9);
   cursor: ${({ filled }) => (filled ? "pointer" : "default")};
-  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
 
   svg,
   img {
-    width: 22px;
-    height: 22px;
+    max-width: 62%;
+    max-height: 62%;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
   }
 `;
 
-/** 속성 아티팩트 슬롯 모서리의 작은 점 — 무슨 속성인지 색으로만 알린다. */
 const ElementDot = styled.i<{ color: string }>`
   position: absolute;
-  right: 3px;
-  top: 3px;
-  width: 7px;
-  height: 7px;
+  right: 8%;
+  top: 8%;
+  width: 12%;
+  height: 12%;
   border-radius: 50%;
   background: ${({ color }) => color};
   box-shadow: 0 0 4px ${({ color }) => color};
 `;
 
-const Detail = styled.div`
-  flex: 1;
-  min-width: 250px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-/** 상세 상단의 원형 초상 프레임 — 참고 시트의 캐릭터 메달리온 문법. */
-const PortraitRing = styled.div`
-  width: 78px;
-  height: 78px;
+const PortraitHit = styled.div`
+  position: absolute;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 2px solid rgba(240, 215, 138, 0.75);
-  box-shadow:
-    inset 0 0 0 4px rgba(8, 5, 9, 0.9),
-    inset 0 0 0 5px rgba(240, 215, 138, 0.3),
-    0 0 14px rgba(240, 215, 138, 0.18);
-  background: radial-gradient(circle, rgba(58, 44, 20, 0.6) 0%, rgba(8, 5, 9, 0.95) 75%);
   color: #f0d78a;
 
   svg,
   img {
-    width: 34px;
-    height: 34px;
+    max-width: 58%;
+    max-height: 58%;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
   }
 `;
 
-const NameBanner = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${theme.space(3)};
-  width: 100%;
-  margin: ${theme.space(3)} 0 ${theme.space(2)};
-  font-family: ${theme.font.ui};
-  font-weight: 400;
-  font-size: 17px;
-  color: #fff;
-  text-align: center;
+const GaugeFill = styled.div<{ pct: number }>`
+  position: absolute;
+  height: 100%;
+  width: ${({ pct }) => pct * 100}%;
+  max-width: 100%;
+  background: linear-gradient(90deg, rgba(200, 56, 60, 0.25), rgba(200, 56, 60, 0.85));
+  box-shadow: 0 0 6px rgba(200, 56, 60, 0.5);
+  transition: width 0.25s ease;
+`;
 
-  &::before,
-  &::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(240, 215, 138, 0.5), transparent);
+const DescOverlay = styled.div`
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: ${theme.space(2)};
+  overflow: hidden;
+  text-align: center;
+  color: ${theme.color.text};
+
+  strong {
+    font-family: ${theme.font.ui};
+    font-weight: 400;
+    font-size: 14px;
+    color: #f0d78a;
+  }
+
+  small {
+    font-size: 11px;
+    line-height: 1.5;
+    color: ${theme.color.textMuted};
   }
 `;
 
 const TagRow = styled.div`
   display: flex;
-  gap: 6px;
-  margin-bottom: ${theme.space(3)};
+  gap: 5px;
 `;
 
 const Tag = styled.span<{ color?: string }>`
-  padding: 2px 10px;
+  padding: 1px 7px;
   border: 1px solid ${({ color }) => color ?? "rgba(255, 255, 255, 0.25)"};
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 9px;
+  letter-spacing: 0.1em;
   color: ${({ color }) => color ?? "rgba(255, 255, 255, 0.65)"};
 `;
 
-const DescBox = styled.p`
-  width: 100%;
-  margin: 0;
-  padding: ${theme.space(4)};
-  border: 1px solid ${theme.color.border};
-  background: rgba(255, 255, 255, 0.03);
-  color: ${theme.color.textMuted};
-  font-size: 13px;
-  line-height: 1.7;
-  text-align: center;
-`;
-
-const Empty = styled.p`
-  margin: ${theme.space(6)} 0;
-  color: ${theme.color.textMuted};
-  font-size: 13px;
-  text-align: center;
+const Wrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: ${theme.space(3)};
 `;
 
 const Hint = styled.p`
-  margin: ${theme.space(5)} 0 0;
+  margin: 0;
   text-align: center;
   color: ${theme.color.textMuted};
   font-size: 12px;
@@ -320,108 +294,160 @@ export interface StatusPanelProps {
 }
 
 export default function StatusPanel({ hud }: StatusPanelProps) {
-  const ownedSkills = SKILL_IDS.filter((id) => hud.selectedUpgrades.includes(id));
-  const ownedArtifacts = hud.selectedUpgrades.filter((id) => !SKILL_IDS.includes(id));
-  const [selected, setSelected] = useState<UpgradeId | null>(
-    ownedSkills[0] ?? ownedArtifacts[0] ?? null,
-  );
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("ALL");
+  const [selected, setSelected] = useState<UpgradeId | null>(hud.selectedUpgrades[0] ?? null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const tween = gsap.fromTo(frame, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.28, ease: "power2.out" });
+    return () => {
+      tween.kill();
+    };
+  }, []);
+
+  const tab = TABS.find((t) => t.id === activeTab) ?? TABS[TABS.length - 1];
+  const owned = hud.selectedUpgrades.filter(tab.match);
+  const cellCount = Math.max(GRID.cols * GRID.rows, owned.length);
+  const cells: (UpgradeId | null)[] = [...owned, ...Array<null>(cellCount - owned.length).fill(null)];
 
   const detail = selected ? UPGRADES[selected] : null;
 
-  /** 고정 칸 수를 유지해 "인벤토리 판"으로 보이게 한다 — 빈 칸도 시트의 일부다. */
-  const skillCells: (UpgradeId | null)[] = [
-    ...ownedSkills,
-    ...Array<null>(Math.max(0, 4 - ownedSkills.length)).fill(null),
-  ];
-  const artifactCells: (UpgradeId | null)[] = [
-    ...ownedArtifacts,
-    ...Array<null>(Math.max(0, 12 - ownedArtifacts.length)).fill(null),
-  ];
+  const attackFill = Math.min(
+    1,
+    hud.selectedUpgrades.filter((id) => UPGRADES[id].category === "MELEE" || UPGRADES[id].category === "RANGED").length / 10,
+  );
+  const defenseFill = Math.min(
+    1,
+    hud.selectedUpgrades.filter((id) => UPGRADES[id].category === "HEALTH" || UPGRADES[id].category === "MOBILITY").length / 8,
+  );
+  const hpFill = hud.maxHp > 0 ? Math.max(0, Math.min(1, hud.hp / hud.maxHp)) : 0;
+
+  const selectTab = (id: TabId) => {
+    setActiveTab(id);
+    const nextOwned = hud.selectedUpgrades.filter(TABS.find((t) => t.id === id)!.match);
+    if (!selected || !nextOwned.includes(selected)) {
+      setSelected(nextOwned[0] ?? null);
+    }
+  };
 
   return (
-    <Panel
-      title="「남아 있는 것」"
-      frameImage={assetPath("ui/inventory-frame.png")}
-      /*
-       * 원본(1536x1024)은 인벤토리 화면 통짜 목업이라 가운데에 칸 격자·초상화가
-       * 그려져 있다. 바깥 장식 띠가 끝나는 지점(위 185 / 오른쪽 150 / 아래 140 /
-       * 왼쪽 150)에서 잘라 테두리로만 쓰고, 안쪽 목업은 버린다 — 격자와 상세는
-       * 아래 CSS 슬롯이 이미 그리고 있다.
-       */
-      frameSlice="185 150 140 150"
-      frameWidth="54px 44px 42px 44px"
-      framePadding="68px 44px 52px"
-      /* 장식 띠가 좌우 44px씩 먹으므로 기본 560px면 상세 설명 칸이 깨져 접힌다. */
-      maxWidth="640px"
-    >
-      <Sheet>
-        <LeftCol>
-          <HpRow>
-            <span>체력</span>
-            <span>
-              {Math.round(hud.hp)} / {hud.maxHp}
-            </span>
-          </HpRow>
+    <Backdrop role="dialog" aria-modal="true" aria-label="「남아 있는 것」">
+      <Wrap>
+        <Frame ref={frameRef}>
+          {TABS.map((t) => (
+            <TabHit
+              key={t.id}
+              type="button"
+              title={t.label}
+              active={t.id === activeTab}
+              onClick={() => selectTab(t.id)}
+              style={{
+                left: pctX(t.cx - TAB_W / 2),
+                top: pctY(TAB_TOP),
+                width: pctX(TAB_W),
+                height: pctY(TAB_H),
+              }}
+            />
+          ))}
 
-          <SectionLabel>스킬</SectionLabel>
-          <SlotGrid>
-            {skillCells.map((id, i) => (
-              <Slot
-                key={id ?? `skill-empty-${i}`}
+          {cells.map((id, i) => {
+            const col = i % GRID.cols;
+            const row = Math.floor(i / GRID.cols);
+            const filled = id !== null;
+            return (
+              <GridSlot
+                key={id ?? `empty-${i}`}
                 type="button"
-                filled={id !== null}
-                selected={id !== null && id === selected}
+                filled={filled}
+                selected={filled && id === selected}
                 onClick={() => id && setSelected(id)}
+                style={{
+                  left: pctX(GRID.left + col * CELL_W),
+                  top: pctY(GRID.top + row * CELL_H),
+                  width: pctX(CELL_W),
+                  height: pctY(CELL_H),
+                }}
               >
                 {id && iconFor(id)}
-              </Slot>
-            ))}
-          </SlotGrid>
+                {id && UPGRADES[id].element && <ElementDot color={ELEMENT_COLOR[UPGRADES[id].element]} />}
+              </GridSlot>
+            );
+          })}
 
-          <SectionLabel>아티팩트</SectionLabel>
-          <SlotGrid>
-            {artifactCells.map((id, i) => (
-              <Slot
-                key={id ?? `artifact-empty-${i}`}
-                type="button"
-                filled={id !== null}
-                selected={id !== null && id === selected}
-                onClick={() => id && setSelected(id)}
-              >
-                {id && iconFor(id)}
-                {id && UPGRADES[id].element && (
-                  <ElementDot color={ELEMENT_COLOR[UPGRADES[id].element]} />
-                )}
-              </Slot>
-            ))}
-          </SlotGrid>
-        </LeftCol>
+          <PortraitHit
+            style={{
+              left: pctX(PORTRAIT.cx - PORTRAIT.size / 2),
+              top: pctY(PORTRAIT.cy - PORTRAIT.size / 2),
+              width: pctX(PORTRAIT.size),
+              height: pctY(PORTRAIT.size),
+            }}
+          >
+            {detail && iconFor(detail.id)}
+          </PortraitHit>
 
-        <Detail>
-          {detail ? (
-            <>
-              <PortraitRing>{iconFor(detail.id)}</PortraitRing>
-              <NameBanner>{detail.name}</NameBanner>
-              <TagRow>
-                <Tag>{CATEGORY_LABEL[detail.category]}</Tag>
-                {SKILL_IDS.includes(detail.id) && <Tag color="#8fd7ff">스킬</Tag>}
-                {detail.element && (
-                  <Tag color={ELEMENT_COLOR[detail.element]}>{ELEMENT_LABEL[detail.element]}</Tag>
-                )}
-              </TagRow>
-              <DescBox>{detail.description}</DescBox>
-            </>
-          ) : (
-            <Empty>
-              아직 남겨진 스킬이나 아티팩트가 없습니다.
-              <br />
-              슬롯을 선택하면 자세한 내용을 확인할 수 있습니다.
-            </Empty>
-          )}
-        </Detail>
-      </Sheet>
+          <div
+            style={{
+              position: "absolute",
+              left: pctX(GAUGE.left),
+              top: pctY(GAUGE.rows[0] - GAUGE.height / 2),
+              width: pctX(GAUGE.width),
+              height: pctY(GAUGE.height),
+            }}
+          >
+            <GaugeFill pct={hpFill} />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: pctX(GAUGE.left),
+              top: pctY(GAUGE.rows[1] - GAUGE.height / 2),
+              width: pctX(GAUGE.width),
+              height: pctY(GAUGE.height),
+            }}
+          >
+            <GaugeFill pct={attackFill} />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: pctX(GAUGE.left),
+              top: pctY(GAUGE.rows[2] - GAUGE.height / 2),
+              width: pctX(GAUGE.width),
+              height: pctY(GAUGE.height),
+            }}
+          >
+            <GaugeFill pct={defenseFill} />
+          </div>
 
-      <Hint>E — 닫기</Hint>
-    </Panel>
+          <DescOverlay
+            style={{
+              left: pctX(DESC.left),
+              top: pctY(DESC.top),
+              width: pctX(DESC.width),
+              height: pctY(DESC.height),
+            }}
+          >
+            {detail ? (
+              <>
+                <strong>{detail.name}</strong>
+                <TagRow>
+                  <Tag>{CATEGORY_LABEL[detail.category]}</Tag>
+                  {SKILL_IDS.includes(detail.id) && <Tag color="#8fd7ff">스킬</Tag>}
+                  {detail.element && <Tag color={ELEMENT_COLOR[detail.element]}>{ELEMENT_LABEL[detail.element]}</Tag>}
+                </TagRow>
+                <small>{detail.description}</small>
+              </>
+            ) : (
+              <small>슬롯을 선택하면 자세한 내용을 확인할 수 있습니다.</small>
+            )}
+          </DescOverlay>
+        </Frame>
+
+        <Hint>E — 닫기</Hint>
+      </Wrap>
+    </Backdrop>
   );
 }
