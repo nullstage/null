@@ -59,7 +59,7 @@ export class RunState {
   /** 사망·포기로 튜토리얼에 되돌아온 상태인지. true면 방 1 기록자 대화창을 건너뛴다. */
   skipTutorialIntro = false;
 
-  /** 그림자 조각. 적 처치로 모아 마을 상인에게 쓴다 — selectedUpgrades처럼 부활해도 유지된다. */
+  /** 그림자 조각. 적 처치로 모아 마을 상인에게 쓴다 — 화폐라 부활해도 유지된다(강화·스킬과 다르다). */
   shards = 0;
 
   /** 이번 시도(런 시작 또는 마지막 부활 이후)에 처치한 적 수. 사망 결과창에 쓴다. */
@@ -102,9 +102,10 @@ export class RunState {
 
   /**
    * 사망 시 런을 끝내지 않고 튜토리얼 방으로 되돌린다. (게임 루프 변경 — 사용자 확정)
-   * 강화(`selectedUpgrades`)와 `maxHp`는 그대로 둔다 — 그게 "런을 유지한다"는 뜻이다.
-   * 그 외 방 진행·텔레메트리·분석·보스 가중치는 `reset()`과 동일하게 되돌려야
-   * 방 1부터 다시 겪을 때 이전 시도의 기록과 섞이지 않는다.
+   * 강화·스킬(`selectedUpgrades`)은 로그라이크 사망 페널티로 전부 잃는다 — `maxHp`도
+   * 각인 보정만 남기고 초기화한다(각인 자체는 영구 해금이라 살아남는다). 조각(`shards`)은
+   * 화폐라 그대로 둔다. 방 진행·텔레메트리·분석·보스 가중치는 `reset()`과 동일하게
+   * 되돌려야 방 1부터 다시 겪을 때 이전 시도의 기록과 섞이지 않는다.
    */
   respawnAtTutorial(nowMs: number): void {
     this.roomIndex = 0;
@@ -114,10 +115,12 @@ export class RunState {
     this.predictedStyle = null;
     this.counterRoomId = null;
     this.latestAnalysis = null;
+    this.selectedUpgrades = [];
     this.bossWeights = { ...DEFAULT_BOSS_WEIGHTS };
     this.bossPatternUsage = emptyPatternUsage();
     this.deception = null;
     this.rooms = [];
+    this.maxHp = PLAYER.maxHp + (hasEngraving("VIGOR") ? ENGRAVING_EFFECT.hpBonus : 0);
     this.hp = this.maxHp;
     this.skipTutorialIntro = true;
     this.kills = 0;

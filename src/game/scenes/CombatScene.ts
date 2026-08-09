@@ -81,10 +81,10 @@ const LAST_COMBAT_ROOM_INDEX = 3;
 const FALL_DAMAGE = 15;
 
 /**
- * 유휴 줌. 가만히 서 있으면 카메라가 천천히 다가오고, 움직이면 곧바로 시야를 되돌린다.
- * 적이 살아 있는 동안엔 발동하지 않는다 — 전투 중 시야가 좁아지면 억울한 피격이 생긴다.
+ * 기본 줌. 서 있는 상태가 기본값이라 화면이 늘 이 배율로 다가와 있다 —
+ * 움직이거나 적이 살아 있으면 즉시 시야를 넓혀 되돌린다(전투 중 좁은 시야는 억울한 피격을 만든다).
  */
-const IDLE_ZOOM = { delayMs: 1500, zoom: 1.22, inMs: 2600, outMs: 420 } as const;
+const IDLE_ZOOM = { zoom: 1.22, inMs: 2600, outMs: 420 } as const;
 
 
 export class CombatScene extends Phaser.Scene {
@@ -115,8 +115,7 @@ export class CombatScene extends Phaser.Scene {
   /** 마을 기록 제단(각인). 조각으로 영구 해금을 새긴다. */
   private altar: Phaser.GameObjects.Container | null = null;
   private altarPrompt: Phaser.GameObjects.Container | null = null;
-  /** 유휴 줌 상태. null이면 방금까지 움직이고 있었다는 뜻이다. */
-  private idleSinceMs: number | null = null;
+  /** 기본 줌이 걸려 있는지. false면 움직이거나 적이 있어 시야를 넓혀 둔 상태다. */
   private idleZoomed = false;
 
   constructor() {
@@ -1006,8 +1005,8 @@ export class CombatScene extends Phaser.Scene {
     this.shopChoices = pool.slice(0, SHOP.choiceCount);
   }
 
-  /** 유휴 줌. 서 있는 시간이 쌓이면 다가가고, 움직이거나 적이 나타나면 즉시 물러난다. */
-  private updateIdleZoom(time: number): void {
+  /** 기본 줌. 서 있으면 곧바로 다가가 있고, 움직이거나 적이 나타나면 즉시 물러난다. */
+  private updateIdleZoom(_time: number): void {
     const body = this.player.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body || this.player.isDead) return;
 
@@ -1017,7 +1016,6 @@ export class CombatScene extends Phaser.Scene {
       Math.abs(body.velocity.y) > 4;
 
     if (busy) {
-      this.idleSinceMs = null;
       if (this.idleZoomed) {
         this.idleZoomed = false;
         this.cameras.main.zoomTo(1, IDLE_ZOOM.outMs, "Sine.easeOut");
@@ -1025,8 +1023,7 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    this.idleSinceMs ??= time;
-    if (!this.idleZoomed && time - this.idleSinceMs > IDLE_ZOOM.delayMs) {
+    if (!this.idleZoomed) {
       this.idleZoomed = true;
       this.cameras.main.zoomTo(IDLE_ZOOM.zoom, IDLE_ZOOM.inMs, "Sine.easeInOut");
     }
