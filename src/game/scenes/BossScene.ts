@@ -155,8 +155,11 @@ export class BossScene extends Phaser.Scene {
       for (let i = 1; i <= upgrade.fireTickCount; i += 1) {
         this.time.delayedCall(i * upgrade.fireTickIntervalMs, () => {
           if (target.isDefeated || !target.sprite) return;
+          // takeDamage가 이 틱으로 대상을 죽이면 그 안에서 sprite가 null이 된다.
+          // 좌표는 죽기 전에 먼저 읽어 둔다.
+          const { x, y } = target.sprite;
           target.takeDamage(upgrade.fireTickDamage);
-          damageNumber(this, target.sprite.x, target.sprite.y - 30, upgrade.fireTickDamage);
+          damageNumber(this, x, y - 30, upgrade.fireTickDamage);
         });
       }
     } else if (element === "FROST") {
@@ -166,8 +169,9 @@ export class BossScene extends Phaser.Scene {
       for (let i = 1; i <= upgrade.poisonTickCount; i += 1) {
         this.time.delayedCall(i * upgrade.poisonTickIntervalMs, () => {
           if (target.isDefeated || !target.sprite) return;
+          const { x, y } = target.sprite;
           target.takeDamage(upgrade.poisonTickDamage);
-          damageNumber(this, target.sprite.x, target.sprite.y - 30, upgrade.poisonTickDamage);
+          damageNumber(this, x, y - 30, upgrade.poisonTickDamage);
         });
       }
     }

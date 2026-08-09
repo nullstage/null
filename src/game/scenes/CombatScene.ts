@@ -652,8 +652,11 @@ export class CombatScene extends Phaser.Scene {
       for (let i = 1; i <= upgrade.fireTickCount; i += 1) {
         this.time.delayedCall(i * upgrade.fireTickIntervalMs, () => {
           if (enemy.isDefeated || !enemy.sprite) return;
+          // takeDamage가 이 틱으로 적을 죽이면 그 안에서 sprite가 null이 된다.
+          // 좌표는 죽기 전에 먼저 읽어 둔다.
+          const { x, y } = enemy.sprite;
           enemy.takeDamage(upgrade.fireTickDamage);
-          damageNumber(this, enemy.sprite.x, enemy.sprite.y - 30, upgrade.fireTickDamage);
+          damageNumber(this, x, y - 30, upgrade.fireTickDamage);
         });
       }
     } else if (element === "FROST") {
@@ -663,8 +666,9 @@ export class CombatScene extends Phaser.Scene {
       for (let i = 1; i <= upgrade.poisonTickCount; i += 1) {
         this.time.delayedCall(i * upgrade.poisonTickIntervalMs, () => {
           if (enemy.isDefeated || !enemy.sprite) return;
+          const { x, y } = enemy.sprite;
           enemy.takeDamage(upgrade.poisonTickDamage);
-          damageNumber(this, enemy.sprite.x, enemy.sprite.y - 30, upgrade.poisonTickDamage);
+          damageNumber(this, x, y - 30, upgrade.poisonTickDamage);
         });
       }
     }

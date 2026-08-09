@@ -1132,6 +1132,51 @@
 
 ---
 
+### 화염·맹독 속성탄 킬 시 크래시 수정
+
+- 상태: DONE
+- 관련 계획: 없음(버그 수정)
+- 관련 AI 로그: AI-019
+
+#### 오류 및 원인
+
+- 사용자 보고: 방 2에서 원거리 모드로 전환해 사격하던 중, 맹독탄(`RANGED_POISON_ROUND`)
+  강화를 획득한 직후 다음 발을 쏘려는 순간 `Cannot read properties of null (reading 'x')`로
+  크래시. 브라우저 콘솔의 프로덕션 번들 스택만으로는 위치를 특정할 수 없어, 사용자에게
+  재현 상황(방 2 · 원거리 · 첫 발 이후 적이 히트펀치로 커지는 연출 · 맹독탄 장착 직후)을
+  물어 좁혔다.
+- 원인: `CombatScene.applyElement`(FIRE·POISON)와 `BossScene.applyElement`(동일 구조)의
+  지연 틱 데미지 콜백이
+  ```
+  if (enemy.isDefeated || !enemy.sprite) return;
+  enemy.takeDamage(tickDamage);
+  damageNumber(this, enemy.sprite.x, enemy.sprite.y - 30, tickDamage);
+  ```
+  순서였다. `takeDamage()`가 이 틱으로 적을 죽이면 `BaseEnemy.defeat() → playDeathEffect()`
+  가 그 안에서 즉시 `this.sprite = null`을 실행하는데(`BaseEnemy.ts:258`, `Boss.ts`도 동일),
+  바로 다음 줄이 이미 null이 된 `sprite.x`를 읽어 크래시로 이어졌다. `isDefeated`/`sprite`
+  가드는 콜백 진입 시점만 확인해, 콜백 실행 중 상태가 바뀌는 경우를 놓치고 있었다.
+- 화염 속성도 같은 구조라 동일 조건(지연 틱이 마무리타가 되는 순간)에서 언제든
+  재현 가능했다 — 사용자가 맹독으로 먼저 밟은 것일 뿐 속성 종류와는 무관한 버그다.
+
+#### 수정
+
+- 4곳(`CombatScene.ts`의 FIRE·POISON, `BossScene.ts`의 FIRE·POISON) 모두 `takeDamage()`
+  호출 **전에** `sprite.x`/`sprite.y`를 지역 변수로 먼저 캡처하도록 순서를 바꿨다.
+  `BaseEnemy.defeat()`가 파괴 전에 좌표를 먼저 붙잡아 두는 것과 같은 패턴이다.
+
+#### 검증
+
+- `npm run typecheck`, `npm run lint` 통과.
+- 실브라우저에서 방 2·보스전 양쪽에 화염/맹독 속성탄으로 적을 서서히 죽이는 상황을
+  재현해 크래시가 없는지와 사망 순간 데미지 숫자 위치가 올바른지는 사용자 확인 대기.
+
+#### 남은 작업
+
+- `npm run build`는 아직 실행하지 않았다.
+
+---
+
 ## 기록 템플릿
 
 ```md
