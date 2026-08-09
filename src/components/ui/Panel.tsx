@@ -28,9 +28,20 @@ export const Backdrop = styled.div`
     rgba(6, 5, 6, 0.84);
 `;
 
-const Frame = styled.section<{ frameImage?: string }>`
+/** 기록 제단 프레임(ui/engrave-frame.png, 1464x998) 기준 기본값. */
+const DEFAULT_FRAME_SLICE = "230 180 230 180 fill";
+const DEFAULT_FRAME_WIDTH = "34px 44px";
+const DEFAULT_FRAME_PADDING = "46px 28px 24px";
+
+const Frame = styled.section<{
+  frameImage?: string;
+  frameSlice: string;
+  frameWidth: string;
+  framePadding: string;
+  maxWidth: string;
+}>`
   position: relative;
-  width: min(560px, 100%);
+  width: min(${({ maxWidth }) => maxWidth}, 100%);
   /* 도트 화면과 맞물리도록 모서리를 깎지 않는다. */
   border: 1px solid rgba(200, 56, 60, 0.4);
   background: rgba(12, 9, 11, 0.94);
@@ -59,18 +70,22 @@ const Frame = styled.section<{ frameImage?: string }>`
    * 장식 프레임 이미지가 있으면 테두리를 통째로 그 그림으로 바꾼다. 9-슬라이스로
    * 늘려서, 패널 크기가 원본 그림 비율과 달라도(이 패널은 원본보다 세로가 훨씬 길다)
    * 모서리 보석·사슬 장식은 원본 비율 그대로 남고 평평한 가장자리만 늘어난다.
+   *
+   * slice에 fill이 있으면 그림 가운데가 빈 판이라는 뜻이라 그대로 배경으로 깐다.
+   * 없으면 가운데에 다른 그림이 들어 있다는 뜻이므로(인벤토리 프레임은 칸 격자·
+   * 초상화 목업이 그려져 있다) 바깥 장식 띠만 쓰고 패널 기본 배경을 남긴다.
    */
-  ${({ frameImage }) =>
+  ${({ frameImage, frameSlice, frameWidth, framePadding }) =>
     frameImage &&
     css`
       border: 0;
       border-image-source: url(${frameImage});
-      border-image-slice: 230 180 230 180 fill;
-      border-image-width: 34px 44px;
+      border-image-slice: ${frameSlice};
+      border-image-width: ${frameWidth};
       border-image-repeat: stretch;
-      background: transparent;
+      ${frameSlice.includes("fill") && "background: transparent;"}
       box-shadow: none;
-      padding: 46px ${theme.space(7)} ${theme.space(6)};
+      padding: ${framePadding};
 
       &::before {
         content: none;
@@ -102,9 +117,28 @@ export interface PanelProps {
   children: ReactNode;
   /** 넘기면 이 패널만 기본 테두리 대신 이 그림을 9-슬라이스 장식 프레임으로 쓴다. */
   frameImage?: string;
+  /** 그림마다 장식 띠 두께가 달라 9-슬라이스 값도 그림별로 준다. */
+  frameSlice?: string;
+  frameWidth?: string;
+  /**
+   * 장식 띠는 레이아웃을 밀지 않고 패딩 위에 덧그려진다. fill이 없는 프레임은
+   * 띠 자리에 진짜 장식이 그려지므로 여백을 border-image-width보다 넓게 줘야
+   * 내용이 장식에 깔리지 않는다.
+   */
+  framePadding?: string;
+  /** 장식 띠가 여백을 먹는 만큼 내용이 좁아지는 패널은 이 값으로 폭을 벌린다. */
+  maxWidth?: string;
 }
 
-export default function Panel({ title, children, frameImage }: PanelProps) {
+export default function Panel({
+  title,
+  children,
+  frameImage,
+  frameSlice = DEFAULT_FRAME_SLICE,
+  frameWidth = DEFAULT_FRAME_WIDTH,
+  framePadding = DEFAULT_FRAME_PADDING,
+  maxWidth = "560px",
+}: PanelProps) {
   const frameRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -125,7 +159,14 @@ export default function Panel({ title, children, frameImage }: PanelProps) {
 
   return (
     <Backdrop role="dialog" aria-modal="true" aria-label={title}>
-      <Frame ref={frameRef} frameImage={frameImage}>
+      <Frame
+        ref={frameRef}
+        frameImage={frameImage}
+        frameSlice={frameSlice}
+        frameWidth={frameWidth}
+        framePadding={framePadding}
+        maxWidth={maxWidth}
+      >
         <Heading>{title}</Heading>
         {children}
       </Frame>

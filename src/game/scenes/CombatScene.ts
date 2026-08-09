@@ -1081,13 +1081,21 @@ export class CombatScene extends Phaser.Scene {
     this.shopChoices = pool.slice(0, SHOP.choiceCount);
   }
 
-  /** 기본 줌. 서 있으면 곧바로 다가가 있고, 움직이거나 적이 나타나면 즉시 물러난다. */
+  /**
+   * 기본 줌. 서 있으면 곧바로 다가가 있고, 움직이거나 전투가 남아 있으면 즉시 물러난다.
+   *
+   * "적이 지금 화면에 있는가"로 판단하면 안 된다. 웨이브 사이에는 이전 웨이브가 전멸하고
+   * 다음 웨이브가 아직 안 나온 1.2초의 공백이 있는데(`RoomController`의 WAVE_GAP_MS),
+   * 그때 잔적 수가 0이라 서 있기만 해도 화면이 확 당겨졌다가 다음 웨이브에 도로 물러났다.
+   * 기준은 "방이 끝났는가"다 — 방이 끝나야 비로소 숨 돌리는 장면이 된다.
+   */
   private updateIdleZoom(_time: number): void {
     const body = this.player.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body || this.player.isDead) return;
 
     const busy =
-      this.room.enemiesRemaining > 0 ||
+      !this.room.isCleared ||
+      this.liveEnemyCount > 0 ||
       Math.abs(body.velocity.x) > 4 ||
       Math.abs(body.velocity.y) > 4;
 
@@ -1358,16 +1366,22 @@ export class CombatScene extends Phaser.Scene {
    * MVP_PLAN §6 역기만 판정.
    *
    * 예측은 방 3 입장 전 값이고, 실제 스타일은 방 3 텔레메트리만으로 다시 계산한다.
-   * OQ-014 미결정 — 보스 성향도 지금은 방 3만 사용한다.
+   * 보스 가중치는 OQ-014 확정에 따라 방 3 65% + 방 2 35%로 넓게 본다.
    */
   private resolveDeception(roomThreeTelemetry: CombatTelemetry): void {
     const predictedStyle = runState.predictedStyle ?? "MIXED";
+    // 역기만 판정은 방 3 단독으로 본다. 여기에 이전 방을 섞으면 "스타일을 바꿔
+    // 예측을 빗나가게 했다"는 판정 자체가 흐려진다.
     const actualStyle = classify(roomThreeTelemetry).style;
+    // 보스 가중치는 방 3만이 아니라 직전 방까지 함께 읽는다 — 방 사이 분석과 같은
+    // 65/35 가중이다(OQ-014 확정). 방 3이 여전히 지배적이라 스타일 전환은 계속 통한다.
+    const bossWeightStyle = analyze(roomThreeTelemetry, runState.previousTelemetry).style;
 
     runState.setDeception(
       evaluateDeception(predictedStyle, actualStyle, true, runState.maxHp),
     );
-    runState.setBossWeights(bossWeightsFor(actualStyle));
+    runState.setBossWeightStyle(bossWeightStyle);
+    runState.setBossWeights(bossWeightsFor(bossWeightStyle));
 
     // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-015)
     this.once("ui:continue", () =>
