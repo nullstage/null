@@ -1,42 +1,36 @@
 "use client";
 
 import styled from "@emotion/styled";
-import { useState, type ReactElement } from "react";
+import { useState } from "react";
 
+import { assetPath } from "@/game/config/gameConfig";
 import type { EngravingId, EngravingView } from "@/game/data/engravings";
 import { theme } from "@/styles/theme";
 
-import {
-  BootIcon,
-  GunIcon,
-  HeartIcon,
-  ReloadIcon,
-  ShardIcon,
-  SwordIcon,
-} from "./HudIcons";
 import Panel from "./Panel";
 
 /**
  * 기록 제단 — 각인 육각 트리. (참고: 세피리아 각인판)
  *
- * 에셋 없이 clip-path 육각형으로 그린다. 노드 좌표는 데이터의 col/row에서 환산.
- * 해금 가능한 노드를 누르면 즉시 새긴다 — 검증·저장은 Phaser 쪽(Engravings)이 정본.
+ * 제공받은 픽셀아트 육각 배지 6장을 그대로 쓴다(테두리·보석 장식까지 그림 안에 있다).
+ * 노드 좌표는 데이터의 col/row에서 환산. 해금 가능한 노드를 누르면 즉시 새긴다 —
+ * 검증·저장은 Phaser 쪽(Engravings)이 정본.
  */
 
-const NODE_ICON: Record<EngravingId, ReactElement> = {
-  ROOT: <ShardIcon />,
-  VIGOR: <HeartIcon />,
-  MEMORY: <ReloadIcon />,
-  SPARE_SHELL: <GunIcon />,
-  SWORD_PATH: <SwordIcon />,
-  AFTERIMAGE: <BootIcon />,
+const NODE_ICON: Record<EngravingId, string> = {
+  ROOT: assetPath("ui/engravings/ROOT.png"),
+  VIGOR: assetPath("ui/engravings/VIGOR.png"),
+  MEMORY: assetPath("ui/engravings/MEMORY.png"),
+  SPARE_SHELL: assetPath("ui/engravings/SPARE_SHELL.png"),
+  SWORD_PATH: assetPath("ui/engravings/SWORD_PATH.png"),
+  AFTERIMAGE: assetPath("ui/engravings/AFTERIMAGE.png"),
 };
 
-/** 육각 크기와 격자 간격. 행을 반칸씩 겹쳐 벌집처럼 붙인다. */
-const HEX_W = 84;
-const HEX_H = 94;
-const STEP_X = 88;
-const STEP_Y = 50;
+/** 육각 배지 크기와 격자 간격. 행을 반칸씩 겹쳐 벌집처럼 붙인다. */
+const HEX_W = 92;
+const HEX_H = 100;
+const STEP_X = 92;
+const STEP_Y = 54;
 
 const Balance = styled.div`
   display: flex;
@@ -65,58 +59,35 @@ const Board = styled.div`
   height: ${3 * STEP_Y + HEX_H}px;
 `;
 
-const Hex = styled.button<{ state: "unlocked" | "available" | "locked" }>`
+/** 배지 그림 자체가 테두리·보석까지 다 그려져 있다 — CSS로는 상태별 밝기만 조절한다. */
+const Hex = styled.button<{ state: "unlocked" | "available" | "locked"; icon: string }>`
   position: absolute;
   width: ${HEX_W}px;
   height: ${HEX_H}px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  justify-content: flex-end;
+  padding-bottom: 6px;
   border: none;
+  background: url(${({ icon }) => icon}) center / contain no-repeat;
   font-family: inherit;
   cursor: ${({ state }) => (state === "available" ? "pointer" : "default")};
-  background: ${({ state }) =>
-    state === "unlocked"
-      ? "linear-gradient(180deg, #3a2c14 0%, #241a0c 100%)"
-      : state === "available"
-        ? "linear-gradient(180deg, #2c2338 0%, #1a1424 100%)"
-        : "rgba(255, 255, 255, 0.04)"};
   color: ${({ state }) =>
     state === "unlocked" ? "#f0d78a" : state === "available" ? "#c9a8ff" : "rgba(255,255,255,0.22)"};
-  transition: filter 0.15s, color 0.15s;
-
-  /* clip-path가 border를 잘라먹는다 — 안쪽 테두리는 의사 요소 육각으로 그린다. */
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 3px;
-    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-    background: transparent;
-    box-shadow: inset 0 0 0 2px
-      ${({ state }) =>
-        state === "unlocked"
-          ? "rgba(240, 215, 138, 0.85)"
-          : state === "available"
-            ? "rgba(169, 127, 255, 0.75)"
-            : "rgba(255, 255, 255, 0.12)"};
-    pointer-events: none;
-  }
+  filter: ${({ state }) =>
+    state === "locked" ? "grayscale(0.85) brightness(0.5)" : "none"};
+  transition: filter 0.15s;
 
   &:hover {
-    filter: ${({ state }) => (state === "available" ? "brightness(1.35)" : "none")};
-  }
-
-  svg {
-    width: 24px;
-    height: 24px;
+    filter: ${({ state }) =>
+      state === "available" ? "brightness(1.3)" : state === "locked" ? "grayscale(0.85) brightness(0.5)" : "none"};
   }
 
   small {
     font-size: 11px;
     letter-spacing: 0.05em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.9);
   }
 `;
 
@@ -208,6 +179,7 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
               key={node.id}
               type="button"
               state={state}
+              icon={NODE_ICON[node.id]}
               style={{ left: node.col * STEP_X, top: node.row * STEP_Y }}
               onMouseEnter={() => setFocusedId(node.id)}
               onClick={() => {
@@ -215,7 +187,6 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
                 if (state === "available" && affordable) onBuy(node.id);
               }}
             >
-              {NODE_ICON[node.id]}
               {!node.unlocked && (
                 <Cost short={state === "available" && !affordable}>◆ {node.cost}</Cost>
               )}
