@@ -58,6 +58,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image(TEXTURE.bossHpFrame, assetPath("ui/boss-hp-frame.png"));
     // 보스방 전용 고딕 성당 배경.
     this.load.image(TEXTURE.bossThrone, assetPath("backgrounds/boss-throne.png"));
+    // 보스방 전용 바닥 타일.
+    this.load.image(TEXTURE.bossFloorTile, assetPath("decor/walls/boss-floor-tile.png"));
     // (실험) 방 2·3 배경.
     this.load.image(TEXTURE.background, assetPath("backgrounds/ruins-dusk.png"));
     // (실험) 방 1~3 공용 — 돌바닥 띠, 전송 게이트, 방 1 전용 배경/장식들.

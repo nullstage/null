@@ -85,6 +85,8 @@ export const TEXTURE = {
   bossHpFrame: "tex_boss_hp_frame",
   /** 보스방 전용 배경 — 고딕 성당 옥좌. 다른 방과 다른 실내 그림이라 구름 없이 한 장만 깐다. */
   bossThrone: "tex_boss_throne",
+  /** 보스방 전용 바닥 타일 — 제공받은 붉은 고딕 타일시트에서 잘라낸 벽돌 한 칸(52px). */
+  bossFloorTile: "tex_boss_floor_tile",
 } as const;
 
 /**

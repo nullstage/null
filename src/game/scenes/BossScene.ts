@@ -65,7 +65,7 @@ export class BossScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDisplaySize(VIEWPORT.width, VIEWPORT.height)
       .setDepth(DEPTH.background);
-    this.arena = createArena(this, VIEWPORT, TEXTURE.floorTileStone, undefined, 87, 0x3a1c28);
+    this.arena = createArena(this, VIEWPORT, TEXTURE.bossFloorTile, undefined, 52, 0x3a1c28);
     // 전투방과 같은 핏빛 비 — 보스전만 하늘이 맑으면 톤이 끊긴다.
     startBloodRain(this, VIEWPORT.width, this.arena.bounds.floorY);
     startDreamMist(this, VIEWPORT.width, this.arena.bounds.floorY);
