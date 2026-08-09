@@ -56,7 +56,9 @@ export class BootScene extends Phaser.Scene {
     });
     // 보스 체력바 장식 프레임.
     this.load.image(TEXTURE.bossHpFrame, assetPath("ui/boss-hp-frame.png"));
-    // (실험) 방 2·3 배경. 보스방은 아직 이 텍스처를 쓰지 않는다.
+    // 보스방 전용 고딕 성당 배경.
+    this.load.image(TEXTURE.bossThrone, assetPath("backgrounds/boss-throne.png"));
+    // (실험) 방 2·3 배경.
     this.load.image(TEXTURE.background, assetPath("backgrounds/ruins-dusk.png"));
     // (실험) 방 1~3 공용 — 돌바닥 띠, 전송 게이트, 방 1 전용 배경/장식들.
     this.load.image(TEXTURE.backgroundTutorial, assetPath("backgrounds/ruins-bloodmoon.png"));

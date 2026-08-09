@@ -83,6 +83,8 @@ export const TEXTURE = {
   playerIntro: "player_intro_sheet",
   /** 보스 체력바 장식 프레임. 위 문장(이름)·아래 문장(부제)·가운데 띠(게이지 창)를 담는다. */
   bossHpFrame: "tex_boss_hp_frame",
+  /** 보스방 전용 배경 — 고딕 성당 옥좌. 다른 방과 다른 실내 그림이라 구름 없이 한 장만 깐다. */
+  bossThrone: "tex_boss_throne",
 } as const;
 
 /**
