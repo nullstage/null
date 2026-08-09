@@ -23,7 +23,7 @@ import type { EngravingId } from "../data/engravings";
 import { NPC_EVENT } from "../data/npcEvents";
 import { SHOP } from "../data/shop";
 import { UPGRADES, UPGRADE_IDS } from "../data/upgrades";
-import { Player, TUNING } from "../entities/Player";
+import { Player, TUNING, type ItemProc } from "../entities/Player";
 import { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { ChaserEnemy } from "../entities/enemies/ChaserEnemy";
 import { MobilityCounterEnemy } from "../entities/enemies/MobilityCounterEnemy";
@@ -162,6 +162,12 @@ export class CombatScene extends Phaser.Scene {
       telemetry: this.telemetry,
       upgrades: runState.selectedUpgrades,
       getShards: () => runState.shards,
+      gainShards: (amount) => {
+        runState.addShards(amount);
+        this.player.emitHud();
+      },
+      consumeRoomShield: () => runState.consumeRoomShield(),
+      roomMeleeDamageBuffActive: () => runState.roomMeleeDamageBuffActive,
       onDamaged: (amount) => runState.damage(amount),
       onDeath: () => this.handlePlayerDeath(),
     });
@@ -633,6 +639,16 @@ export class CombatScene extends Phaser.Scene {
       damageNumber(this, hitTarget.x, hitTarget.y - 20, damage);
       this.applyElement(attack.getData("element") as UpgradeElement | undefined, enemy);
 
+      // 적중 시 속성 부여 아이템 14종 — 각자 독립된 확률로 굴린다(한 타에 여럿 붙을 수 있다).
+      const itemProcs = attack.getData("itemProcs") as ItemProc[] | undefined;
+      if (itemProcs) {
+        for (const proc of itemProcs) {
+          if (Math.random() < proc.chance) {
+            this.applyItemProcElement(proc.element, enemy, hitTarget.x, hitTarget.y);
+          }
+        }
+      }
+
       const mode = attack.getData("mode") as AttackMode | undefined;
       // 파편은 맞은 적 위에서 터져야 한다. 플레이어 위치에서 터지면 누굴 쳤는지 모른다.
       const target = bodyObj as Phaser.GameObjects.Sprite;
@@ -653,6 +669,10 @@ export class CombatScene extends Phaser.Scene {
       if (result.perfect) {
         const source = attack.getData("source") as { takeDamage: (amount: number) => void } | undefined;
         source?.takeDamage(damage ?? 0);
+        // 붉은 파편 — 반사할 때 상대에게 출혈(추가 피해)을 더 얹는다.
+        if (source && runState.selectedUpgrades.includes("ITEM_RED_SHARD")) {
+          source.takeDamage(TUNING.upgrade.itemParryReflectBonusDamage);
+        }
       }
       if (attack.getData("consumeOnHit")) attack.destroy();
     });
@@ -665,6 +685,10 @@ export class CombatScene extends Phaser.Scene {
       if (!enemy || enemy.isDefeated) return;
       const result = this.player.takeDamage(enemy.definition.contactDamage);
       if (result.perfect) enemy.takeDamage(enemy.definition.contactDamage);
+      // 가시 왕관 — 접촉 피해를 받을 때마다 그 적도 피해를 입는다.
+      if (runState.selectedUpgrades.includes("ITEM_THORN_CROWN")) {
+        enemy.takeDamage(TUNING.upgrade.itemThornReflectDamage);
+      }
     });
 
     // 게이트는 충돌·오버랩이 아니라 `update()`의 거리 판정 + INTERACT 키로 반응한다
@@ -705,6 +729,48 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * 적중 시 속성 부여 아이템 14종의 실제 효과. 불·냉기·독은 applyElement의 로직을 그대로
+   * 재사용하고, 나머지 4속성만 여기서 새로 정의한다 — 홀리는 적이 아니라 플레이어를 치료한다.
+   */
+  private applyItemProcElement(
+    element: UpgradeElement,
+    enemy: BaseEnemy,
+    x: number,
+    y: number,
+  ): void {
+    const { upgrade } = TUNING;
+
+    if (element === "FIRE" || element === "FROST" || element === "POISON") {
+      this.applyElement(element, enemy);
+      return;
+    }
+
+    if (element === "BLEED") {
+      for (let i = 1; i <= upgrade.itemBleedTickCount; i += 1) {
+        this.time.delayedCall(i * upgrade.itemBleedTickIntervalMs, () => {
+          if (enemy.isDefeated || !enemy.sprite) return;
+          const { x: ex, y: ey } = enemy.sprite;
+          enemy.takeDamage(upgrade.itemBleedTickDamage);
+          damageNumber(this, ex, ey - 30, upgrade.itemBleedTickDamage);
+        });
+      }
+    } else if (element === "DARK") {
+      if (enemy.isDefeated) return;
+      enemy.takeDamage(upgrade.itemDarkBonusDamage);
+      damageNumber(this, x, y - 30, upgrade.itemDarkBonusDamage);
+    } else if (element === "SHOCK") {
+      for (const other of this.enemies) {
+        if (other.isDefeated || !other.sprite) continue;
+        if (Phaser.Math.Distance.Between(x, y, other.sprite.x, other.sprite.y) > upgrade.itemShockRadiusPx) continue;
+        other.takeDamage(upgrade.itemShockDamage);
+        damageNumber(this, other.sprite.x, other.sprite.y - 30, upgrade.itemShockDamage);
+      }
+    } else if (element === "HOLY") {
+      this.player.heal(upgrade.itemHolyProcHeal);
+    }
+  }
+
   private spawnEnemy(spawn: EnemySpawn, _preset: RoomPreset): void {
     const enemy = this.createEnemy(spawn.type);
     enemy.spawn(this.groundedSpawnX(this.arena.bounds.width * spawn.xRatio), this.arena.bounds.floorY - 60);
@@ -741,6 +807,7 @@ export class CombatScene extends Phaser.Scene {
         // 처치 집계의 유일한 관문 — 직격이든 화상·독 틱이든 낙사든 여길 지난다.
         // (예전엔 공격 오버랩에서만 세서 틱·낙사 킬이 빠졌다.)
         runState.recordKill();
+        this.player.notifyKill(x, y);
         this.dropShards(x, y);
         this.room.onEnemyDefeated();
         this.player.emitHud(this.liveEnemyCount, runState.roomIndex);
@@ -878,6 +945,7 @@ export class CombatScene extends Phaser.Scene {
           },
           onDefeated: (dx: number, dy: number) => {
             runState.recordKill();
+            this.player.notifyKill(dx, dy);
             this.dropShards(dx, dy);
             this.player.emitHud(this.liveEnemyCount, runState.roomIndex);
           },

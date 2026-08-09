@@ -115,11 +115,23 @@ const CATEGORY_LABEL: Record<UpgradeCategory, string> = {
   HEALTH: "생존",
 };
 
-const ELEMENT_LABEL: Record<string, string> = { FIRE: "화염", FROST: "냉기", POISON: "맹독" };
+const ELEMENT_LABEL: Record<string, string> = {
+  FIRE: "화염",
+  FROST: "냉기",
+  POISON: "맹독",
+  BLEED: "출혈",
+  DARK: "암흑",
+  SHOCK: "감전",
+  HOLY: "신성",
+};
 const ELEMENT_COLOR: Record<string, string> = {
   FIRE: "#ff8a50",
   FROST: "#8fd7ff",
   POISON: "#8fe08a",
+  BLEED: "#e0334f",
+  DARK: "#a78bfa",
+  SHOCK: "#ffe066",
+  HOLY: "#f0d78a",
 };
 
 const iconFor = (id: UpgradeId): ReactElement =>
