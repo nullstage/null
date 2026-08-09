@@ -20,6 +20,8 @@ import Phaser from "phaser";
 
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
+import { ENGRAVING_EFFECT } from "../data/engravings";
+import { hasEngraving } from "../systems/Engravings";
 import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
 import {
   ashRise,
@@ -902,9 +904,13 @@ export class Player {
     if (!this.hasUpgrade(id)) return false;
     if (now < (this.skillCooldownUntil[id] ?? 0)) return false;
 
-    this.skillCooldownUntil[id] = now + cooldownMs;
+    // 각인 "검로" — 모든 스킬의 재사용 대기가 일괄로 짧아진다.
+    const effectiveCooldown = Math.round(
+      cooldownMs * (hasEngraving("SWORD_PATH") ? ENGRAVING_EFFECT.skillCooldownScale : 1),
+    );
+    this.skillCooldownUntil[id] = now + effectiveCooldown;
     this.emitHud();
-    this.scene.time.delayedCall(cooldownMs, () => {
+    this.scene.time.delayedCall(effectiveCooldown, () => {
       if (!this.isDead) this.emitHud();
     });
     return true;
@@ -1578,14 +1584,16 @@ export class Player {
   private get maxDashCharges(): number {
     return (
       PLAYER.dashCharges +
-      (this.hasUpgrade("DASH_CHARGE_UP") ? TUNING.upgrade.dashChargeBonus : 0)
+      (this.hasUpgrade("DASH_CHARGE_UP") ? TUNING.upgrade.dashChargeBonus : 0) +
+      (hasEngraving("AFTERIMAGE") ? ENGRAVING_EFFECT.dashChargeBonus : 0)
     );
   }
 
   private get maxMagazineSize(): number {
     return (
       TUNING.ranged.magazineSize +
-      (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0)
+      (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0) +
+      (hasEngraving("SPARE_SHELL") ? ENGRAVING_EFFECT.magazineBonus : 0)
     );
   }
 

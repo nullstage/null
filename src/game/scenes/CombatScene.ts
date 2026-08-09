@@ -19,6 +19,7 @@ import { KEY_BINDINGS } from "../config/inputConfig";
 import { SOFT_COUNTER_ROOM_2_BY_STYLE } from "../data/directorRules";
 import { FIXED_ROOM_SEQUENCE, getRoomPreset } from "../data/rooms";
 import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
+import type { EngravingId } from "../data/engravings";
 import { NPC_EVENT } from "../data/npcEvents";
 import { SHOP } from "../data/shop";
 import { UPGRADES, UPGRADE_IDS } from "../data/upgrades";
@@ -42,6 +43,7 @@ import { playSfx, startRoomBgm } from "../systems/audio";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { analyze, bossWeightsFor, classify, evaluateDeception } from "../systems/DirectorPolicy";
 import { RoomController } from "../systems/RoomController";
+import { engravingSnapshot, unlockEngraving } from "../systems/Engravings";
 import { rollUpgradeChoices } from "../systems/UpgradeSystem";
 import { runState } from "../systems/RunState";
 import {
@@ -100,6 +102,9 @@ export class CombatScene extends Phaser.Scene {
   /** 전투방의 방랑자 NPC. 말을 걸면 우호/적대로 갈리고, 한 번 반응하면 끝이다. */
   private wanderer: Phaser.GameObjects.Sprite | null = null;
   private wandererPrompt: Phaser.GameObjects.Container | null = null;
+  /** 마을 기록 제단(각인). 조각으로 영구 해금을 새긴다. */
+  private altar: Phaser.GameObjects.Container | null = null;
+  private altarPrompt: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super("Combat");
@@ -115,6 +120,8 @@ export class CombatScene extends Phaser.Scene {
     this.merchantPrompt = null;
     this.wanderer = null;
     this.wandererPrompt = null;
+    this.altar = null;
+    this.altarPrompt = null;
     this.shopChoices = [];
     this.portal = null;
     this.portalPrompt = null;
@@ -200,6 +207,9 @@ export class CombatScene extends Phaser.Scene {
     this.subscriptions.push(
       eventBus.on("shop:buy", ({ upgradeId }) => this.handleShopBuy(upgradeId)),
     );
+
+    // 각인 새기기. 성공하면 갱신 스냅샷을 다시 쏴 패널이 열린 채로 갱신되게 한다.
+    this.subscriptions.push(eventBus.on("engrave:buy", ({ id }) => this.handleEngraveBuy(id)));
   }
 
   update(time: number, deltaMs: number): void {
@@ -215,6 +225,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.portal) this.updatePortalPrompt();
     if (this.merchant) this.updateMerchantPrompt();
     if (this.wanderer) this.updateWandererPrompt();
+    if (this.altar) this.updateAltarPrompt();
     this.drawMinimap();
 
     // 배경/구름 흐름. 트윈으로 하면 반복마다 원위치로 튀어서(Phaser 상대값 트윈의 특성)
@@ -304,6 +315,7 @@ export class CombatScene extends Phaser.Scene {
         addDecor(this, decor.key, decor.x, this.arena.bounds.floorY, decor.scale);
       }
       this.spawnMerchant();
+      this.spawnAltar();
     } else {
       // 전투방에도 폐허 장식을 몇 개 흩뿌린다. 지형과 함께 매 방 랜덤이라 방마다 표정이 다르다.
       // 낭떠러지 위에 뜨지 않게 바닥 조각 위로만 보정한다.
@@ -315,10 +327,6 @@ export class CombatScene extends Phaser.Scene {
         addDecor(this, decor.key, x, this.arena.bounds.floorY, decor.scale, true);
       }
 
-      // 방랑자 — 확률로 나타나는 그림자 NPC. 말을 걸지 말지는 플레이어의 선택이다.
-      if (Phaser.Math.FloatBetween(0, 1) < NPC_EVENT.spawnChance) {
-        this.spawnWanderer(roomWidth);
-      }
     }
 
     // 전송 게이트. 방 2·3은 적을 다 처치해야(`handleRoomClear`가 콜백을 채워야) 반응한다.
@@ -350,6 +358,12 @@ export class CombatScene extends Phaser.Scene {
     this.portalPrompt = this.buildInteractPrompt();
 
     this.interactKey = this.input.keyboard?.addKey(KEY_BINDINGS.INTERACT);
+
+    // 방랑자 — 게이트 위치가 정해진 뒤에 세운다. 게이트 옆에 서면 W 프롬프트가
+    // 겹쳐 "들어가기"와 "말 걸기"가 한 자리에서 다투기 때문이다(spawnWanderer가 거리를 벌린다).
+    if (!isTutorialRoom && Phaser.Math.FloatBetween(0, 1) < NPC_EVENT.spawnChance) {
+      this.spawnWanderer(roomWidth);
+    }
 
     // 우상단 미니맵. 카메라에 고정하고(setScrollFactor 0) 매 프레임 다시 그린다.
     this.minimap = this.add.graphics();
@@ -720,9 +734,19 @@ export class CombatScene extends Phaser.Scene {
    * 시작 지점과 게이트 근처는 피해 방 가운데쯤에 세운다.
    */
   private spawnWanderer(roomWidth: number): void {
-    const x = this.groundedSpawnX(
+    let x = this.groundedSpawnX(
       Phaser.Math.Between(Math.round(roomWidth * 0.3), Math.round(roomWidth * 0.7)),
     );
+    // 게이트와 최소 거리를 벌린다 — 겹치면 W 한 번에 "들어가기"와 "말 걸기"가 다툰다.
+    for (
+      let attempt = 0;
+      attempt < 5 && this.portal && Math.abs(x - this.portal.x) < 180;
+      attempt += 1
+    ) {
+      x = this.groundedSpawnX(
+        Phaser.Math.Between(Math.round(roomWidth * 0.3), Math.round(roomWidth * 0.7)),
+      );
+    }
     const floorY = this.arena.bounds.floorY;
 
     const wanderer = this.add.sprite(x, floorY, PLAYER_SPRITE.key);
@@ -955,6 +979,88 @@ export class CombatScene extends Phaser.Scene {
     const pool = UPGRADE_IDS.filter((id) => !runState.selectedUpgrades.includes(id));
     Phaser.Utils.Array.Shuffle(pool);
     this.shopChoices = pool.slice(0, SHOP.choiceCount);
+  }
+
+  /**
+   * 기록 제단. 떠 있는 금빛 육각 각인석 — 조각으로 영구 해금(각인)을 새기는 곳이다.
+   * 마을 초입(시작 지점과 상인 사이)에 세워, 부활 직후 자연스럽게 마주친다.
+   */
+  private spawnAltar(): void {
+    const x = 760;
+    const floorY = this.arena.bounds.floorY;
+
+    const stone = this.add.graphics();
+    stone.setBlendMode(Phaser.BlendModes.ADD);
+    // 육각 각인석 — 겹친 두 테두리 + 중심 결정.
+    const hex = (radius: number): { x: number; y: number }[] =>
+      [0, 1, 2, 3, 4, 5].map((i) => {
+        const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+      });
+    stone.lineStyle(2.5, 0xd9b24a, 0.9);
+    stone.strokePoints([...hex(30), hex(30)[0]], false);
+    stone.lineStyle(1.2, 0xf5e2a8, 0.5);
+    stone.strokePoints([...hex(23), hex(23)[0]], false);
+    stone.fillStyle(0xf5e2a8, 0.95);
+    stone.fillPoints(
+      [
+        { x: 0, y: -9 },
+        { x: 7, y: 0 },
+        { x: 0, y: 9 },
+        { x: -7, y: 0 },
+      ],
+      true,
+    );
+
+    const container = this.add.container(x, floorY - 78, [stone]);
+    container.setDepth(9);
+    this.tweens.add({
+      targets: container,
+      y: floorY - 88,
+      angle: 4,
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+    });
+
+    // 받침돌 — 떠 있는 돌만 있으면 어디 세워진 건지 모른다.
+    const base = this.add.graphics({ x, y: floorY });
+    base.fillStyle(0x241a10, 0.9);
+    base.fillRect(-26, -14, 52, 14);
+    base.fillStyle(0x3a2c1a, 0.9);
+    base.fillRect(-18, -22, 36, 8);
+    base.setDepth(3);
+
+    this.altar = container;
+    this.altarPrompt = this.buildInteractPrompt("각인 새기기");
+  }
+
+  private updateAltarPrompt(): void {
+    const sprite = this.player.sprite;
+    if (!sprite || !this.altar || !this.altarPrompt) return;
+
+    const near = Math.abs(sprite.x - this.altar.x) < 80;
+    this.altarPrompt.setVisible(near);
+    if (near) this.altarPrompt.setPosition(sprite.x, sprite.y - 70);
+
+    if (near && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.altarPrompt.setVisible(false);
+      this.openEngrave();
+    }
+  }
+
+  /** 제단 열기. 상점과 같은 문법 — 이벤트를 쏘고 스스로 멈춘다. */
+  private openEngrave(): void {
+    eventBus.emit("engrave:open", { nodes: engravingSnapshot(), shards: runState.shards });
+    this.scene.pause();
+  }
+
+  /** 각인 확정. 성공하면 갱신 스냅샷을 다시 쏜다 — 패널은 열려 있는 채로 갱신된다. */
+  private handleEngraveBuy(id: EngravingId): void {
+    if (!unlockEngraving(id, (cost) => runState.spendShards(cost))) return;
+    this.player.emitHud();
+    eventBus.emit("engrave:open", { nodes: engravingSnapshot(), shards: runState.shards });
   }
 
   /** 상인 근처 안내와 상호작용. 게이트 프롬프트와 같은 문법이다. */

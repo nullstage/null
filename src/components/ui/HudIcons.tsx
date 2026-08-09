@@ -79,6 +79,31 @@ export const SpikeIcon = () => (
   </svg>
 );
 
+/** 체력 계열 아티팩트. */
+export const HeartIcon = () => (
+  <svg {...base}>
+    <path
+      d="M12 20 C6 15 3.5 11.5 3.5 8.5 A4.2 4.2 0 0 1 12 6.5 A4.2 4.2 0 0 1 20.5 8.5 C20.5 11.5 18 15 12 20 Z"
+      fill="currentColor"
+      stroke="none"
+      opacity={0.9}
+    />
+  </svg>
+);
+
+/** 기동 계열 아티팩트 — 잔상이 남는 대시. */
+export const BootIcon = () => (
+  <svg {...base}>
+    <path d="M4 12 L14 12 M2.5 16 L11 16" opacity={0.45} strokeWidth={1.4} />
+    <path
+      d="M9 4 H14 V10 L20 13 V19 H8 V13 L9 10 Z"
+      fill="currentColor"
+      stroke="none"
+      opacity={0.85}
+    />
+  </svg>
+);
+
 /** 검무(F) — 회전하는 칼바람. */
 export const CycloneIcon = () => (
   <svg {...base}>

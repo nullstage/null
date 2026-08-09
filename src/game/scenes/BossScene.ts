@@ -224,10 +224,32 @@ export class BossScene extends Phaser.Scene {
       ease: "power2.out",
     });
 
+    // 이름 밑의 부제 — 세계관(그림자 침식)과 이 보스의 역할을 한 줄로 잇는다.
+    const subtitle = this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height * 0.315, "삼켜진 이름들을 거두는 자", {
+        fontFamily: "'Pretendard', sans-serif",
+        fontSize: "17px",
+        color: "rgba(243, 223, 227, 0.75)",
+        stroke: "#3d0a14",
+        strokeThickness: 4,
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(951)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: subtitle,
+      alpha: 1,
+      delay: 780,
+      duration: 380,
+      ease: "power2.out",
+    });
+
     this.time.delayedCall(1800, () => {
       cam.pan(VIEWPORT.width / 2, VIEWPORT.height / 2, 600, "Sine.easeInOut");
       cam.zoomTo(1, 600, "Sine.easeInOut");
-      this.tweens.add({ targets: name, alpha: 0, duration: 300 });
+      this.tweens.add({ targets: [name, subtitle], alpha: 0, duration: 300 });
       this.tweens.add({ targets: top, y: 0, duration: 400, ease: "power2.in" });
       this.tweens.add({
         targets: bottom,
@@ -238,6 +260,7 @@ export class BossScene extends Phaser.Scene {
           top.destroy();
           bottom.destroy();
           name.destroy();
+          subtitle.destroy();
         },
       });
     });

@@ -204,6 +204,8 @@ export class Boss {
   private airborne = false;
   /** 체력 구간 페이즈(1~3). 내려갈수록 빨라지고 기믹이 풀린다. */
   private phase: 1 | 2 | 3 = 1;
+  /** 첫 수를 이미 뒀는가. 오프닝은 무작위가 아니라 정해진 베기로 시작한다. */
+  private hasOpened = false;
   /** 마지막 기믹 이후 일반 패턴 횟수. GIMMICK_EVERY에 닿으면 기믹이 끼어든다. */
   private patternsSinceGimmick = 0;
   /** 유휴 부양. 정지 프레임뿐이라도 몸이 숨쉬듯 떠 있어야 굳어 보이지 않는다. */
@@ -352,6 +354,16 @@ export class Boss {
    * 순수 로직이므로 여기를 고치지 말고, 실행부만 손댄다.
    */
   private selectPattern(): BossPattern {
+    // 첫 수는 정해진 오프닝(베기)이다 — 인트로 직후 무작위 전력 패턴이 튀어나오면
+    // 등장 서사가 끊긴다. 가장 읽기 쉬운 근접 베기로 시작해 리듬을 서서히 올린다.
+    if (!this.hasOpened) {
+      this.hasOpened = true;
+      this.sameStreak = 1;
+      this.lastPattern = "slash";
+      this.deps.onPatternSelected("slash");
+      return "slash";
+    }
+
     const excluded: BossPattern[] =
       this.lastPattern && this.sameStreak >= BOSS.maxSamePatternStreak ? [this.lastPattern] : [];
 
