@@ -218,7 +218,7 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
           <small>
             각인에 마우스를 올리면 설명이 표시됩니다. 해금 가능한 각인은 눌러서 새깁니다.
             <br />
-            <em>— 침식이 삼키지 못하는, 유일한 기록이다.</em>
+            <em>침식이 삼키지 못하는, 유일한 기록이다.</em>
           </small>
         )}
       </Info>
