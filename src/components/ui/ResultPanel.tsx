@@ -2,6 +2,7 @@
 
 import styled from "@emotion/styled";
 
+import { FIXED_ROOM_SEQUENCE } from "@/game/data/rooms";
 import type { BossPattern, RunResult } from "@/game/types/game";
 import { theme } from "@/styles/theme";
 
@@ -51,6 +52,20 @@ export interface ResultPanelProps {
 }
 
 export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
+  /**
+   * 로비(방 1)는 전투가 없어 남긴 기록도 없다 — 목록에 두면 늘 "-"인 줄이 하나 생기고,
+   * 플레이어가 세는 방식(로비 → 1번째 → 2번째)과 번호도 어긋난다. 빼고 다시 매긴다.
+   */
+  const trials = result.rooms.filter((room) => room.roomId !== FIXED_ROOM_SEQUENCE[0]);
+
+  /**
+   * 마지막 시험의 성향은 분석이 아니라 역기만 판정에서 확정된다 — 그 방은
+   * `attachAnalysis`를 거치지 않아 `analysis`가 비어 있다. 거기서 끌어와야
+   * "속였다"고 적어 놓고 정작 무엇으로 속였는지는 "-"인 상태가 되지 않는다.
+   */
+  const styleOf = (room: (typeof trials)[number], index: number) =>
+    room.analysis?.style ?? (index === trials.length - 1 ? result.deception?.actualStyle : undefined);
+
   const totalSeconds = Math.round(result.totalTimeMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
@@ -83,13 +98,17 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
       </PanelRow>
 
       <Section>
-        <SectionTitle>방마다 남긴 기록</SectionTitle>
-        {result.rooms.map((room) => (
-          <PanelRow key={room.roomIndex}>
-            <span>{room.roomIndex}번째 방</span>
-            <span>{room.analysis ? STYLE_LABEL[room.analysis.style] : "-"}</span>
-          </PanelRow>
-        ))}
+        <SectionTitle>시험마다 남긴 기록</SectionTitle>
+        {trials.length === 0 && <PanelRow><span>남긴 기록이 없다</span><span>-</span></PanelRow>}
+        {trials.map((room, index) => {
+          const style = styleOf(room, index);
+          return (
+            <PanelRow key={room.roomIndex}>
+              <span>{index + 1}번째 시험</span>
+              <span>{style ? STYLE_LABEL[style] : "-"}</span>
+            </PanelRow>
+          );
+        })}
       </Section>
 
       <Section>
