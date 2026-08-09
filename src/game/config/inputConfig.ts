@@ -17,6 +17,9 @@ export type GameAction =
   | "ATTACK"
   | "SWITCH_MODE"
   | "PARRY"
+  | "SKILL"
+  | "SKILL_2"
+  | "SKILL_3"
   | "INTERACT"
   | "CONFIRM"
   | "TOGGLE_DEBUG"
@@ -31,6 +34,10 @@ export const DEFAULT_KEY_BINDINGS: Readonly<Record<GameAction, string>> = {
   ATTACK: "J",
   SWITCH_MODE: "K",
   PARRY: "S",
+  /** 아티팩트로 해금되는 액티브 스킬 슬롯들(검기·검극·검무). */
+  SKILL: "Q",
+  SKILL_2: "R",
+  SKILL_3: "F",
   /** 전송 게이트 같은 월드 상호작용 지점 전용. 이동·전투 키와 겹치지 않는 W를 쓴다. */
   INTERACT: "W",
   CONFIRM: "ENTER",
@@ -57,6 +64,9 @@ export const REBINDABLE_ACTIONS: readonly GameAction[] = [
   "ATTACK",
   "SWITCH_MODE",
   "PARRY",
+  "SKILL",
+  "SKILL_2",
+  "SKILL_3",
   "CONFIRM",
 ];
 

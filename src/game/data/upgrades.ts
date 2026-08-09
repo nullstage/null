@@ -86,7 +86,19 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     id: "MELEE_SWORD_WAVE",
     category: "MELEE",
     name: "검기",
-    description: "마무리 타격(3타)에 참격을 함께 날려 멀리 있는 적도 벤다.",
+    description: "스킬 해금 — Q를 눌러 멀리 베는 참격을 날린다. 재사용 4초.",
+  },
+  MELEE_SPIKE_ERUPTION: {
+    id: "MELEE_SPIKE_ERUPTION",
+    category: "MELEE",
+    name: "검극(劍棘)",
+    description: "스킬 해금 — R를 눌러 전방 바닥에서 검의 가시를 연쇄로 솟구치게 한다. 재사용 6초.",
+  },
+  MELEE_BLADE_CYCLONE: {
+    id: "MELEE_BLADE_CYCLONE",
+    category: "MELEE",
+    name: "검무(劍舞)",
+    description: "스킬 해금 — F를 눌러 주위 전방위를 베는 검의 폭풍을 일으킨다. 재사용 8초.",
   },
   RANGED_BULLET_SIZE_UP: {
     id: "RANGED_BULLET_SIZE_UP",

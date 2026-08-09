@@ -5,7 +5,6 @@ import gsap from "gsap";
 import localFont from "next/font/local";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { KEY_BINDINGS } from "@/game/config/inputConfig";
 import { theme } from "@/styles/theme";
 
 import { DIALOGUE_ASSETS } from "./dialogueAssets";
@@ -30,22 +29,24 @@ const chosunKg = localFont({
  * 검은 화면을 또 까는 프롤로그와 달리 캐릭터가 서 있는 방을 그대로 보여 준다.
  * "깨어나 보니 여기더라"는 감각은 실제로 그 자리에 있어야 산다.
  *
- * 조작 안내는 하드코딩하지 않는다. `KEY_BINDINGS`를 그대로 읽어서,
- * 설정에서 키를 바꾼 사용자에게도 맞는 안내가 나온다.
+ * 조작 키를 나열하는 튜토리얼이 아니라 세계관을 여는 서사다(사용자 결정) —
+ * 키 안내는 설정 화면의 조작 목록이 맡는다. 대사에는 키 이름을 넣지 않는다.
  */
 
 /** 화자는 방 클리어 후 뜨는 그 목소리와 같다. (DEC-011 기록자 톤) */
 const SPEAKER = "기록자";
 
 const buildLines = (): string[] => [
-  "눈을 뜨는가.",
-  "여기는 NULL. 돌아오지 못한 자들의 시험장이다.",
-  `${KEY_BINDINGS.MOVE_LEFT} / ${KEY_BINDINGS.MOVE_RIGHT}로 움직여라.`,
-  `${KEY_BINDINGS.JUMP}로 뛰어넘어라.`,
-  `${KEY_BINDINGS.DASH}로 몸을 피하라. 짧은 순간, 닿지 않는다.`,
-  `${KEY_BINDINGS.ATTACK}로 벤다.`,
-  `${KEY_BINDINGS.SWITCH_MODE}로 검과 총을 바꿔 쥔다. 나는 그 차이를 지켜본다.`,
-  "이제, 움직여 보아라.",
+  // 소울류 문법을 따른다 — 짧은 단문, 명사형 종결, 관찰자의 거리감, 마지막 줄의 낙차.
+  "……또 하나, 눈을 떴군.",
+  "여기는 NULL. 그림자에 침식되어, 이름부터 잃은 세계의 끝.",
+  "붉은 달이 지지 않는 한, 이 폐허에서 나가는 길은 하나뿐이다.",
+  "달 아래를 떠도는 것들은, 한때 모두 사람이었다.",
+  "그림자는 먼저 이름을 삼키고, 그다음 몸을 삼킨다. ……너도, 절반쯤은 잊었을 것이다.",
+  "놈들이 흘리는 조각은 삼켜진 자들의 마지막 기억. 거두어라. 그것을 탐내는 자가, 이 마을에 있다.",
+  "나는 기록한다. 네가 어떻게 싸우고, 무엇을 고르고, 어디서 쓰러지는지.",
+  "기록이 쌓이면, 침식도 너를 배운다. ……그때부터가 진짜 시험이다.",
+  "게이트는 열려 있다. 이름을 되찾고 싶다면, 걸어 들어와라.",
 ];
 
 /**

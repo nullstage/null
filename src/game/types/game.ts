@@ -41,8 +41,12 @@ export type UpgradeId =
   | "MELEE_BLADE_SIZE_UP"
   /** 화염 속성. 근접 적중 시 짧은 화상 대미지가 따로 들어간다. */
   | "MELEE_FIRE_EDGE"
-  /** 마무리 타격(3타)에 검기를 함께 날린다 — 특수기술. */
+  /** 스킬 해금(Q) — 멀리 베는 참격. */
   | "MELEE_SWORD_WAVE"
+  /** 스킬 해금(R) — 전방 바닥에서 연쇄로 솟구치는 검의 가시. */
+  | "MELEE_SPIKE_ERUPTION"
+  /** 스킬 해금(F) — 주위 전방위를 베는 검의 폭풍. */
+  | "MELEE_BLADE_CYCLONE"
   | "RANGED_COOLDOWN_DOWN"
   | "RANGED_PIERCE"
   /** 총 자체를 개조한다. 탄속과 피해가 오르고 탄 궤적이 길고 밝아진다. */
@@ -178,4 +182,6 @@ export interface HudState {
   reloading: boolean;
   /** 그림자 조각 — 적 처치로 모으고 마을 상인에게 쓰는 런 화폐. */
   shards: number;
+  /** 해금된 액티브 스킬 목록. key는 현재 바인딩 키, ready는 재사용 대기 여부. */
+  skills: readonly { id: UpgradeId; key: string; ready: boolean }[];
 }

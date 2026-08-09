@@ -2,11 +2,12 @@
 
 import { keyframes } from "@emotion/react";
 import styled from "@emotion/styled";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 
 import { assetPath, debugFlag } from "@/game/config/gameConfig";
 import { loadKeyBindings } from "@/game/config/inputConfig";
 import { DEFAULT_BOSS_WEIGHTS, STYLE_TITLE } from "@/game/data/directorRules";
+import { UPGRADES } from "@/game/data/upgrades";
 import { emitGameEvent, useGameEvent } from "@/hooks/useGameEvent";
 import type {
   BossPatternWeights,
@@ -18,14 +19,26 @@ import type {
   RoomId,
   RunResult,
   UpgradeDefinition,
+  UpgradeId,
 } from "@/game/types/game";
+import type { EngravingView } from "@/game/data/engravings";
 import { theme } from "@/styles/theme";
 
 import AnalysisPanel from "./ui/AnalysisPanel";
 import DebugPanel from "./ui/DebugPanel";
 import DeceptionPanel from "./ui/DeceptionPanel";
 import DialogueBox from "./ui/DialogueBox";
+import EngravePanel from "./ui/EngravePanel";
 import FirstVisitPrompt, { hasVisitedBefore } from "./ui/FirstVisitPrompt";
+import {
+  CycloneIcon,
+  GunIcon,
+  ReloadIcon,
+  ShardIcon,
+  SpikeIcon,
+  SwordIcon,
+  WaveIcon,
+} from "./ui/HudIcons";
 import LoadingScreen from "./ui/LoadingScreen";
 import PauseMenu from "./ui/PauseMenu";
 import PrologueText from "./ui/PrologueText";
@@ -51,7 +64,22 @@ import UpgradePanel from "./ui/UpgradePanel";
  * 패널이 하나만 뜨도록 여기서 배타적으로 관리한다. 두 개가 겹치면 입력이 이중으로 들어간다.
  */
 
-type ActivePanel = "none" | "analysis" | "upgrade" | "deception" | "result" | "status" | "shop";
+type ActivePanel =
+  | "none"
+  | "analysis"
+  | "upgrade"
+  | "deception"
+  | "result"
+  | "status"
+  | "shop"
+  | "engrave";
+
+/** 스킬 아이콘 매핑. 새 스킬은 여기에 한 줄 추가한다. */
+const SKILL_ICONS: Partial<Record<UpgradeId, ReactElement>> = {
+  MELEE_SWORD_WAVE: <WaveIcon />,
+  MELEE_SPIKE_ERUPTION: <SpikeIcon />,
+  MELEE_BLADE_CYCLONE: <CycloneIcon />,
+};
 
 
 const Layer = styled.div`
@@ -100,6 +128,43 @@ const HealthBar = styled.div`
     image-rendering: pixelated;
     pointer-events: none;
   }
+`;
+
+/**
+ * HP 프레임 왼쪽 문장(나침반 장식) 위에 얹는 모드 아이콘.
+ * 따로 떠 있던 슬롯이 "붕 뜬다"는 피드백 — 프레임 안으로 들여보낸다.
+ */
+const ModeEmblem = styled.span<{ accent: string }>`
+  position: absolute;
+  left: 3.6%;
+  top: 16%;
+  width: 15.5%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ accent }) => accent};
+  filter: drop-shadow(0 0 6px currentColor);
+
+  svg {
+    width: 58%;
+    height: 58%;
+  }
+`;
+
+/** 게이지 오른쪽 끝에 겹쳐 앉는 체력 수치 — 바 밖에 떠 있지 않게 한다. */
+const HpInBar = styled.span`
+  position: absolute;
+  right: 7.5%;
+  top: 29.65%;
+  height: 21.77%;
+  display: flex;
+  align-items: center;
+  font-family: ${theme.font.mono};
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 245, 240, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 `;
 
 /** 프레임의 게이지 창 영역. 잘라낸 프레임 기준 픽셀 좌표(251~1256, 94~162)를 비율로 환산했다. */
@@ -221,23 +286,37 @@ const StatusRow = styled.div`
   color: rgba(255, 255, 255, 0.5);
 `;
 
-/** 지금 무엇을 들고 있는지. 모드 전환이 핵심 조작이라 가장 눈에 띄어야 한다. */
-const ModeTag = styled.span<{ mode: "MELEE" | "RANGED" }>`
-  padding: 3px 10px;
-  border-left: 2px solid ${({ mode }) => (mode === "MELEE" ? "#e05055" : "#9a5f86")};
-  background: ${({ mode }) =>
-    mode === "MELEE"
-      ? "linear-gradient(90deg, rgba(224,80,85,0.3) 0%, rgba(224,80,85,0) 100%)"
-      : "linear-gradient(90deg, rgba(154,95,134,0.32) 0%, rgba(154,95,134,0) 100%)"};
-  font-family: ${theme.font.ui};
-  font-weight: 300;
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  color: #fff;
+/**
+ * 아이콘 슬롯 공통 몸체. 텍스트 라벨 대신 게임식 사각 슬롯에 SVG 아이콘을 담는다.
+ * (사용자 요청 — HUD의 텍스트를 전부 스킬 아이콘류로)
+ */
+const IconSlot = styled.span<{ accent: string; dim?: boolean }>`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid ${({ accent, dim }) => (dim ? "rgba(255,255,255,0.14)" : accent)};
+  background: rgba(8, 5, 9, 0.75);
+  color: ${({ accent, dim }) => (dim ? "rgba(255,255,255,0.28)" : accent)};
+  box-shadow: ${({ accent, dim }) => (dim ? "none" : `0 0 8px ${accent}44`)};
+  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
 `;
 
-const HpText = styled.span`
-  color: rgba(255, 255, 255, 0.72);
+/** 슬롯 우하단의 키 뱃지(Q/R/F/K). 아이콘만으로는 어느 키인지 몰라 작게 붙인다. */
+const KeyBadge = styled.em`
+  position: absolute;
+  right: -4px;
+  bottom: -5px;
+  padding: 0 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #0d090c;
+  font-style: normal;
+  font-family: ${theme.font.mono};
+  font-size: 9px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.75);
 `;
 
 /** 남은 탄. 총 모드에서만 보인다 — 탄피 모양 칸이 쏠 때마다 꺼진다. */
@@ -259,25 +338,33 @@ const AmmoPip = styled.span<{ spent: boolean }>`
   transition: background 0.1s, box-shadow 0.1s;
 `;
 
-/** 그림자 조각 잔액. 적을 잡을 때마다 오르는 게 보여야 모으는 재미가 산다. */
-const ShardTag = styled.span`
+/** 그림자 조각 — 아이콘 + 수치. 수치는 개수라 남긴다(라벨이 아니다). */
+const ShardChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: #c9a8ff;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
 `;
 
-const reloadBlink = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+const reloadSpin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 `;
 
-const ReloadTag = styled.span`
-  font-family: ${theme.font.ui};
-  font-weight: 300;
-  font-size: 12px;
-  letter-spacing: 0.24em;
+/** 재장전 — 텍스트 대신 도는 화살표 아이콘. */
+const ReloadSpin = styled.span`
+  display: inline-flex;
   color: #ffd9a8;
-  animation: ${reloadBlink} 0.45s ease-in-out infinite;
+
+  svg {
+    animation: ${reloadSpin} 0.9s linear infinite;
+  }
 `;
 
 export default function HUDOverlay() {
@@ -299,6 +386,8 @@ export default function HUDOverlay() {
     shards: number;
     price: number;
   } | null>(null);
+  /** 기록 제단(각인)의 현재 스냅샷. `engrave:open`으로 채워지고 구매 후 갱신된다. */
+  const [engrave, setEngrave] = useState<{ nodes: EngravingView[]; shards: number } | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
   /** Esc로 연 일시정지 메뉴. 열려 있는 동안 전투 씬은 멈춰 있다. */
   const [paused, setPaused] = useState(false);
@@ -428,6 +517,11 @@ export default function HUDOverlay() {
   useGameEvent("shop:open", (offer) => {
     setShop(offer);
     setActivePanel("shop");
+  });
+
+  useGameEvent("engrave:open", (payload) => {
+    setEngrave(payload);
+    setActivePanel("engrave");
   });
 
   // F1 디버그 토글. 브라우저 기본 도움말이 뜨지 않도록 막는다.
@@ -601,7 +695,8 @@ export default function HUDOverlay() {
 
   // 전투 중에만 HUD를 띄운다. 시작 화면과 결과 화면에 이전 런의 값이 남으면 안 된다.
   const inCombat = phase === "COMBAT" || phase === "BOSS";
-  const showCombatHud = hud !== null && inCombat && activePanel === "none";
+  // 대사가 열려 있는 동안엔 HUD를 통째로 숨긴다 — 첫 만남의 서사 위에 게이지가 떠 있으면 깬다.
+  const showCombatHud = hud !== null && inCombat && activePanel === "none" && !dialogueOpen;
 
   // 로딩 화면에서 시작해 시작 화면까지 흐르고, 전투로 넘어가는 순간 꺼진다.
   // 첫 방문 안내가 떠 있는 동안은 어차피 브라우저가 소리를 막으므로 켜지 않는다.
@@ -677,17 +772,39 @@ export default function HUDOverlay() {
             {/* 정적 내보내기라 next/image 최적화가 안 붙는다. 픽셀아트 프레임 한 장이라 img로 충분하다. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={assetPath("ui/hp-frame.png")} alt="" />
+            {/* 모드 아이콘과 체력 수치는 프레임 안에 앉힌다 — 밖에 떠 있으면 붕 뜬다(사용자 피드백). */}
+            <ModeEmblem
+              accent={hud.mode === "MELEE" ? "#ffb9bc" : "#e8c8dd"}
+              title={hud.mode === "MELEE" ? "검 — K로 전환" : "총 — K로 전환"}
+            >
+              {hud.mode === "MELEE" ? <SwordIcon /> : <GunIcon />}
+            </ModeEmblem>
+            <HpInBar>
+              {hud.hp} / {hud.maxHp}
+            </HpInBar>
           </HealthBar>
 
           <StatusRow>
-            <ModeTag mode={hud.mode}>{hud.mode === "MELEE" ? "검" : "총"}</ModeTag>
-            <HpText>
-              {hud.hp} / {hud.maxHp}
-            </HpText>
-            <ShardTag>◆ {hud.shards}</ShardTag>
+            <ShardChip title="그림자 조각">
+              <ShardIcon />
+              {hud.shards}
+            </ShardChip>
+            {hud.skills.map((skill) => (
+              <IconSlot
+                key={skill.id}
+                accent="#8fd7ff"
+                dim={!skill.ready}
+                title={UPGRADES[skill.id].name}
+              >
+                {SKILL_ICONS[skill.id] ?? <SwordIcon />}
+                <KeyBadge>{skill.key}</KeyBadge>
+              </IconSlot>
+            ))}
             {hud.mode === "RANGED" &&
               (hud.reloading ? (
-                <ReloadTag>재장전</ReloadTag>
+                <ReloadSpin title="재장전 중">
+                  <ReloadIcon />
+                </ReloadSpin>
               ) : (
                 <AmmoRow>
                   {Array.from({ length: hud.magazineSize }, (_, i) => (
@@ -771,6 +888,19 @@ export default function HUDOverlay() {
       )}
 
       {activePanel === "status" && hud && <StatusPanel hud={hud} />}
+
+      {activePanel === "engrave" && engrave && (
+        <EngravePanel
+          nodes={engrave.nodes}
+          shards={engrave.shards}
+          onBuy={(id) => emitGameEvent("engrave:buy", { id })}
+          onClose={() => {
+            setActivePanel("none");
+            setEngrave(null);
+            emitGameEvent("game:resume", {});
+          }}
+        />
+      )}
 
       {activePanel === "shop" && shop && (
         <ShopPanel

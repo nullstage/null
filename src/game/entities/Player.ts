@@ -20,6 +20,8 @@ import Phaser from "phaser";
 
 import { eventBus } from "../EventBus";
 import { PLAYER } from "../config/gameBalance";
+import { ENGRAVING_EFFECT } from "../data/engravings";
+import { hasEngraving } from "../systems/Engravings";
 import { KEY_BINDINGS, type GameAction } from "../config/inputConfig";
 import {
   ashRise,
@@ -38,6 +40,7 @@ import {
   rangedSpark,
   slashArc,
   slashFlash,
+  spikeBurst,
   swordWaveTrail,
 } from "../systems/CombatVfx";
 import { playSfx, startFootsteps, stopFootsteps } from "../systems/audio";
@@ -219,8 +222,24 @@ export const TUNING = {
     /** 확장 탄창 — 탄창 최대치에 더한다. */
     magazineBonus: 3,
 
-    /** 검기 — 마무리 타격에 얹는 참격 투사체. */
+    /** 검기 — Q 스킬로 발동하는 참격 투사체. */
     swordWaveDamageMultiplier: 0.6,
+    /** 검기 스킬 재사용 대기시간과 스킬 보정(수동 발동이라 3타 자동보다 세다). */
+    swordWaveSkillCooldownMs: 4000,
+    swordWaveSkillDamageBonus: 1.5,
+
+    /** 검극(劍棘) — 전방 바닥에서 연쇄로 솟구치는 검의 가시. */
+    eruptionCooldownMs: 6000,
+    eruptionDamageMultiplier: 1.2,
+    eruptionCount: 4,
+    eruptionStepPx: 92,
+    eruptionIntervalMs: 90,
+
+    /** 검무(劍舞) — 주위 전방위를 베는 검의 폭풍. */
+    cycloneCooldownMs: 8000,
+    cycloneDamageMultiplier: 1.6,
+    cycloneActiveMs: 220,
+    cycloneRadiusPx: 115,
     swordWaveSpeed: 640,
     swordWaveWidth: 40,
     swordWaveHeight: 46,
@@ -301,9 +320,19 @@ const MOVE_ACTIONS = [
   "ATTACK",
   "SWITCH_MODE",
   "PARRY",
+  "SKILL",
+  "SKILL_2",
+  "SKILL_3",
 ] as const satisfies readonly GameAction[];
 
 type PlayerAction = (typeof MOVE_ACTIONS)[number];
+
+/** 스킬 아티팩트 ↔ 키 슬롯. 새 스킬은 여기에 한 줄 추가하면 HUD 표시까지 따라온다. */
+const SKILL_SLOTS: readonly { id: UpgradeId; action: GameAction }[] = [
+  { id: "MELEE_SWORD_WAVE", action: "SKILL" },
+  { id: "MELEE_SPIKE_ERUPTION", action: "SKILL_2" },
+  { id: "MELEE_BLADE_CYCLONE", action: "SKILL_3" },
+];
 
 export interface PlayerDeps {
   scene: Phaser.Scene;
@@ -378,6 +407,9 @@ export class Player {
 
   /** 공격으로 파고드는 중이면 이 시각까지 이동 입력이 속도를 덮지 않는다. */
   private lungeUntilMs = 0;
+
+  /** 액티브 스킬들의 재사용 대기 시각. 해당 아티팩트를 갖고 있어야만 발동된다. */
+  private skillCooldownUntil: Partial<Record<UpgradeId, number>> = {};
 
   /** 공격 애니메이션이 끝나는 시각. 그 전에는 다른 상태가 끼어들지 못한다. */
   private attackAnimUntilMs = 0;
@@ -551,6 +583,9 @@ export class Player {
     if (this.justPressed("ATTACK")) this.attack();
     if (this.justPressed("SWITCH_MODE")) this.switchMode();
     if (this.justPressed("PARRY")) this.parry();
+    if (this.justPressed("SKILL")) this.castSwordWave();
+    if (this.justPressed("SKILL_2")) this.castSpikeEruption();
+    if (this.justPressed("SKILL_3")) this.castBladeCyclone();
 
     if (this.parrying) {
       if (time >= this.parryEndsAtMs) this.endParry();
@@ -854,12 +889,148 @@ export class Player {
 
     this.punch(TUNING.feedback.punchScale, 1 / TUNING.feedback.punchScale);
 
-    // 검기 — 마무리 타격에만 얹는다. 근접 사거리 밖의 적도 벨 수 있는 특수기술이다.
-    if (isFinisher && this.hasUpgrade("MELEE_SWORD_WAVE")) {
-      this.fireSwordWave(sprite, Math.round(damage * TUNING.upgrade.swordWaveDamageMultiplier));
-    }
+    // 검기는 이제 3타 자동 발동이 아니라 Q 액티브 스킬이다(useSkill). (사용자 결정)
 
     return true;
+  }
+
+  /**
+   * 스킬 공통 발동 관문 — 보유·쿨다운을 검사하고 통과하면 쿨다운을 건다.
+   * HUD 갱신(발동 순간 흐려지고, 다 차면 다시 밝아지는)도 여기서 한 번에 처리한다.
+   */
+  private tryCastSkill(id: UpgradeId, cooldownMs: number): boolean {
+    const now = this.scene.time.now;
+    if (!this.sprite || this.isDead || this.isDashing) return false;
+    if (!this.hasUpgrade(id)) return false;
+    if (now < (this.skillCooldownUntil[id] ?? 0)) return false;
+
+    // 각인 "검로" — 모든 스킬의 재사용 대기가 일괄로 짧아진다.
+    const effectiveCooldown = Math.round(
+      cooldownMs * (hasEngraving("SWORD_PATH") ? ENGRAVING_EFFECT.skillCooldownScale : 1),
+    );
+    this.skillCooldownUntil[id] = now + effectiveCooldown;
+    this.emitHud();
+    this.scene.time.delayedCall(effectiveCooldown, () => {
+      if (!this.isDead) this.emitHud();
+    });
+    return true;
+  }
+
+  /**
+   * 검기(Q). 3타에 자동으로 얹히던 것을 "원할 때 쏘는 한 방"으로 옮겼다 —
+   * 증강이 아니라 스킬이다. (사용자 결정)
+   */
+  private castSwordWave(): void {
+    if (!this.tryCastSkill("MELEE_SWORD_WAVE", TUNING.upgrade.swordWaveSkillCooldownMs)) return;
+    const sprite = this.sprite!;
+
+    // 그림부터 마무리 타격이어야 한다 — 3타 모션으로 크게 벤다.
+    this.comboStep = 0;
+    this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 3));
+    playSfx(this.scene, AUDIO.swordHit3);
+
+    const damage = Math.round(
+      TUNING.melee.damage *
+        TUNING.melee.finisherDamageMultiplier *
+        TUNING.upgrade.swordWaveDamageMultiplier *
+        TUNING.upgrade.swordWaveSkillDamageBonus,
+    );
+    this.fireSwordWave(sprite, damage);
+
+    // 발동의 "쾅" — 가시 폭발은 이런 스킬급 순간의 언어다. 검기와 같은 한랭 팔레트.
+    spikeBurst(this.scene, sprite.x + this.facing * 24, sprite.y, {
+      scale: 0.85,
+      spikes: 8,
+      dark: 0x141c33,
+      mid: 0x4d7dff,
+      bright: 0xcfeeff,
+    });
+    this.scene.cameras.main.shake(110, 0.006);
+    this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
+  }
+
+  /**
+   * 검극(R). 전방 바닥에서 검의 가시가 연쇄로 솟구치며 행진한다 —
+   * 참고 스크린샷(스컬)의 보라 가시 폭발이 그대로 스킬이 된 것이다.
+   */
+  private castSpikeEruption(): void {
+    if (!this.tryCastSkill("MELEE_SPIKE_ERUPTION", TUNING.upgrade.eruptionCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+
+    this.comboStep = 0;
+    this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 3));
+    playSfx(this.scene, AUDIO.swordHit3);
+    this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
+    this.scene.cameras.main.shake(90, 0.005);
+
+    const dir = this.facing;
+    const floorY = this.deps.arena.bounds.floorY;
+    const damage = Math.round(TUNING.melee.damage * upgrade.eruptionDamageMultiplier);
+
+    for (let i = 0; i < upgrade.eruptionCount; i += 1) {
+      const at = sprite.x + dir * (70 + i * upgrade.eruptionStepPx);
+      this.scene.time.delayedCall(i * upgrade.eruptionIntervalMs, () => {
+        if (this.isDead) return;
+
+        const box = this.scene.physics.add.image(at, floorY - 45, TEXTURE.playerAttack);
+        box.setDisplaySize(56, 90);
+        box.setDepth(TUNING.depth.attack);
+        box.setAlpha(0);
+        this.deps.arena.playerAttacks.add(box);
+        (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+        box.setData("damage", damage);
+        box.setData("mode", "MELEE" satisfies AttackMode);
+        if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
+        this.scene.time.delayedCall(140, () => box.destroy());
+
+        // 위쪽 반원으로만 치솟는 보라 가시 — 판정은 투명하고 이 그림이 전부다.
+        spikeBurst(this.scene, at, floorY - 8, {
+          scale: 0.8,
+          spikes: 6,
+          slashLines: false,
+          angleRange: { from: -Math.PI * 0.85, to: -Math.PI * 0.15 },
+        });
+        groundDust(this.scene, at, floorY, "land");
+      });
+    }
+  }
+
+  /**
+   * 검무(F). 제자리에서 주위 전방위를 베는 검의 폭풍 — 둘러싸였을 때의 탈출기다.
+   */
+  private castBladeCyclone(): void {
+    if (!this.tryCastSkill("MELEE_BLADE_CYCLONE", TUNING.upgrade.cycloneCooldownMs)) return;
+    const sprite = this.sprite!;
+    const { upgrade } = TUNING;
+
+    this.comboStep = 0;
+    this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 2));
+    playSfx(this.scene, AUDIO.swordHit2);
+    playSfx(this.scene, AUDIO.swordHit3, { delay: 120 });
+
+    const damage = Math.round(TUNING.melee.damage * upgrade.cycloneDamageMultiplier);
+    const box = this.scene.physics.add.image(sprite.x, sprite.y, TEXTURE.playerAttack);
+    box.setDisplaySize(upgrade.cycloneRadiusPx * 2, 130);
+    box.setDepth(TUNING.depth.attack);
+    box.setAlpha(0);
+    this.deps.arena.playerAttacks.add(box);
+    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    box.setData("damage", damage);
+    box.setData("mode", "MELEE" satisfies AttackMode);
+    if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
+    this.scene.time.delayedCall(upgrade.cycloneActiveMs, () => box.destroy());
+
+    // 전방위 가시 + 양방향 슬래시를 연달아 — 한 바퀴 돌아 벤 것처럼 읽힌다.
+    spikeBurst(this.scene, sprite.x, sprite.y, { scale: 1.05, spikes: 12 });
+    slashArc(this.scene, sprite.x, sprite.y - 6, this.facing, 95, 3, false);
+    this.scene.time.delayedCall(110, () => {
+      if (this.sprite) {
+        slashArc(this.scene, this.sprite.x, this.sprite.y - 6, (this.facing * -1) as 1 | -1, 95, 2, false);
+      }
+    });
+    this.scene.cameras.main.shake(120, 0.006);
+    this.punch(TUNING.feedback.punchScale * 1.25, 1 / TUNING.feedback.punchScale);
   }
 
   /** 검기 투사체. 근접 판정과 별개로 `playerAttacks`에 들어가는 얇고 빠른 참격이다. */
@@ -1413,14 +1584,16 @@ export class Player {
   private get maxDashCharges(): number {
     return (
       PLAYER.dashCharges +
-      (this.hasUpgrade("DASH_CHARGE_UP") ? TUNING.upgrade.dashChargeBonus : 0)
+      (this.hasUpgrade("DASH_CHARGE_UP") ? TUNING.upgrade.dashChargeBonus : 0) +
+      (hasEngraving("AFTERIMAGE") ? ENGRAVING_EFFECT.dashChargeBonus : 0)
     );
   }
 
   private get maxMagazineSize(): number {
     return (
       TUNING.ranged.magazineSize +
-      (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0)
+      (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0) +
+      (hasEngraving("SPARE_SHELL") ? ENGRAVING_EFFECT.magazineBonus : 0)
     );
   }
 
@@ -1484,6 +1657,13 @@ export class Player {
         magazineSize: this.maxMagazineSize,
         reloading: this.scene.time.now < this.reloadingUntilMs,
         shards: this.deps.getShards(),
+        skills: SKILL_SLOTS.filter((slot) => this.deps.upgrades.includes(slot.id)).map(
+          (slot) => ({
+            id: slot.id,
+            key: KEY_BINDINGS[slot.action],
+            ready: this.scene.time.now >= (this.skillCooldownUntil[slot.id] ?? 0),
+          }),
+        ),
       },
     });
   }
