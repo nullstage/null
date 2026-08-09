@@ -152,7 +152,7 @@ const GRID = { left: 166, top: 304, width: 738, height: 535, cols: 7, rows: 5 };
 const CELL_W = GRID.width / GRID.cols;
 const CELL_H = GRID.height / GRID.rows;
 
-const PORTRAIT = { cx: 1180, cy: 407, size: 150 };
+const PORTRAIT = { cx: 1180, cy: 407, size: 195 };
 
 const GAUGE = { left: 1051, width: 189, height: 26, rows: [567.5, 613.75, 656.25] };
 
@@ -192,8 +192,8 @@ const GridSlot = styled.button<{ filled: boolean; selected: boolean }>`
 
   svg,
   img {
-    width: 62%;
-    height: 62%;
+    max-width: 62%;
+    max-height: 62%;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
   }
 `;
@@ -219,8 +219,8 @@ const PortraitHit = styled.div`
 
   svg,
   img {
-    width: 46%;
-    height: 46%;
+    max-width: 58%;
+    max-height: 58%;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
   }
 `;
