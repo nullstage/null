@@ -117,10 +117,20 @@ const HP_BAR = {
    * 부분은 프레임 테두리가 그대로 가려준다. "체력바가 잘 안 보인다"는 지적으로 두껍게 키움.
    */
   window: { left: 0.0375, right: 0.9596, centerY: 0.5742, height: 0.185 },
-  /** 위 문장(이름) 중심 Y 비율. 플레이트 안에서 살짝 아래로 내려 여백을 준다. */
-  nameY: 0.3,
-  /** 아래 문장(부제) 중심 Y 비율. */
-  titleY: 0.7789,
+  /**
+   * 게이지 구멍(프레임에서 실제로 뚫린 투명 영역) 실측값 — 원본에서 x 95..1438,
+   * y 183..230이다. 위 `window`는 채움 막대를 프레임 밑으로 밀어 넣으려고 일부러
+   * 구멍보다 넓게 잡은 값이라, 그 중심에 숫자를 놓으면 구멍 중심에서 밀린다
+   * (오른쪽 1.6px·아래 1.1px). 체력 숫자는 이 구멍을 기준으로 놓는다.
+   */
+  hole: { centerX: (95 + 1438) / 2 / 1545, centerY: (183 + 230) / 2 / 364 },
+  /**
+   * 위 문장(이름)·아래 문장(부제) 중심 Y 비율.
+   * 원본에서 명패 안쪽(검은 면)의 세로 범위를 픽셀로 재서 그 한가운데로 잡았다 —
+   * 위 명패 y 87..166, 아래 명패 y 241..298 (전체 364).
+   */
+  nameY: (87 + 166) / 2 / 364,
+  titleY: (241 + 298) / 2 / 364,
 } as const;
 
 /** 체력바 위 문장(이름)·아래 문장(부제). 보스 인트로 배너(BossScene)와 같은 문구를 쓴다. */
@@ -1097,16 +1107,22 @@ export class Boss {
       .setDepth(DEPTH.hud + 2);
 
     // 수치까지 찍어야 "얼마나 남았는지"가 색만으로 안 헷갈린다.
+    // 채움 막대(barLeft/barY)가 아니라 구멍 중심에 놓는다 — 위 `hole` 주석 참고.
     this.hpValueText = this.scene.add
-      .text(barLeft + barWidth / 2, barY, "", {
-        fontFamily: "'Pretendard', sans-serif",
-        fontSize: "12px",
-        fontStyle: "bold",
-        color: "#fff5f0",
-        stroke: "#2a0508",
-        strokeThickness: 3,
-        resolution: 2,
-      })
+      .text(
+        frameLeft + HP_BAR.hole.centerX * frameWidth,
+        frameTop + HP_BAR.hole.centerY * frameHeight,
+        "",
+        {
+          fontFamily: "'Pretendard', sans-serif",
+          fontSize: "12px",
+          fontStyle: "bold",
+          color: "#fff5f0",
+          stroke: "#2a0508",
+          strokeThickness: 3,
+          resolution: 2,
+        },
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud + 3);
