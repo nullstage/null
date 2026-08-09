@@ -584,6 +584,72 @@ Playwright 헤드리스로 실제 원거리 전투를 재현: 모드 전환(K) �
 
 ---
 
+## DEC-017 — 방 단위 함정 플래그(`hazardsEnabled`)를 제거한다
+
+- 날짜: 2026-08-09
+- 상태: ACCEPTED
+- 관련 질문: OQ-032
+
+### 결정
+
+`RoomPreset.hazardsEnabled`와 `RoomControllerDeps.enableHazards`, `CombatScene.enableHazards`를
+전부 걷어낸다. 장판은 기동 카운터형(`MobilityCounterEnemy`)이 스스로 까는 것만 남긴다.
+
+### 이유
+
+플래그는 있었지만 `enableHazards`가 빈 스텁이라 어떤 방에서도 아무 일이 일어나지 않았다.
+`counter_mobile`과 `room_2_soft_mobile`이 `hazardsEnabled: true`를 선언해 두고도 실제로는
+함정이 없었으니, 계약만 있고 구현이 없는 상태가 "구현된 척"으로 읽혔다.
+게다가 `RoomController.start()`는 최초 프리셋의 플래그만 읽어서, 웨이브 오버라이드
+(DEC-016)로 바뀐 2·3웨이브의 함정은 구현하더라도 켜지지 않는 구조였다.
+
+3일 차 이후 신규 핵심 기능을 추가하지 않는다는 규칙(CLAUDE.md 5)에 따라, 지금 방 단위
+함정을 새로 만들지 않고 죽은 계약을 지우는 쪽을 택했다.
+
+### 대안
+
+- **지연 폭발 장판을 실제로 구현한다** — MVP_PLAN §2를 충족하지만 신규 기능이라 범위가
+  커지고 밸런스 재검증이 필요하다. 사용자 판단으로 제외했다.
+- **플래그를 남기고 배선만 고친다** — 구현이 없는 한 상태가 그대로다.
+
+### 영향
+
+- `src/game/types/game.ts` — `RoomPreset.hazardsEnabled` 삭제
+- `src/game/data/rooms.ts` — 9개 프리셋에서 플래그 삭제, 함정 관련 주석 정리
+- `src/game/systems/RoomController.ts` — `enableHazards` 의존성과 호출 삭제
+- `src/game/scenes/CombatScene.ts` — `enableHazards` 스텁과 배선 삭제
+- `MVP_PLAN.md` §2 방 변수 목록과 §5 MOBILE·MIXED 구성에서 함정 항목 삭제
+- 다시 넣으려면 계약(`RoomPreset` 필드)부터 되살려야 한다
+
+---
+
+## DEC-018 — 디버그 방 스킵(F2)을 `?debug=1`로 가둔다
+
+- 날짜: 2026-08-09
+- 상태: ACCEPTED
+
+### 결정
+
+`CombatScene`·`BossScene`의 F2(방·보스 즉시 클리어) 키 등록을 `debugFlag("debug")`가
+참일 때만 붙인다. `?boss=1`(보스전 직행)은 지금처럼 배포본에도 남긴다.
+
+### 이유
+
+F2에는 아무 가드가 없어 배포본에서도 한 번 누르면 방이 통째로 넘어갔다. 심사 중
+오조작 한 번이 런을 무의미하게 만든다. 반면 `?boss=1`은 주소를 알아야만 켜지고
+심사·시연에서 보스전만 바로 보여줘야 할 이유가 분명해 그대로 둔다.
+
+`NODE_ENV`로 완전히 제거하는 안은 배포 URL로 시연할 길이 막혀서 택하지 않았다.
+
+### 영향
+
+- `src/game/scenes/CombatScene.ts`, `src/game/scenes/BossScene.ts`
+- 시연 시 `?debug=1`을 붙여야 F2가 동작한다
+- 같은 작업에서 F2 스킵이 남은 적을 정리하도록 고쳤다 — 이전에는 클리어된 방에서
+  적만 계속 공격했다
+
+---
+
 ## 새 결정 템플릿
 
 ```md

@@ -21,7 +21,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "room_1",
     template: "HORIZONTAL",
-    hazardsEnabled: false,
     spawns: [],
   },
 
@@ -33,7 +32,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "room_2",
     template: "PLATFORM",
-    hazardsEnabled: false,
     extraWaves: 2,
     spawns: [
       { type: "CHASER", xRatio: 0.7, delayMs: 0 },
@@ -52,7 +50,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "room_2_soft_ranged",
     template: "HORIZONTAL",
-    hazardsEnabled: false,
     spawns: [
       { type: "CHASER", xRatio: 0.7, delayMs: 0 },
       { type: "CHASER", xRatio: 0.9, delayMs: 800 },
@@ -61,7 +58,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "room_2_soft_melee",
     template: "PLATFORM",
-    hazardsEnabled: false,
     spawns: [
       { type: "RANGED", xRatio: 0.1, delayMs: 0 },
       { type: "RANGED", xRatio: 0.9, delayMs: 0 },
@@ -70,7 +66,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "room_2_soft_mobile",
     template: "PLATFORM",
-    hazardsEnabled: true,
     spawns: [
       { type: "MOBILITY_COUNTER", xRatio: 0.25, delayMs: 0 },
       { type: "MOBILITY_COUNTER", xRatio: 0.75, delayMs: 1200 },
@@ -81,7 +76,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "counter_ranged",
     template: "HORIZONTAL",
-    hazardsEnabled: false,
     extraWaves: 2,
     spawns: [
       { type: "CHASER", xRatio: 0.7, delayMs: 0 },
@@ -95,7 +89,6 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
   {
     id: "counter_melee",
     template: "PLATFORM",
-    hazardsEnabled: false,
     extraWaves: 2,
     spawns: [
       { type: "RANGED", xRatio: 0.1, delayMs: 0 },
@@ -105,11 +98,10 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
     ],
   },
 
-  /** MVP_PLAN §5 — MOBILE 대응: 기동 카운터형 다수, 추격형 소수, 지연 장판 활성화 */
+  /** MVP_PLAN §5 — MOBILE 대응: 기동 카운터형 다수, 추격형 소수 */
   {
     id: "counter_mobile",
     template: "PLATFORM",
-    hazardsEnabled: true,
     extraWaves: 2,
     spawns: [
       { type: "MOBILITY_COUNTER", xRatio: 0.25, delayMs: 0 },
@@ -119,11 +111,10 @@ const ROOM_PRESET_LIST: RoomPreset[] = [
     ],
   },
 
-  /** MVP_PLAN §5 — MIXED 대응: 세 역할 고르게, 함정 없음 */
+  /** MVP_PLAN §5 — MIXED 대응: 세 역할 고르게 */
   {
     id: "counter_mixed",
     template: "HORIZONTAL",
-    hazardsEnabled: false,
     extraWaves: 2,
     spawns: [
       { type: "CHASER", xRatio: 0.8, delayMs: 0 },

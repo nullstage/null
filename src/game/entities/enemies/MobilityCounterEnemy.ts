@@ -46,6 +46,8 @@ const TELEGRAPH_ALPHA_FROM = 0.18;
 const TELEGRAPH_ALPHA_TO = 0.6;
 /** 벽 안쪽 이 범위에는 장판을 깔지 않는다. 화면 밖에 걸치면 예고가 안 보인다. */
 const PLANT_MARGIN = 60;
+/** 이만큼 앞의 바닥을 미리 살핀다. 추격형·견제형과 같은 값이다. */
+const LEDGE_LOOKAHEAD = 24;
 
 export class MobilityCounterEnemy extends BaseEnemy {
   private plantMs = 0;
@@ -71,10 +73,14 @@ export class MobilityCounterEnemy extends BaseEnemy {
 
     const dx = player.x - body.x;
     const distance = Math.abs(dx);
-    const speed = this.definition.moveSpeed;
+    const speed = this.definition.moveSpeed * this.speedMultiplier;
+    // 낭떠러지 앞에서는 멈춘다. 없으면 스스로 빠져 낙사하고, 그게 방 클리어 판정에
+    // 들어가 MOBILE 카운터 방이 저절로 끝난다.
+    const step = (direction: number): number =>
+      this.hasFloorBelow(body.x + direction * LEDGE_LOOKAHEAD) ? direction * speed : 0;
 
-    if (distance < KEEP_DISTANCE_MIN) body.setVelocityX(dx === 0 ? speed : -Math.sign(dx) * speed);
-    else if (distance > KEEP_DISTANCE_MAX) body.setVelocityX(Math.sign(dx) * speed);
+    if (distance < KEEP_DISTANCE_MIN) body.setVelocityX(step(dx === 0 ? 1 : -Math.sign(dx)));
+    else if (distance > KEEP_DISTANCE_MAX) body.setVelocityX(step(Math.sign(dx)));
     else body.setVelocityX(0);
 
     this.plantMs += deltaMs;

@@ -14,7 +14,7 @@
 import Phaser from "phaser";
 
 import { eventBus, type GameEventMap } from "../EventBus";
-import { TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
+import { debugFlag, TUTORIAL_ROOM_WIDTH, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
 import { SOFT_COUNTER_ROOM_2_BY_STYLE } from "../data/directorRules";
 import { FIXED_ROOM_SEQUENCE, getRoomPreset } from "../data/rooms";
@@ -115,6 +115,8 @@ export class CombatScene extends Phaser.Scene {
   /** 마을 기록 제단(각인). 조각으로 영구 해금을 새긴다. */
   private altar: Phaser.GameObjects.Container | null = null;
   private altarPrompt: Phaser.GameObjects.Container | null = null;
+  /** 방랑자가 돌변한 매복. 클리어 카운트와는 분리하되(DEC-014 #4), 잔적 표시와 방 종료 정리에는 포함한다. */
+  private ambushes: BaseEnemy[] = [];
   /** 기본 줌이 걸려 있는지. false면 움직이거나 적이 있어 시야를 넓혀 둔 상태다. */
   private idleZoomed = false;
 
@@ -125,6 +127,7 @@ export class CombatScene extends Phaser.Scene {
   init(data: CombatSceneData): void {
     this.roomId = data.roomId ?? FIXED_ROOM_SEQUENCE[0];
     this.enemies = [];
+    this.ambushes = [];
     this.subscriptions = [];
     // scene.restart는 인스턴스를 재사용한다 — 이전 방의 상인·방랑자 참조가 남으면
     // 파괴된 스프라이트의 잔존 좌표에 대고 상호작용이 열린다(실제로 방 2에서 상점이 열렸다).
@@ -171,7 +174,6 @@ export class CombatScene extends Phaser.Scene {
       scene: this,
       telemetry: this.telemetry,
       spawnEnemy: (spawn, preset) => this.spawnEnemy(spawn, preset),
-      enableHazards: (preset) => this.enableHazards(preset),
       getRemainingHp: () => this.player.hp,
       onRoomClear: (telemetry) => this.handleRoomClear(telemetry),
       resolveWaveOverride: (telemetrySoFar, waveIndex) =>
@@ -191,12 +193,19 @@ export class CombatScene extends Phaser.Scene {
 
     runState.beginRoom(this.roomId);
     this.room.start(this.roomId);
-    this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+    this.player.emitHud(this.liveEnemyCount, runState.roomIndex);
 
-    // 개발·시연 전용 방 스킵. 전투가 완성되기 전에도 전체 흐름을 확인하기 위한 것이다.
-    this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () =>
-      this.room.forceClear(),
-    );
+    // 개발·시연 전용 방 스킵. 배포본에서 실수로 눌려 방이 통째로 넘어가지 않게
+    // `?debug=1`일 때만 붙인다. 남은 적도 함께 정리한다 — 안 그러면 클리어된 방에서
+    // 적만 계속 공격한다.
+    if (debugFlag("debug")) {
+      this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () => {
+        for (const enemy of this.enemies) {
+          if (!enemy.isDefeated) enemy.takeDamage(9999);
+        }
+        this.room.forceClear();
+      });
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
 
@@ -697,7 +706,7 @@ export class CombatScene extends Phaser.Scene {
     const enemy = this.createEnemy(spawn.type);
     enemy.spawn(this.groundedSpawnX(this.arena.bounds.width * spawn.xRatio), this.arena.bounds.floorY - 60);
     this.enemies.push(enemy);
-    this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+    this.player.emitHud(this.liveEnemyCount, runState.roomIndex);
   }
 
   /** 스폰 지점이 낭떠러지 위면 가장 가까운 바닥 조각 위로 옮긴다. 나오자마자 낙사하면 안 된다. */
@@ -731,7 +740,7 @@ export class CombatScene extends Phaser.Scene {
         runState.recordKill();
         this.dropShards(x, y);
         this.room.onEnemyDefeated();
-        this.player.emitHud(this.room.enemiesRemaining, runState.roomIndex);
+        this.player.emitHud(this.liveEnemyCount, runState.roomIndex);
       },
     };
 
@@ -743,11 +752,6 @@ export class CombatScene extends Phaser.Scene {
       case "MOBILITY_COUNTER":
         return new MobilityCounterEnemy(deps);
     }
-  }
-
-  /** 팀원 담당: 지연 폭발 장판 배치. 예고 없이 즉시 폭발시키지 않는다. (DEC-004) */
-  private enableHazards(_preset: RoomPreset): void {
-    // 팀원 담당
   }
 
   // ────────────────────────────── 방랑자 NPC ──────────────────────────────
@@ -872,11 +876,12 @@ export class CombatScene extends Phaser.Scene {
           onDefeated: (dx: number, dy: number) => {
             runState.recordKill();
             this.dropShards(dx, dy);
-            this.player.emitHud();
+            this.player.emitHud(this.liveEnemyCount, runState.roomIndex);
           },
         });
         ambush.spawn(x, y - 60);
         this.enemies.push(ambush);
+        this.ambushes.push(ambush);
       },
     });
   }
@@ -1139,8 +1144,14 @@ export class CombatScene extends Phaser.Scene {
   /** 구매 확정. 잔액·품목 검증에 실패하면 조용히 무시한다 — React가 이미 버튼을 잠근다. */
   private handleShopBuy(upgradeId: UpgradeId): void {
     if (!this.shopChoices.includes(upgradeId)) return;
+    // 이미 가진 것에 조각을 쓰면 addUpgrade가 조용히 무시해 조각만 사라진다.
+    if (runState.selectedUpgrades.includes(upgradeId)) return;
     if (!runState.spendShards(SHOP.price)) return;
     runState.addUpgrade(upgradeId);
+    // HEALTH_MAX_UP은 RunState 쪽 maxHp·hp만 올린다. 즉시 내려주지 않으면 이번 방에서는
+    // 아무 일도 일어나지 않고, 방 클리어 때 runState.hp가 덮여 회복분까지 사라진다.
+    this.player.maxHp = runState.maxHp;
+    this.player.hp = runState.hp;
     this.shopChoices = this.shopChoices.filter((id) => id !== upgradeId);
     this.player.emitHud();
 
@@ -1164,14 +1175,27 @@ export class CombatScene extends Phaser.Scene {
 
   private handleRoomClear(telemetry: CombatTelemetry): void {
     // completeRoom은 같은 방에 두 번 호출되면 false를 돌려준다.
-    if (!runState.completeRoom(telemetry)) return;
-
+    // completeRoom 안에서 HEALTH_REGEN 회복이 일어난다. 씬의 체력을 먼저 올려보내고
+    // 회복 결과를 다시 내려받아야 회복분이 덮이지 않는다. 순서를 바꾸면 무효가 된다.
     runState.hp = this.player.hp;
+    if (!runState.completeRoom(telemetry)) return;
+    this.player.hp = runState.hp;
+    this.player.emitHud();
+
+    // 방이 끝났는데 매복만 살아서 계속 때리면 "클리어"가 거짓말이 된다.
+    // 처치가 아니라 물러남이다 — defeat()를 거치지 않으므로 킬·조각이 들어가지 않는다.
+    for (const ambush of this.ambushes) {
+      if (ambush.isDefeated || !ambush.sprite) continue;
+      ashRise(this, ambush.sprite.x, ambush.sprite.y, 0xff2a3a);
+      ambush.destroy();
+    }
+    this.ambushes = [];
 
     // 모든 일반 전투방(1~3)은 게이트를 밟아야 다음 단계로 넘어간다.
     // 방 1(적 없음)은 `RoomController`가 방 시작과 동시에 이미 클리어를 끝내 두므로
     // 콜백만 미리 채워 두는 셈이고, 방 2·3은 마지막 적을 잡는 순간 채워진다.
     this.awaitPortal(() => {
+      this.pauseForPanel();
       if (runState.roomIndex >= LAST_COMBAT_ROOM_INDEX) {
         this.resolveDeception(telemetry);
         return;
@@ -1246,6 +1270,7 @@ export class CombatScene extends Phaser.Scene {
    * 바꾸는 방식으로 옮겨졌다 — `resolveWaveOverride` 참고.
    */
   private goToNextRoom(): void {
+    this.resumeFromPanel();
     const nextIndex = runState.roomIndex + 1;
 
     // 방 3 — Director가 고른 카운터 방(3기). 그 외(방 2)는 고정 순서를 쓴다. (MVP_PLAN §5)
@@ -1276,6 +1301,7 @@ export class CombatScene extends Phaser.Scene {
     // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-015)
     this.once("ui:continue", () =>
       this.offerUpgrade(() => {
+        this.resumeFromPanel();
         playSfx(this, AUDIO.portal);
         portalWipeOut(this, () => this.scene.start("Boss"));
       }, true),
@@ -1304,6 +1330,28 @@ export class CombatScene extends Phaser.Scene {
   }
 
   // ────────────────────────────── 유틸 ──────────────────────────────
+
+  /** 패널이 떠 있는 동안 씬을 멈춘다. 상점·대화창과 같은 문법이다. */
+  private pauseForPanel(): void {
+    if (!this.scene.isPaused()) this.scene.pause();
+  }
+
+  /**
+   * 패널을 닫고 씬을 되돌린다.
+   * 전환 연출(`portalWipeOut`)은 트윈이라, 멈춘 채로 부르면 영원히 끝나지 않는다.
+   * 화면을 넘기기 전에 반드시 먼저 부른다.
+   */
+  private resumeFromPanel(): void {
+    if (this.scene.isPaused()) this.scene.resume();
+  }
+
+  /** HUD에 찍히는 잔적 수. 매복은 클리어를 막지 않지만, 살아 있는데 0으로 보이면 거짓말이다. */
+  private get liveEnemyCount(): number {
+    return (
+      this.room.enemiesRemaining +
+      this.ambushes.filter((enemy) => !enemy.isDefeated && enemy.sprite).length
+    );
+  }
 
   /** 한 번만 반응하는 구독. 씬이 내려가면 자동으로 해제된다. */
   private once<K extends keyof GameEventMap>(
