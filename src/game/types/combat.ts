@@ -84,21 +84,35 @@ export const TEXTURE = {
 } as const;
 
 /**
- * 보스 스프라이트시트의 프레임 번호. 224px 정사각 셀 10칸(가로 한 줄).
- * 패턴마다 예고(telegraph)와 타격(strike) 두 포즈를 쓴다. (public/assets/sprites/boss/manifest.json)
+ * 보스 스프라이트시트. 224px 정사각 셀 22칸(가로 한 줄), 상태별 다프레임 애니메이션.
+ * idle 4 · slash/dash/projectile/slam 각 4(예고 2 + 타격 2) · hit 2.
  */
-export const BOSS_FRAME = {
-  idle: 0,
-  slashTelegraph: 1,
-  slashStrike: 2,
-  dashTelegraph: 3,
-  dashStrike: 4,
-  projectileTelegraph: 5,
-  projectileStrike: 6,
-  slamTelegraph: 7,
-  slamStrike: 8,
-  hit: 9,
+export const BOSS_ANIM = {
+  bossIdle: { key: TEXTURE.boss, start: 0, frames: 4, fps: 6, loop: true },
+  bossSlashTelegraph: { key: TEXTURE.boss, start: 4, frames: 2, fps: 8, loop: true },
+  bossSlashStrike: { key: TEXTURE.boss, start: 6, frames: 2, fps: 16, loop: false },
+  bossDashTelegraph: { key: TEXTURE.boss, start: 8, frames: 2, fps: 8, loop: true },
+  bossDashStrike: { key: TEXTURE.boss, start: 10, frames: 2, fps: 16, loop: false },
+  bossProjectileTelegraph: { key: TEXTURE.boss, start: 12, frames: 2, fps: 8, loop: true },
+  bossProjectileStrike: { key: TEXTURE.boss, start: 14, frames: 2, fps: 16, loop: false },
+  bossSlamTelegraph: { key: TEXTURE.boss, start: 16, frames: 2, fps: 8, loop: true },
+  bossSlamStrike: { key: TEXTURE.boss, start: 18, frames: 2, fps: 16, loop: false },
+  bossHit: { key: TEXTURE.boss, start: 20, frames: 2, fps: 12, loop: false },
 } as const;
+
+/** 패턴별 예고(telegraph)·타격(strike) 포즈가 재생할 애니메이션 키. `Boss.ts`의 setPose/strikePose가 쓴다. */
+export const BOSS_FRAME = {
+  idle: "bossIdle",
+  slashTelegraph: "bossSlashTelegraph",
+  slashStrike: "bossSlashStrike",
+  dashTelegraph: "bossDashTelegraph",
+  dashStrike: "bossDashStrike",
+  projectileTelegraph: "bossProjectileTelegraph",
+  projectileStrike: "bossProjectileStrike",
+  slamTelegraph: "bossSlamTelegraph",
+  slamStrike: "bossSlamStrike",
+  hit: "bossHit",
+} as const satisfies Record<string, keyof typeof BOSS_ANIM>;
 
 /** 전투 효과음·BGM 키. Phaser 내장 사운드로 재생한다 — UI 효과음(`sfx.ts`)과는 별도 경로다. */
 export const AUDIO = {

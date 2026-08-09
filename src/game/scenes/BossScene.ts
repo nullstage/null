@@ -17,7 +17,15 @@ import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { Boss } from "../entities/Boss";
 import { Player, TUNING } from "../entities/Player";
 import { playSfx, startRoomBgm, stopRoomBgm } from "../systems/audio";
-import { attachHitFx, damageNumber, portalWipeOut, startBloodRain } from "../systems/CombatVfx";
+import {
+  attachGlitchFx,
+  attachHitFx,
+  damageNumber,
+  portalWipeOut,
+  pulseGlitchFx,
+  startBloodRain,
+  startDreamMist,
+} from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
 import { AUDIO, createArena, TEXTURE, type CombatArena } from "../types/combat";
@@ -45,12 +53,16 @@ export class BossScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor("#140b10");
     // 전투방과 같은 피격 셰이더. 보스전만 연출이 빠지면 격이 낮아 보인다.
     attachHitFx(this);
+    attachGlitchFx(this);
+    // 보스방 진입 — 세계가 한 번 크게 일그러지며 시작한다.
+    pulseGlitchFx(this, 0.8, 650);
     this.telemetry.begin(this.time.now);
 
     // 보스방도 맨바닥 도형이 아니라 전투방과 같은 돌바닥·폐허 배경을 깐다.
     this.arena = createArena(this, VIEWPORT, TEXTURE.floorTileStone, TEXTURE.background, 87, 0x3a1c28);
     // 전투방과 같은 핏빛 비 — 보스전만 하늘이 맑으면 톤이 끊긴다.
     startBloodRain(this, VIEWPORT.width, this.arena.bounds.floorY);
+    startDreamMist(this, VIEWPORT.width, this.arena.bounds.floorY);
 
     this.player = new Player({
       scene: this,

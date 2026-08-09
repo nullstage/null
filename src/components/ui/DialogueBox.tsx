@@ -2,18 +2,12 @@
 
 import styled from "@emotion/styled";
 import gsap from "gsap";
-import localFont from "next/font/local";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { chosunKg } from "@/styles/fonts";
 import { theme } from "@/styles/theme";
 
 import { DIALOGUE_ASSETS } from "./dialogueAssets";
-
-/** 대화 본문 전용 서체(정체, Regular). 다른 UI는 손대지 않는다 — 지금은 이 대화창 본문에만 쓴다. */
-const chosunKg = localFont({
-  src: "../../assets/fonts/ChosunKg.ttf",
-  display: "swap",
-});
 
 /**
  * 기록자 대화창.
@@ -166,12 +160,41 @@ const Caret = styled.span`
   opacity: 0;
 `;
 
+/** ESC를 꾹 누르는 동안 채워지는 스킵 게이지. 화면 왼쪽 위, 대화 상자와는 독립된 자리다. */
+const SkipGauge = styled.div`
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+`;
+
+const SkipLabel = styled.span`
+  font-family: ${chosunKg.style.fontFamily};
+  font-size: clamp(11px, 1vw, 13px);
+  letter-spacing: 0.06em;
+  color: #f5ece0;
+  user-select: none;
+`;
+
+const SKIP_RING_RADIUS = 15;
+const SKIP_RING_CIRCUMFERENCE = 2 * Math.PI * SKIP_RING_RADIUS;
+/** 다 채우는 데 걸리는 시간(초). 실수로 스치는 입력을 걸러낼 만큼은 있어야 한다. */
+const SKIP_HOLD_SEC = 0.85;
+
 export default function DialogueBox({ onDone }: { onDone: () => void }) {
   const lines = useMemo(() => buildLines(), []);
 
   const screenRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<HTMLParagraphElement>(null);
   const caretRef = useRef<HTMLSpanElement>(null);
+  const skipGaugeRef = useRef<HTMLDivElement>(null);
+  const skipRingRef = useRef<SVGCircleElement>(null);
+  const skipTweenRef = useRef<gsap.core.Tween | null>(null);
 
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState(0);
@@ -276,19 +299,78 @@ export default function DialogueBox({ onDone }: { onDone: () => void }) {
     };
   }, [index, lines]);
 
+  /** 게이지를 원래 자리로 되돌린다 — 중간에 손을 떼거나 대화가 이미 끝났을 때 쓴다. */
+  const resetSkipGauge = useCallback(() => {
+    skipTweenRef.current?.kill();
+    skipTweenRef.current = null;
+    gsap.to(skipGaugeRef.current, { autoAlpha: 0, duration: 0.2 });
+    gsap.set(skipRingRef.current, { strokeDashoffset: SKIP_RING_CIRCUMFERENCE });
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      // ESC는 한 줄씩 넘기는 게 아니라 꾹 눌러 전체를 건너뛴다 — 다른 진행 방식이라
+      // advance()가 아니라 별도의 홀드 게이지로 다룬다. 키 반복 이벤트는 무시한다.
+      if (event.key === "Escape") {
+        if (event.repeat || doneRef.current || skipTweenRef.current) return;
+        gsap.to(skipGaugeRef.current, { autoAlpha: 1, duration: 0.15 });
+        skipTweenRef.current = gsap.fromTo(
+          skipRingRef.current,
+          { strokeDashoffset: SKIP_RING_CIRCUMFERENCE },
+          {
+            strokeDashoffset: 0,
+            duration: SKIP_HOLD_SEC,
+            ease: "none",
+            onComplete: () => {
+              skipTweenRef.current = null;
+              finish();
+            },
+          },
+        );
+        return;
+      }
+
       if (event.key === " ") event.preventDefault();
       advance();
     };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Escape") resetSkipGauge();
+    };
+
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [advance]);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      skipTweenRef.current?.kill();
+    };
+  }, [advance, finish, resetSkipGauge]);
 
   return (
     <Screen ref={screenRef} onPointerDown={advance}>
       <Scrim />
+      <SkipGauge ref={skipGaugeRef}>
+        <svg width={36} height={36} viewBox="0 0 36 36">
+          <circle cx={18} cy={18} r={SKIP_RING_RADIUS} fill="none" stroke="rgba(245,236,224,0.25)" strokeWidth={3} />
+          <circle
+            ref={skipRingRef}
+            cx={18}
+            cy={18}
+            r={SKIP_RING_RADIUS}
+            fill="none"
+            stroke="#c8383c"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeDasharray={SKIP_RING_CIRCUMFERENCE}
+            strokeDashoffset={SKIP_RING_CIRCUMFERENCE}
+            transform="rotate(-90 18 18)"
+          />
+        </svg>
+        <SkipLabel>ESC 꾹 눌러 건너뛰기</SkipLabel>
+      </SkipGauge>
       <Frame>
         <Tag>
           <SpeakerName>{SPEAKER}</SpeakerName>

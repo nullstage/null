@@ -14,6 +14,7 @@ import { ROOM_ONE_DECOR } from "../data/roomOneDecor";
 import { runState } from "../systems/RunState";
 import {
   AUDIO,
+  BOSS_ANIM,
   ENEMY_ANIM,
   PLAYER_INTRO_ANIM,
   PLAYER_SPRITE,
@@ -82,7 +83,8 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     this.registerPlayerAnimations();
     this.registerIntroAnimation();
-    this.registerEnemyAnimations();
+    this.registerFrameAnimations(ENEMY_ANIM);
+    this.registerFrameAnimations(BOSS_ANIM);
     runState.reset(this.time.now);
     runState.setPhase("READY");
     this.scene.start("Ready");
@@ -135,9 +137,9 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
-  /** 적1(원거리)·적2(근접) 스프라이트의 idle·walk·attack 애니메이션을 등록한다. */
-  private registerEnemyAnimations(): void {
-    for (const [key, spec] of Object.entries(ENEMY_ANIM)) {
+  /** {키: 프레임 구간} 형태의 애니메이션 테이블을 등록한다. 적·보스가 같은 셰이프를 쓴다. */
+  private registerFrameAnimations(set: Record<string, { key: string; start: number; frames: number; fps: number; loop: boolean }>): void {
+    for (const [key, spec] of Object.entries(set)) {
       if (this.anims.exists(key)) continue;
       this.anims.create({
         key,

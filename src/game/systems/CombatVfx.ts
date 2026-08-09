@@ -395,6 +395,203 @@ export const updateAmbientLightCenter = (
 };
 
 /**
+ * 상시 글리치 셰이더. (사용자 요청 — "연출로 승부")
+ *
+ * 평상시에는 3~4초에 한 번, 몇 프레임만 스치는 마이크로 글리치(가로 밴드 어긋남 +
+ * RGB 분리 + 노이즈 라인)가 지나간다 — 침식당한 세계라는 설정을 화면 질감으로 만든다.
+ * `uBoost`를 올리면 방 진입·페이즈 전환·사망 같은 순간에 크게 터뜨릴 수 있다.
+ */
+export class GlitchFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
+  private boost = 0;
+
+  constructor(game: Phaser.Game) {
+    super({
+      game,
+      name: "GlitchFx",
+      fragShader: `
+        precision mediump float;
+        uniform sampler2D uMainSampler;
+        uniform float uTime;
+        uniform float uBoost;
+        uniform vec2 uSize;
+        varying vec2 outTexCoord;
+
+        float hash(float n) { return fract(sin(n) * 43758.5453123); }
+
+        void main() {
+          vec2 uv = outTexCoord;
+          // 시간을 낮은 틱으로 양자화 — 글리치는 연속이 아니라 "튀는" 것이어야 한다.
+          float t = floor(uTime * 24.0);
+          float seed = hash(t);
+          // 희박 발동(마이크로) 또는 외부 부스트. 0.99 임계 = 초당 24틱 중 평균 0.24회,
+          // 대략 4초에 한 번 스치는 정도가 "침식의 낌새"로 적당하다.
+          float amt = max(step(0.99, seed) * 0.35, uBoost);
+
+          // 가로 밴드 슬라이스 어긋남.
+          float band = floor(uv.y * 24.0 + hash(t + 7.0) * 24.0);
+          float jitter = (hash(band + t) - 0.5) * 2.0;
+          float slice = step(0.72, hash(band * 1.7 + t)) * jitter;
+          uv.x += slice * amt * 26.0 / uSize.x * floor(1.0 + amt * 4.0);
+
+          vec4 base = texture2D(uMainSampler, uv);
+
+          // RGB 분리.
+          float shift = amt * 6.0 / uSize.x;
+          float r = texture2D(uMainSampler, uv + vec2(shift, 0.0)).r;
+          float b = texture2D(uMainSampler, uv - vec2(shift, 0.0)).b;
+          vec3 col = vec3(r, base.g, b);
+
+          // 이따금 지나가는 밝은 노이즈 라인 — 마젠타 계열로, 세계관 색과 맞춘다.
+          float noiseLine = step(0.994 - amt * 0.02, hash(uv.y * uSize.y + t * 13.0));
+          col += vec3(0.55, 0.2, 0.6) * noiseLine * amt;
+
+          gl_FragColor = vec4(col, base.a);
+        }
+      `,
+    });
+  }
+
+  /** 프레임당 감쇠율. 씬 트윈이 아니라 렌더 루프에서 줄여야 씬이 멈춰도 글리치가 안 남는다. */
+  private decay = 0.93;
+
+  onPreRender(): void {
+    this.set1f("uTime", this.game.loop.time / 1000);
+    this.set1f("uBoost", this.boost);
+    this.set2f("uSize", this.renderer.width, this.renderer.height);
+
+    // 부스트는 렌더 프레임마다 스스로 사그라든다 — 일시정지된 씬 위에서도 멈추지 않는다.
+    this.boost *= this.decay;
+    if (this.boost < 0.01) this.boost = 0;
+  }
+
+  setBoost(value: number, decay = 0.93): void {
+    this.boost = value;
+    this.decay = decay;
+  }
+}
+
+/** 카메라에 글리치 셰이더를 붙인다. 다른 셰이더보다 마지막에 붙여 화면 전체 위에 얹는다. */
+export const attachGlitchFx = (scene: Phaser.Scene): void => {
+  if (scene.game.renderer.type !== Phaser.WEBGL) return;
+  scene.cameras.main.setPostPipeline(GlitchFxPipeline);
+};
+
+/** 글리치를 한 번 크게 터뜨린다. 방 진입·페이즈 전환·사망 같은 "세계가 흔들리는" 순간용. */
+export const pulseGlitchFx = (scene: Phaser.Scene, strength = 0.7, durationMs = 420): void => {
+  if (scene.game.renderer.type !== Phaser.WEBGL) return;
+  const found = scene.cameras.main.getPostPipeline(GlitchFxPipeline);
+  const target = (Array.isArray(found) ? found[0] : found) as GlitchFxPipeline | undefined;
+  if (!target) return;
+
+  // durationMs 뒤에 0.01까지 사그라드는 프레임당 감쇠율(60fps 기준)을 역산한다.
+  const frames = Math.max(1, durationMs / 16.7);
+  const decay = Math.pow(0.01 / Math.max(0.01, strength), 1 / frames);
+  target.setBoost(strength, Math.min(0.99, Math.max(0.5, decay)));
+};
+
+/**
+ * 몽환 안개. 캔버스에서 즉석 생성한 부드러운 원형 그라데이션을 3겹 깊이로 띄워
+ * 서로 다른 속도로 하늘하늘 떠다니게 한다 — "딱 봤을 때 압도되는" 공기의 밀도.
+ */
+export const startDreamMist = (scene: Phaser.Scene, roomWidth: number, floorY: number): void => {
+  const KEY = "mist_soft";
+  if (!scene.textures.exists(KEY)) {
+    const size = 256;
+    const canvas = scene.textures.createCanvas(KEY, size, size);
+    if (!canvas) return;
+    const ctx = canvas.getContext();
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, "rgba(255,255,255,0.85)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.28)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    canvas.refresh();
+  }
+
+  const layers = [
+    { y: floorY - 30, tint: 0xd96a8a, alpha: 0.11, scale: 1.6, drift: 46, breatheMs: 5200, depth: 1 },
+    { y: floorY - 150, tint: 0x8a5f9e, alpha: 0.08, scale: 2.2, drift: 70, breatheMs: 7400, depth: 0 },
+    { y: floorY - 280, tint: 0x5f6a9e, alpha: 0.06, scale: 2.9, drift: 100, breatheMs: 9800, depth: 0 },
+  ] as const;
+
+  for (const layer of layers) {
+    const count = Math.max(5, Math.ceil(roomWidth / 420));
+    for (let i = 0; i < count; i += 1) {
+      const x = (i + Phaser.Math.FloatBetween(-0.3, 0.3)) * (roomWidth / (count - 1 || 1));
+      const mist = scene.add.image(x, layer.y + Phaser.Math.Between(-24, 24), KEY);
+      mist.setDepth(layer.depth);
+      mist.setTint(layer.tint);
+      mist.setAlpha(0);
+      mist.setScale(layer.scale * Phaser.Math.FloatBetween(0.8, 1.25), layer.scale * 0.5);
+      mist.setScrollFactor(0.9, 1);
+
+      // 좌우 드리프트와 숨쉬는 알파를 서로 다른 주기로 — 동기화되면 안개가 아니라 커튼이 된다.
+      scene.tweens.add({
+        targets: mist,
+        x: x + Phaser.Math.FloatBetween(-1, 1) * layer.drift,
+        duration: layer.breatheMs * Phaser.Math.FloatBetween(0.8, 1.3),
+        yoyo: true,
+        repeat: -1,
+        ease: "sine.inOut",
+      });
+      scene.tweens.add({
+        targets: mist,
+        alpha: layer.alpha * Phaser.Math.FloatBetween(0.75, 1.25),
+        duration: layer.breatheMs,
+        yoyo: true,
+        repeat: -1,
+        ease: "sine.inOut",
+        delay: Phaser.Math.Between(0, layer.breatheMs),
+      });
+    }
+  }
+};
+
+/**
+ * 플랫폼이 핏빛 달빛을 받아 바닥에 드리우는 사광 그림자. (사용자 요청 — 반사각 그림자)
+ * 입사각(skew)만큼 비껴 눕고, 플랫폼 밑면과 그림자를 잇는 희미한 빛기둥이 각도를 읽게 한다.
+ */
+export const MOON_SHADOW_SKEW = 0.22;
+
+export const castPlatformShadows = (
+  scene: Phaser.Scene,
+  platforms: readonly { x: number; y: number; width: number }[],
+  floorY: number,
+): void => {
+  for (const platform of platforms) {
+    const drop = floorY - platform.y;
+    if (drop <= 0) continue;
+    const offset = drop * MOON_SHADOW_SKEW;
+
+    // 바닥에 눕는 그림자 띠 — 플레이어 발밑 그림자와 같은 문법.
+    const shadow = scene.add.ellipse(
+      platform.x + platform.width / 2 + offset,
+      floorY - 3,
+      platform.width * 1.05,
+      10,
+      0x000000,
+      0.26,
+    );
+    shadow.setDepth(2);
+
+    // 사광 — 밑면에서 그림자까지 비껴 내려가는 아주 옅은 어둠의 기둥.
+    const beam = scene.add.graphics();
+    beam.setDepth(1);
+    beam.fillStyle(0x000000, 0.05);
+    beam.fillPoints(
+      [
+        { x: platform.x, y: platform.y + 6 },
+        { x: platform.x + platform.width, y: platform.y + 6 },
+        { x: platform.x + platform.width + offset, y: floorY },
+        { x: platform.x + offset, y: floorY },
+      ],
+      true,
+    );
+  }
+};
+
+/**
  * 콤보 단계별 베는 각도.
  *
  * 0도가 정면, 음수가 위, 양수가 아래다. 위아래로 크게 휘두르면 우산처럼 보여 둔탁하다.
@@ -906,6 +1103,8 @@ export const spikeBurst = (
     bright?: number;
     /** 교차 섬광선을 그릴지. 잔타격에서는 꺼서 화면을 아낀다. */
     slashLines?: boolean;
+    /** 교차 섬광선 색. 생략하면 기본 핑크. */
+    lineColor?: number;
     /** 가시가 뻗는 각도 범위(라디안). 생략하면 전방위. 지면 충격파는 위쪽 반원만. */
     angleRange?: { from: number; to: number };
   } = {},
@@ -915,6 +1114,7 @@ export const spikeBurst = (
   const dark = opts.dark ?? 0x1c0f33;
   const mid = opts.mid ?? 0x7a2ee0;
   const bright = opts.bright ?? 0xd98aff;
+  const lineColor = opts.lineColor ?? 0xff5fa8;
   const from = opts.angleRange?.from ?? 0;
   const to = opts.angleRange?.to ?? Math.PI * 2;
 
@@ -1021,7 +1221,7 @@ export const spikeBurst = (
       line.setDepth(VFX.depth + 2);
       line.setBlendMode(Phaser.BlendModes.ADD);
       line.setRotation(lineAngle + (i * Math.PI) / 2);
-      line.fillStyle(0xff5fa8, 0.9);
+      line.fillStyle(lineColor, 0.9);
       line.fillPoints(
         [
           { x: -lineLen, y: 0 },
@@ -1588,6 +1788,137 @@ export const bossShockwave = (scene: Phaser.Scene, x: number, y: number, width: 
         debris.setAlpha(1 - carrier.t * 0.7);
       },
       onComplete: () => debris.destroy(),
+    });
+  }
+};
+
+/**
+ * 지면 가시 폭발. `bossShockwave`와 같은 얼개(위쪽 반원 가시+바닥 충격 링+튀는 잔해)를
+ * 색만 매개변수로 받게 뺐다 — 가시 혼자서는 "쾅"이 약해서, 스킬 이펙트는 항상 이 조합을 쓴다.
+ */
+export const groundEruptionBurst = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  opts: {
+    scale?: number;
+    dark?: number;
+    mid?: number;
+    bright?: number;
+    ringColor?: number;
+    debrisColor?: number;
+  } = {},
+): void => {
+  spikeBurst(scene, x, y, {
+    scale: opts.scale ?? 1.15,
+    spikes: 7,
+    dark: opts.dark,
+    mid: opts.mid,
+    bright: opts.bright,
+    slashLines: false,
+    angleRange: { from: -Math.PI * 0.9, to: -Math.PI * 0.1 },
+  });
+
+  const ringColor = opts.ringColor ?? 0xff5a3c;
+  const debrisColor = opts.debrisColor ?? 0x5a1010;
+
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.lineStyle(4, ringColor, 0.9);
+  ring.strokeEllipse(0, 0, 46, 14);
+  scene.tweens.add({
+    targets: ring,
+    scaleX: 2.4,
+    scaleY: 2.2,
+    alpha: 0,
+    duration: 300,
+    ease: "power2.out",
+    onComplete: () => ring.destroy(),
+  });
+
+  for (let i = 0; i < 7; i += 1) {
+    const size = Phaser.Math.Between(3, 6);
+    const debris = scene.add.rectangle(x + Phaser.Math.Between(-18, 18), y, size, size, debrisColor);
+    debris.setDepth(VFX.depth + 1);
+    debris.setAngle(Phaser.Math.Between(0, 360));
+
+    const startX = debris.x;
+    const drift = Phaser.Math.FloatBetween(-1, 1) * 40;
+    const peak = Phaser.Math.FloatBetween(30, 70);
+    const spin = Phaser.Math.FloatBetween(-0.25, 0.25);
+    const carrier = { t: 0 };
+    scene.tweens.add({
+      targets: carrier,
+      t: 1,
+      duration: Phaser.Math.Between(280, 420),
+      ease: "linear",
+      onUpdate: () => {
+        debris.x = startX + drift * carrier.t;
+        debris.y = y - peak * Math.sin(carrier.t * Math.PI);
+        debris.rotation += spin;
+        debris.setAlpha(1 - carrier.t * 0.7);
+      },
+      onComplete: () => debris.destroy(),
+    });
+  }
+};
+
+/**
+ * 칼날 소용돌이. 전방위 가시 위에 원형으로 확 부푸는 이중 링과, 사방으로 튕겨 나가는
+ * 짧은 칼날 조각들을 얹는다 — 제자리에서 도는 스킬이라 "돈다"는 인상은 가시만으론 안 읽힌다.
+ */
+export const bladeVortexBurst = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  radius: number,
+  opts: { dark?: number; mid?: number; bright?: number; ringColor?: number } = {},
+): void => {
+  spikeBurst(scene, x, y, {
+    scale: 1.2,
+    spikes: 13,
+    dark: opts.dark,
+    mid: opts.mid,
+    bright: opts.bright,
+    lineColor: opts.ringColor,
+  });
+
+  const ringColor = opts.ringColor ?? 0xff3b3b;
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth + 2);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.lineStyle(3, ringColor, 1);
+  ring.strokeCircle(0, 0, radius * 0.3);
+  ring.lineStyle(1.5, ringColor, 0.6);
+  ring.strokeCircle(0, 0, radius * 0.5);
+  scene.tweens.add({
+    targets: ring,
+    scale: radius / (radius * 0.3),
+    alpha: 0,
+    duration: 260,
+    ease: "power3.out",
+    onComplete: () => ring.destroy(),
+  });
+
+  const bladeCount = 10;
+  for (let i = 0; i < bladeCount; i += 1) {
+    const angle = (i / bladeCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.1, 0.1);
+    const dist = radius * Phaser.Math.FloatBetween(0.75, 1.05);
+    const blade = scene.add.graphics({ x, y });
+    blade.setDepth(VFX.depth + 2);
+    blade.setBlendMode(Phaser.BlendModes.ADD);
+    blade.lineStyle(2.5, ringColor, 0.95);
+    blade.lineBetween(0, 0, 14, 0);
+    blade.setRotation(angle);
+    scene.tweens.add({
+      targets: blade,
+      x: x + Math.cos(angle) * dist,
+      y: y + Math.sin(angle) * dist,
+      alpha: 0,
+      duration: 240 + Phaser.Math.Between(-30, 50),
+      ease: "power2.out",
+      onComplete: () => blade.destroy(),
     });
   }
 };

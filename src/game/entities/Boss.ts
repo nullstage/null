@@ -25,6 +25,7 @@ import {
   enemySlash,
   groundDust,
   hitStop,
+  pulseGlitchFx,
 } from "../systems/CombatVfx";
 import { pickBossPattern } from "../systems/DirectorPolicy";
 import { BOSS_FRAME, SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
@@ -238,10 +239,11 @@ export class Boss {
     // 224px 셀 안에서 실제 그림은 여백을 두고 그려져 있다. setDisplaySize로 셀을 통째로
     // 눌러 맞추면 보스가 작아 보이므로, 그림은 스케일로 키우고 충돌 박스만 따로 잡는다.
     const sprite = this.scene.physics.add
-      .sprite(x, this.groundY, TEXTURE.boss, BOSS_FRAME.idle)
+      .sprite(x, this.groundY, TEXTURE.boss, 0)
       .setScale(BOSS_SPRITE_SCALE)
       .setDepth(DEPTH.boss);
     sprite.body?.setSize(BODY.width / BOSS_SPRITE_SCALE, BODY.height / BOSS_SPRITE_SCALE);
+    sprite.play(BOSS_FRAME.idle);
 
     this.arena.enemyBodies.add(sprite);
     sprite.setData("enemy", this);
@@ -298,16 +300,16 @@ export class Boss {
   }
 
   /**
-   * 포즈 교체. 보스는 애니메이션 없이 패턴별 정지 포즈만 골라 쓴다.
+   * 포즈 교체. 패턴별 예고·타격 애니메이션을 재생한다.
    * 예고 포즈를 먼저 보여주고 타격 순간에 바꿔야 "무엇을 하려는지"가 읽힌다. (DEC-004)
    */
-  private setPose(frame: number): void {
-    this.sprite?.setFrame(frame);
+  private setPose(animKey: string): void {
+    this.sprite?.play(animKey, true);
   }
 
-  /** 타격 포즈를 잠깐 보여준 뒤 idle로 돌아온다. 젖혔던 몸도 이때 되돌린다. */
-  private strikePose(frame: number, holdMs: number): void {
-    this.setPose(frame);
+  /** 타격 애니메이션을 잠깐 재생한 뒤 idle로 돌아온다. 젖혔던 몸도 이때 되돌린다. */
+  private strikePose(animKey: string, holdMs: number): void {
+    this.setPose(animKey);
     this.sprite?.setRotation(0);
     this.after(holdMs, () => this.setPose(BOSS_FRAME.idle));
   }
@@ -829,6 +831,7 @@ export class Boss {
     hitStop(this.scene, 120);
     this.scene.cameras.main.shake(220, 0.01);
     this.scene.cameras.main.flash(160, 120, 10, 30);
+    pulseGlitchFx(this.scene, next === 2 ? 0.65 : 0.9, 550);
     bossShockwave(this.scene, sprite.x, this.arena.bounds.floorY - 6, 300);
     groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
 
@@ -867,6 +870,7 @@ export class Boss {
     sprite.clearTint();
     // 런의 마지막 타격이다. 시간이 잠깐 멎고, 화면이 하얗게 번쩍이며, 재가 오래 떠오른다.
     hitStop(this.scene, 300);
+    pulseGlitchFx(this.scene, 1, 900);
     const cam = this.scene.cameras.main;
     cam.shake(320, 0.012);
     cam.flash(260, 255, 235, 220);

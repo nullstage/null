@@ -249,11 +249,13 @@ export abstract class BaseEnemy {
       else body.setTintFill(this.stateTint);
     });
 
+    // Arcade Body는 매 프레임 scaleY로 충돌 박스 높이·위치를 다시 계산한다(Player.punch와
+    // 같은 원인, 그쪽에서 이미 문서화됨). 접지 중인 적을 세로로도 스쿼시하면 그 프레임에
+    // 박스가 바닥과 어긋나 파묻히거나 뜬 것처럼 보인다 — 가로만 스쿼시한다.
     const { scaleX, scaleY } = body;
     this.scene.tweens.add({
       targets: body,
       scaleX: scaleX * HIT_PUNCH_SCALE,
-      scaleY: scaleY * HIT_PUNCH_SCALE,
       duration: HIT_PUNCH_MS,
       yoyo: true,
       onComplete: () => {

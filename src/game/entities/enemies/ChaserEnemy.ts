@@ -95,7 +95,12 @@ export class ChaserEnemy extends BaseEnemy {
         if (this.stateMs >= this.definition.telegraphMs) this.beginLunge();
         break;
 
-      case "LUNGE":
+      case "LUNGE": {
+        // CHASE에서만 걸던 낭떠러지 체크가 LUNGE엔 없어서, 돌진이 바닥 끝을 넘어가면
+        // 중력에 끌려 아래 지형 모서리에 파묻히듯 걸렸다 — 돌진 중에도 앞이 끊기면 멈춘다.
+        const aheadX = body.x + this.facing * LEDGE_LOOKAHEAD;
+        if (!this.hasFloorBelow(aheadX)) body.setVelocityX(0);
+
         this.afterimageMs += deltaMs;
         if (this.afterimageMs >= AFTERIMAGE_INTERVAL_MS) {
           this.afterimageMs = 0;
@@ -106,6 +111,7 @@ export class ChaserEnemy extends BaseEnemy {
           this.enter("RECOVER");
         }
         break;
+      }
 
       case "RECOVER":
       case "STAGGER":
