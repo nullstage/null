@@ -160,7 +160,11 @@ const Caret = styled.span`
   opacity: 0;
 `;
 
-/** ESC를 꾹 누르는 동안 채워지는 스킵 게이지. 화면 왼쪽 위, 대화 상자와는 독립된 자리다. */
+/**
+ * ESC로 건너뛸 수 있음을 알리는 안내. 화면 왼쪽 위, 대화 상자와는 독립된 자리다.
+ * 눌러야만 나타나면 건너뛰기가 있다는 것 자체를 모르고 지나칠 수 있어 처음부터 띄워 둔다.
+ * 실제로 채워지는 건 안쪽 링(SkipRing)뿐이다.
+ */
 const SkipGauge = styled.div`
   position: absolute;
   top: 28px;
@@ -169,7 +173,6 @@ const SkipGauge = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  opacity: 0;
   pointer-events: none;
 `;
 
@@ -299,11 +302,10 @@ export default function DialogueBox({ onDone }: { onDone: () => void }) {
     };
   }, [index, lines]);
 
-  /** 게이지를 원래 자리로 되돌린다 — 중간에 손을 떼거나 대화가 이미 끝났을 때 쓴다. */
+  /** 링을 원래 자리로 되돌린다 — 중간에 손을 떼거나 대화가 이미 끝났을 때 쓴다. */
   const resetSkipGauge = useCallback(() => {
     skipTweenRef.current?.kill();
     skipTweenRef.current = null;
-    gsap.to(skipGaugeRef.current, { autoAlpha: 0, duration: 0.2 });
     gsap.set(skipRingRef.current, { strokeDashoffset: SKIP_RING_CIRCUMFERENCE });
   }, []);
 
@@ -315,7 +317,6 @@ export default function DialogueBox({ onDone }: { onDone: () => void }) {
       // advance()가 아니라 별도의 홀드 게이지로 다룬다. 키 반복 이벤트는 무시한다.
       if (event.key === "Escape") {
         if (event.repeat || doneRef.current || skipTweenRef.current) return;
-        gsap.to(skipGaugeRef.current, { autoAlpha: 1, duration: 0.15 });
         skipTweenRef.current = gsap.fromTo(
           skipRingRef.current,
           { strokeDashoffset: SKIP_RING_CIRCUMFERENCE },
