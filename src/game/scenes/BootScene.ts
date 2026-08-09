@@ -19,6 +19,8 @@ import {
   PLAYER_INTRO_ANIM,
   PLAYER_SPRITE,
   SILHOUETTE,
+  SKILL_VFX_ANIM,
+  SKILL_VFX_SHEET,
   TEXTURE,
   playerAnimKey,
   type PlayerAnimState,
@@ -53,6 +55,19 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet(TEXTURE.playerIntro, assetPath("sprites/player/player-intro.png"), {
       frameWidth: PLAYER_SPRITE.frameWidth,
       frameHeight: PLAYER_SPRITE.frameHeight,
+    });
+    // 검기·검극·검무 이펙트 — 프레임마다 크기가 달라 행별 최댓값으로 셀을 통일했다.
+    this.load.spritesheet(TEXTURE.skillWave, assetPath(SKILL_VFX_SHEET.wave.path), {
+      frameWidth: SKILL_VFX_SHEET.wave.frameWidth,
+      frameHeight: SKILL_VFX_SHEET.wave.frameHeight,
+    });
+    this.load.spritesheet(TEXTURE.skillEruption, assetPath(SKILL_VFX_SHEET.eruption.path), {
+      frameWidth: SKILL_VFX_SHEET.eruption.frameWidth,
+      frameHeight: SKILL_VFX_SHEET.eruption.frameHeight,
+    });
+    this.load.spritesheet(TEXTURE.skillCyclone, assetPath(SKILL_VFX_SHEET.cyclone.path), {
+      frameWidth: SKILL_VFX_SHEET.cyclone.frameWidth,
+      frameHeight: SKILL_VFX_SHEET.cyclone.frameHeight,
     });
     // 보스 체력바 장식 프레임.
     this.load.image(TEXTURE.bossHpFrame, assetPath("ui/boss-hp-frame.png"));
@@ -92,6 +107,7 @@ export class BootScene extends Phaser.Scene {
     this.registerIntroAnimation();
     this.registerFrameAnimations(ENEMY_ANIM);
     this.registerFrameAnimations(BOSS_ANIM);
+    this.registerFrameAnimations(SKILL_VFX_ANIM);
     runState.reset(this.time.now);
     runState.setPhase("READY");
     this.scene.start("Ready");
