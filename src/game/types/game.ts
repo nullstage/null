@@ -81,7 +81,79 @@ export type UpgradeId =
   /** 아티팩트 — 떨어지지 않는 깃털. 낭떠러지에 떨어져도 다치지 않는다. */
   | "MOBILITY_FEATHER"
   /** 아티팩트 — 멈추지 않는 심장. 근접 공격이 스민 상대에게서 이따금 숨을 되찾는다. */
-  | "HEALTH_VAMPIRE";
+  | "HEALTH_VAMPIRE"
+  /**
+   * 잡화 아티팩트 55종(아이템 아이콘 시트 전체). 이름은 저마다 다르지만 기계적 효과는
+   * 카테고리당 3개 축을 재사용한다 — `Player.ts`의 `*_IDS` 배열 참고. 같은 축을 여럿
+   * 가지면 개수만큼 겹쳐 쌓인다.
+   */
+  /** 근접 공격력 축. */
+  | "ITEM_RED_STAR_SHARD"
+  | "ITEM_BLUE_POTION"
+  | "ITEM_TEAL_RING"
+  | "ITEM_GOLD_SCROLL"
+  | "ITEM_RED_LANTERN"
+  /** 근접 사거리 축. */
+  | "ITEM_BLOOD_NECKLACE"
+  | "ITEM_VIOLET_WHIRL_ORB"
+  | "ITEM_RED_SPELLBOOK"
+  | "ITEM_VIOLET_DAGGER"
+  | "ITEM_VIOLET_FLAME_ORB"
+  /** 근접 마무리 타격 피해 축. */
+  | "ITEM_RED_SEAL"
+  | "ITEM_RED_RING"
+  | "ITEM_GREEN_SPELLBOOK"
+  | "ITEM_VIOLET_SHURIKEN"
+  /** 원거리 공격력 축. */
+  | "ITEM_GREED_EYE_ORB"
+  | "ITEM_GOLD_POTION"
+  | "ITEM_BEAST_FANG"
+  | "ITEM_WINGED_STAR"
+  | "ITEM_THORN_CROWN"
+  /** 탄창 용량 축. */
+  | "ITEM_BAT_AXE"
+  | "ITEM_TEAL_GEM"
+  | "ITEM_VIOLET_SPELLBOOK"
+  | "ITEM_BLOOD_SCYTHE"
+  | "ITEM_RED_WHIRL_ORB"
+  /** 원거리 발사 간격 축. */
+  | "ITEM_VIOLET_GEM_PENDANT"
+  | "ITEM_VIOLET_RING"
+  | "ITEM_OLD_SCROLL"
+  | "ITEM_GREEN_STAFF"
+  /** 이동 속도 축. */
+  | "ITEM_RUNNER_STAR"
+  | "ITEM_TEAL_POTION"
+  | "ITEM_BLOOD_CAPE"
+  | "ITEM_RED_ARROW"
+  | "ITEM_VIOLET_LANTERN"
+  /** 대시 충전 시간 축. */
+  | "ITEM_NIGHT_MASK"
+  | "ITEM_GOLD_CROSS_STAR"
+  | "ITEM_BLUE_SPELLBOOK"
+  | "ITEM_STAR_MACE"
+  | "ITEM_CRACKED_ORB"
+  /** 대시 무적 시간 축. */
+  | "ITEM_RED_POTION"
+  | "ITEM_BLUE_RING"
+  | "ITEM_VIOLET_SCROLL"
+  | "ITEM_BLACK_HOURGLASS"
+  /** 최대 체력 축. */
+  | "ITEM_VIOLET_DIAMOND_PENDANT"
+  | "ITEM_GEAR_HEART"
+  | "ITEM_GOLD_SPELLBOOK"
+  | "ITEM_BLACK_SHURIKEN"
+  /** 받는 피해 감소 축. */
+  | "ITEM_SHADOWFLAME_RING"
+  | "ITEM_RED_SHARD"
+  | "ITEM_SPIKED_STAR"
+  | "ITEM_OLD_RIFLE"
+  | "ITEM_GLASS_ORB"
+  /** 근접 흡혈 축. */
+  | "ITEM_VIOLET_POTION"
+  | "ITEM_GOLD_RING"
+  | "ITEM_BLOODY_SCROLL"
+  | "ITEM_VIOLET_HOURGLASS";
 
 export type UpgradeCategory = "MELEE" | "RANGED" | "MOBILITY" | "HEALTH";
 

@@ -181,6 +181,75 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     name: "멈추지 않는 심장",
     description: "근접 공격 적중 시 15% 확률로 체력을 1 회복한다.",
   },
+
+  // ── 잡화 아티팩트 55종. 이름은 다르지만 효과 축은 12가지를 재사용한다(Player.ts 참고). ──
+
+  ITEM_RED_STAR_SHARD: { id: "ITEM_RED_STAR_SHARD", category: "MELEE", name: "붉은 별의 파편", description: "근접 공격력이 12% 증가한다." },
+  ITEM_BLUE_POTION: { id: "ITEM_BLUE_POTION", category: "MELEE", name: "푸른 물약", description: "근접 공격력이 12% 증가한다." },
+  ITEM_TEAL_RING: { id: "ITEM_TEAL_RING", category: "MELEE", name: "청록 반지", description: "근접 공격력이 12% 증가한다." },
+  ITEM_GOLD_SCROLL: { id: "ITEM_GOLD_SCROLL", category: "MELEE", name: "금빛 두루마리", description: "근접 공격력이 12% 증가한다." },
+  ITEM_RED_LANTERN: { id: "ITEM_RED_LANTERN", category: "MELEE", name: "붉은 등불", description: "근접 공격력이 12% 증가한다." },
+
+  ITEM_BLOOD_NECKLACE: { id: "ITEM_BLOOD_NECKLACE", category: "MELEE", name: "피의 목걸이", description: "근접 공격 사거리가 늘어난다." },
+  ITEM_VIOLET_WHIRL_ORB: { id: "ITEM_VIOLET_WHIRL_ORB", category: "MELEE", name: "보랏빛 소용돌이", description: "근접 공격 사거리가 늘어난다." },
+  ITEM_RED_SPELLBOOK: { id: "ITEM_RED_SPELLBOOK", category: "MELEE", name: "붉은 마법서", description: "근접 공격 사거리가 늘어난다." },
+  ITEM_VIOLET_DAGGER: { id: "ITEM_VIOLET_DAGGER", category: "MELEE", name: "보랏빛 단검", description: "근접 공격 사거리가 늘어난다." },
+  ITEM_VIOLET_FLAME_ORB: { id: "ITEM_VIOLET_FLAME_ORB", category: "MELEE", name: "보랏빛 화염구", description: "근접 공격 사거리가 늘어난다." },
+
+  ITEM_RED_SEAL: { id: "ITEM_RED_SEAL", category: "MELEE", name: "붉은 인장", description: "근접 연속 공격의 마지막 타격 피해가 15% 증가한다." },
+  ITEM_RED_RING: { id: "ITEM_RED_RING", category: "MELEE", name: "붉은 반지", description: "근접 연속 공격의 마지막 타격 피해가 15% 증가한다." },
+  ITEM_GREEN_SPELLBOOK: { id: "ITEM_GREEN_SPELLBOOK", category: "MELEE", name: "초록 마법서", description: "근접 연속 공격의 마지막 타격 피해가 15% 증가한다." },
+  ITEM_VIOLET_SHURIKEN: { id: "ITEM_VIOLET_SHURIKEN", category: "MELEE", name: "보랏빛 수리검", description: "근접 연속 공격의 마지막 타격 피해가 15% 증가한다." },
+
+  ITEM_GREED_EYE_ORB: { id: "ITEM_GREED_EYE_ORB", category: "RANGED", name: "탐욕의 눈동자", description: "원거리 공격력이 12% 증가한다." },
+  ITEM_GOLD_POTION: { id: "ITEM_GOLD_POTION", category: "RANGED", name: "황금 물약", description: "원거리 공격력이 12% 증가한다." },
+  ITEM_BEAST_FANG: { id: "ITEM_BEAST_FANG", category: "RANGED", name: "짐승의 송곳니", description: "원거리 공격력이 12% 증가한다." },
+  ITEM_WINGED_STAR: { id: "ITEM_WINGED_STAR", category: "RANGED", name: "날개별", description: "원거리 공격력이 12% 증가한다." },
+  ITEM_THORN_CROWN: { id: "ITEM_THORN_CROWN", category: "RANGED", name: "가시 왕관", description: "원거리 공격력이 12% 증가한다." },
+
+  ITEM_BAT_AXE: { id: "ITEM_BAT_AXE", category: "RANGED", name: "박쥐날개 도끼", description: "탄창 용량이 1발 증가한다." },
+  ITEM_TEAL_GEM: { id: "ITEM_TEAL_GEM", category: "RANGED", name: "청록 보주", description: "탄창 용량이 1발 증가한다." },
+  ITEM_VIOLET_SPELLBOOK: { id: "ITEM_VIOLET_SPELLBOOK", category: "RANGED", name: "보라 마법서", description: "탄창 용량이 1발 증가한다." },
+  ITEM_BLOOD_SCYTHE: { id: "ITEM_BLOOD_SCYTHE", category: "RANGED", name: "핏빛 낫", description: "탄창 용량이 1발 증가한다." },
+  ITEM_RED_WHIRL_ORB: { id: "ITEM_RED_WHIRL_ORB", category: "RANGED", name: "붉은 소용돌이", description: "탄창 용량이 1발 증가한다." },
+
+  ITEM_VIOLET_GEM_PENDANT: { id: "ITEM_VIOLET_GEM_PENDANT", category: "RANGED", name: "보랏빛 공명석", description: "원거리 공격의 발사 간격이 8% 감소한다." },
+  ITEM_VIOLET_RING: { id: "ITEM_VIOLET_RING", category: "RANGED", name: "보랏빛 반지", description: "원거리 공격의 발사 간격이 8% 감소한다." },
+  ITEM_OLD_SCROLL: { id: "ITEM_OLD_SCROLL", category: "RANGED", name: "낡은 두루마리", description: "원거리 공격의 발사 간격이 8% 감소한다." },
+  ITEM_GREEN_STAFF: { id: "ITEM_GREEN_STAFF", category: "RANGED", name: "초록 지팡이", description: "원거리 공격의 발사 간격이 8% 감소한다." },
+
+  ITEM_RUNNER_STAR: { id: "ITEM_RUNNER_STAR", category: "MOBILITY", name: "질주자의 별", description: "이동 속도가 5% 증가한다." },
+  ITEM_TEAL_POTION: { id: "ITEM_TEAL_POTION", category: "MOBILITY", name: "청록 물약", description: "이동 속도가 5% 증가한다." },
+  ITEM_BLOOD_CAPE: { id: "ITEM_BLOOD_CAPE", category: "MOBILITY", name: "핏빛 망토", description: "이동 속도가 5% 증가한다." },
+  ITEM_RED_ARROW: { id: "ITEM_RED_ARROW", category: "MOBILITY", name: "붉은 화살", description: "이동 속도가 5% 증가한다." },
+  ITEM_VIOLET_LANTERN: { id: "ITEM_VIOLET_LANTERN", category: "MOBILITY", name: "보랏빛 등불", description: "이동 속도가 5% 증가한다." },
+
+  ITEM_NIGHT_MASK: { id: "ITEM_NIGHT_MASK", category: "MOBILITY", name: "밤의 복면", description: "대시 충전 시간이 6% 감소한다." },
+  ITEM_GOLD_CROSS_STAR: { id: "ITEM_GOLD_CROSS_STAR", category: "MOBILITY", name: "금빛 십자성", description: "대시 충전 시간이 6% 감소한다." },
+  ITEM_BLUE_SPELLBOOK: { id: "ITEM_BLUE_SPELLBOOK", category: "MOBILITY", name: "푸른 마법서", description: "대시 충전 시간이 6% 감소한다." },
+  ITEM_STAR_MACE: { id: "ITEM_STAR_MACE", category: "MOBILITY", name: "별의 철퇴", description: "대시 충전 시간이 6% 감소한다." },
+  ITEM_CRACKED_ORB: { id: "ITEM_CRACKED_ORB", category: "MOBILITY", name: "균열난 구슬", description: "대시 충전 시간이 6% 감소한다." },
+
+  ITEM_RED_POTION: { id: "ITEM_RED_POTION", category: "MOBILITY", name: "붉은 물약", description: "대시 중 무적 시간이 늘어난다." },
+  ITEM_BLUE_RING: { id: "ITEM_BLUE_RING", category: "MOBILITY", name: "푸른 반지", description: "대시 중 무적 시간이 늘어난다." },
+  ITEM_VIOLET_SCROLL: { id: "ITEM_VIOLET_SCROLL", category: "MOBILITY", name: "보랏빛 두루마리", description: "대시 중 무적 시간이 늘어난다." },
+  ITEM_BLACK_HOURGLASS: { id: "ITEM_BLACK_HOURGLASS", category: "MOBILITY", name: "검은 모래시계", description: "대시 중 무적 시간이 늘어난다." },
+
+  ITEM_VIOLET_DIAMOND_PENDANT: { id: "ITEM_VIOLET_DIAMOND_PENDANT", category: "HEALTH", name: "보랏빛 심핵", description: "최대 체력이 8 증가하고 증가한 만큼 즉시 회복한다." },
+  ITEM_GEAR_HEART: { id: "ITEM_GEAR_HEART", category: "HEALTH", name: "톱니 심장", description: "최대 체력이 8 증가하고 증가한 만큼 즉시 회복한다." },
+  ITEM_GOLD_SPELLBOOK: { id: "ITEM_GOLD_SPELLBOOK", category: "HEALTH", name: "황금 마법서", description: "최대 체력이 8 증가하고 증가한 만큼 즉시 회복한다." },
+  ITEM_BLACK_SHURIKEN: { id: "ITEM_BLACK_SHURIKEN", category: "HEALTH", name: "검은 수리검", description: "최대 체력이 8 증가하고 증가한 만큼 즉시 회복한다." },
+
+  ITEM_SHADOWFLAME_RING: { id: "ITEM_SHADOWFLAME_RING", category: "HEALTH", name: "그림자 불꽃의 고리", description: "받는 피해가 5% 감소한다." },
+  ITEM_RED_SHARD: { id: "ITEM_RED_SHARD", category: "HEALTH", name: "붉은 파편", description: "받는 피해가 5% 감소한다." },
+  ITEM_SPIKED_STAR: { id: "ITEM_SPIKED_STAR", category: "HEALTH", name: "가시별", description: "받는 피해가 5% 감소한다." },
+  ITEM_OLD_RIFLE: { id: "ITEM_OLD_RIFLE", category: "HEALTH", name: "낡은 소총", description: "받는 피해가 5% 감소한다." },
+  ITEM_GLASS_ORB: { id: "ITEM_GLASS_ORB", category: "HEALTH", name: "초록 유리구슬", description: "받는 피해가 5% 감소한다." },
+
+  ITEM_VIOLET_POTION: { id: "ITEM_VIOLET_POTION", category: "HEALTH", name: "보라 물약", description: "근접 공격 적중 시 4% 확률로 체력을 1 회복한다." },
+  ITEM_GOLD_RING: { id: "ITEM_GOLD_RING", category: "HEALTH", name: "황금 반지", description: "근접 공격 적중 시 4% 확률로 체력을 1 회복한다." },
+  ITEM_BLOODY_SCROLL: { id: "ITEM_BLOODY_SCROLL", category: "HEALTH", name: "핏빛 두루마리", description: "근접 공격 적중 시 4% 확률로 체력을 1 회복한다." },
+  ITEM_VIOLET_HOURGLASS: { id: "ITEM_VIOLET_HOURGLASS", category: "HEALTH", name: "보라 모래시계", description: "근접 공격 적중 시 4% 확률로 체력을 1 회복한다." },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

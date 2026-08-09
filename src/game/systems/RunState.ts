@@ -13,7 +13,7 @@ import { DEFAULT_BOSS_WEIGHTS } from "../data/directorRules";
 import { ENGRAVING_EFFECT } from "../data/engravings";
 import { FIXED_ROOM_SEQUENCE } from "../data/rooms";
 import { hasEngraving } from "./Engravings";
-import { TUNING } from "../entities/Player";
+import { HEALTH_HP_IDS, TUNING } from "../entities/Player";
 import type {
   BossPattern,
   BossPatternWeights,
@@ -209,6 +209,11 @@ export class RunState {
     if (upgradeId === "HEALTH_MAX_UP") {
       this.maxHp += TUNING.upgrade.healthMaxBonus;
       this.heal(TUNING.upgrade.healthMaxBonus);
+    }
+    // 잡화 아티팩트(최대 체력 축) — 하나 주울 때마다 그 자리에서 즉시 늘고 채워진다.
+    if (HEALTH_HP_IDS.includes(upgradeId)) {
+      this.maxHp += TUNING.upgrade.itemHpBonus;
+      this.heal(TUNING.upgrade.itemHpBonus);
     }
   }
 
