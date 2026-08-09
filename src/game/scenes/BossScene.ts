@@ -28,7 +28,7 @@ import {
 } from "../systems/CombatVfx";
 import { CombatTelemetryRecorder } from "../systems/CombatTelemetry";
 import { runState } from "../systems/RunState";
-import { AUDIO, createArena, TEXTURE, type CombatArena } from "../types/combat";
+import { AUDIO, createArena, DEPTH, TEXTURE, type CombatArena } from "../types/combat";
 import type { AttackMode, UpgradeElement } from "../types/game";
 
 export class BossScene extends Phaser.Scene {
@@ -58,8 +58,14 @@ export class BossScene extends Phaser.Scene {
     pulseGlitchFx(this, 0.8, 650);
     this.telemetry.begin(this.time.now);
 
-    // 보스방도 맨바닥 도형이 아니라 전투방과 같은 돌바닥·폐허 배경을 깐다.
-    this.arena = createArena(this, VIEWPORT, TEXTURE.floorTileStone, TEXTURE.background, 87, 0x3a1c28);
+    // 보스방은 야외 폐허 스카이라인 대신 실내 고딕 성당 배경을 직접 깐다 — 구름 없이,
+    // 방 크기(1280×720)와 그림 비율(1672×941)이 거의 같아 늘리지 않고 꽉 채운다.
+    this.add
+      .image(0, 0, TEXTURE.bossThrone)
+      .setOrigin(0, 0)
+      .setDisplaySize(VIEWPORT.width, VIEWPORT.height)
+      .setDepth(DEPTH.background);
+    this.arena = createArena(this, VIEWPORT, TEXTURE.floorTileStone, undefined, 87, 0x3a1c28);
     // 전투방과 같은 핏빛 비 — 보스전만 하늘이 맑으면 톤이 끊긴다.
     startBloodRain(this, VIEWPORT.width, this.arena.bounds.floorY);
     startDreamMist(this, VIEWPORT.width, this.arena.bounds.floorY);
