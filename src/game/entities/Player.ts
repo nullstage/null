@@ -98,6 +98,95 @@ const PARRY_COOLDOWN_MS = 900;
 /** 퍼펙트를 놓치고 일반 막기로만 받아냈을 때 남는 피해 비율. */
 const PARRY_BLOCK_DAMAGE_RATIO = 0.25;
 
+/**
+ * 잡화 아티팩트 55종. 이름·설명은 저마다 다르지만 기계적 효과는 12가지 축(카테고리마다
+ * 3개)을 재사용한다 — 스컬(Skul: The Hero Slayer)의 실제 아이템 목록도 상당수가 이런
+ * "같은 축, 다른 이름" 구성이다. 같은 축을 여럿 가지면 개수만큼 겹쳐 쌓인다.
+ */
+const MELEE_DMG_IDS: readonly UpgradeId[] = [
+  "ITEM_RED_STAR_SHARD",
+  "ITEM_BLUE_POTION",
+  "ITEM_TEAL_RING",
+  "ITEM_GOLD_SCROLL",
+  "ITEM_RED_LANTERN",
+];
+const MELEE_REACH_IDS: readonly UpgradeId[] = [
+  "ITEM_BLOOD_NECKLACE",
+  "ITEM_VIOLET_WHIRL_ORB",
+  "ITEM_RED_SPELLBOOK",
+  "ITEM_VIOLET_DAGGER",
+  "ITEM_VIOLET_FLAME_ORB",
+];
+const MELEE_FINISHER_IDS: readonly UpgradeId[] = [
+  "ITEM_RED_SEAL",
+  "ITEM_RED_RING",
+  "ITEM_GREEN_SPELLBOOK",
+  "ITEM_VIOLET_SHURIKEN",
+];
+
+const RANGED_DMG_IDS: readonly UpgradeId[] = [
+  "ITEM_GREED_EYE_ORB",
+  "ITEM_GOLD_POTION",
+  "ITEM_BEAST_FANG",
+  "ITEM_WINGED_STAR",
+  "ITEM_THORN_CROWN",
+];
+const RANGED_MAG_IDS: readonly UpgradeId[] = [
+  "ITEM_BAT_AXE",
+  "ITEM_TEAL_GEM",
+  "ITEM_VIOLET_SPELLBOOK",
+  "ITEM_BLOOD_SCYTHE",
+  "ITEM_RED_WHIRL_ORB",
+];
+const RANGED_CD_IDS: readonly UpgradeId[] = [
+  "ITEM_VIOLET_GEM_PENDANT",
+  "ITEM_VIOLET_RING",
+  "ITEM_OLD_SCROLL",
+  "ITEM_GREEN_STAFF",
+];
+
+const MOBILITY_SPEED_IDS: readonly UpgradeId[] = [
+  "ITEM_RUNNER_STAR",
+  "ITEM_TEAL_POTION",
+  "ITEM_BLOOD_CAPE",
+  "ITEM_RED_ARROW",
+  "ITEM_VIOLET_LANTERN",
+];
+const MOBILITY_DASH_CD_IDS: readonly UpgradeId[] = [
+  "ITEM_NIGHT_MASK",
+  "ITEM_GOLD_CROSS_STAR",
+  "ITEM_BLUE_SPELLBOOK",
+  "ITEM_STAR_MACE",
+  "ITEM_CRACKED_ORB",
+];
+const MOBILITY_INVULN_IDS: readonly UpgradeId[] = [
+  "ITEM_RED_POTION",
+  "ITEM_BLUE_RING",
+  "ITEM_VIOLET_SCROLL",
+  "ITEM_BLACK_HOURGLASS",
+];
+
+/** RunState.addUpgrade가 즉시 최대 체력을 올릴 때도 같은 목록을 써야 한다. */
+export const HEALTH_HP_IDS: readonly UpgradeId[] = [
+  "ITEM_VIOLET_DIAMOND_PENDANT",
+  "ITEM_GEAR_HEART",
+  "ITEM_GOLD_SPELLBOOK",
+  "ITEM_BLACK_SHURIKEN",
+];
+const HEALTH_ARMOR_IDS: readonly UpgradeId[] = [
+  "ITEM_SHADOWFLAME_RING",
+  "ITEM_RED_SHARD",
+  "ITEM_SPIKED_STAR",
+  "ITEM_OLD_RIFLE",
+  "ITEM_GLASS_ORB",
+];
+const HEALTH_LIFE_IDS: readonly UpgradeId[] = [
+  "ITEM_VIOLET_POTION",
+  "ITEM_GOLD_RING",
+  "ITEM_BLOODY_SCROLL",
+  "ITEM_VIOLET_HOURGLASS",
+];
+
 /** 원거리 모드 표시색. 곱연산이라 흰색에 가까울수록 원본이 살아 있다. */
 const RANGED_MODE_TINT = 0xffc9d4;
 
@@ -220,6 +309,23 @@ export const TUNING = {
     /** 멈추지 않는 심장 — 근접 적중마다 이 확률로 체력을 회복한다. */
     vampireChance: 0.15,
     vampireHeal: 1,
+
+    /**
+     * 잡화 아티팩트 55종 — 12개 효과 축의 단위 수치(스택당). `*_IDS` 배열(위)의
+     * 소속 개수를 곱해서 쓴다. 하나짜리 전용 아티팩트보다 낮게 잡았다 — 최대 4~5개까지
+     * 겹쳐 쌓일 수 있어서다.
+     */
+    itemMeleeDmgPer: 0.12,
+    itemMeleeReachPer: 8,
+    itemMeleeFinisherPer: 0.15,
+    itemRangedDmgPer: 0.12,
+    itemRangedCdPer: 0.08,
+    itemMoveSpeedPer: 0.05,
+    itemDashCdPer: 0.06,
+    itemDashInvulnPer: 40,
+    itemHpBonus: 8,
+    itemArmorPer: 0.05,
+    itemLifestealChancePer: 0.04,
 
     /** 화염 — 적중 후 이 간격으로 이 횟수만큼 화상 틱이 들어간다. */
     fireTickDamage: 3,
@@ -559,10 +665,7 @@ export class Player {
 
     if (this.dashCharges < this.maxDashCharges && time >= this.dashRechargeAtMs) {
       this.dashCharges += 1;
-      this.dashRechargeAtMs =
-        time +
-        TUNING.dash.rechargeMs *
-          (this.hasUpgrade("DASH_COOLDOWN_DOWN") ? TUNING.upgrade.dashCooldownMultiplier : 1);
+      this.dashRechargeAtMs = time + TUNING.dash.rechargeMs * this.dashCooldownMultiplier;
     }
 
     // 대시가 끝나도 관성으로 계속 날아간다. 그 구간에도 잔상을 이어야 궤적이 안 끊긴다.
@@ -575,7 +678,7 @@ export class Player {
       // 팔만 흔드는 그림이 된다. 잠깐은 관성을 살려 둔다.
       body.setVelocityX(body.velocity.x * TUNING.melee.lungeDrag);
     } else if (this.isGrounded) {
-      body.setVelocityX(direction * PLAYER.moveSpeed);
+      body.setVelocityX(direction * this.moveSpeed);
     } else if (direction !== 0 && Math.sign(body.velocity.x) === direction &&
                Math.abs(body.velocity.x) > PLAYER.moveSpeed) {
       // 대시 관성이 이동 속도보다 빠른데 같은 방향을 누르고 있다.
@@ -583,7 +686,7 @@ export class Player {
       body.setVelocityX(body.velocity.x * TUNING.airDragPerFrame);
     } else if (direction !== 0) {
       // 반대로 꺾거나 이미 느려졌으면 조작을 그대로 받는다. 공중 제어권은 남겨야 한다.
-      body.setVelocityX(direction * PLAYER.moveSpeed);
+      body.setVelocityX(direction * this.moveSpeed);
     } else {
       // 손을 떼면 서서히 죽는다. 즉시 0으로 만들면 포물선이 끊긴다.
       body.setVelocityX(body.velocity.x * TUNING.airDragPerFrame);
@@ -684,9 +787,7 @@ export class Player {
     if (!sprite || !body || this.isDashing || this.dashCharges <= 0) return;
 
     const now = this.scene.time.now;
-    const rechargeMs =
-      TUNING.dash.rechargeMs *
-      (this.hasUpgrade("DASH_COOLDOWN_DOWN") ? TUNING.upgrade.dashCooldownMultiplier : 1);
+    const rechargeMs = TUNING.dash.rechargeMs * this.dashCooldownMultiplier;
     this.dashCharges -= 1;
     // 충전이 가득 찼다가 처음 빠진 순간부터 재충전 타이머를 돌린다.
     if (this.dashRechargeAtMs <= now) this.dashRechargeAtMs = now + rechargeMs;
@@ -699,7 +800,8 @@ export class Player {
     this.dashFollowupUntilMs = now + TUNING.upgrade.dashFollowupWindowMs;
     const invulnMs =
       PLAYER.dashInvulnerabilityMs +
-      (this.hasUpgrade("DASH_INVULN_UP") ? TUNING.upgrade.dashInvulnBonusMs : 0);
+      (this.hasUpgrade("DASH_INVULN_UP") ? TUNING.upgrade.dashInvulnBonusMs : 0) +
+      TUNING.upgrade.itemDashInvulnPer * this.countOwned(MOBILITY_INVULN_IDS);
     this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, now + invulnMs);
 
     // 스케일 펀치가 남아 있으면 대시 중에 충돌 박스가 계속 흔들린다(punch 주석 참고).
@@ -834,12 +936,17 @@ export class Player {
       (isFinisher ? melee.finisherReach : melee.reach) +
       (isFinisher && this.hasUpgrade("MELEE_FINISHER_RANGE_UP") ? melee.finisherRangeBonus : 0) +
       (reforgedBlade ? TUNING.upgrade.bladeReachBonus : 0) +
-      (this.hasUpgrade("MELEE_BLADE_SIZE_UP") ? TUNING.upgrade.bladeSizeReachBonus : 0);
+      (this.hasUpgrade("MELEE_BLADE_SIZE_UP") ? TUNING.upgrade.bladeSizeReachBonus : 0) +
+      TUNING.upgrade.itemMeleeReachPer * this.countOwned(MELEE_REACH_IDS);
 
     let damage: number = melee.damage;
     if (this.hasUpgrade("MELEE_DAMAGE_UP")) damage *= TUNING.upgrade.meleeDamageMultiplier;
     if (reforgedBlade) damage *= TUNING.upgrade.bladeDamageMultiplier;
-    if (isFinisher) damage *= melee.finisherDamageMultiplier;
+    damage *= 1 + TUNING.upgrade.itemMeleeDmgPer * this.countOwned(MELEE_DMG_IDS);
+    if (isFinisher) {
+      damage *= melee.finisherDamageMultiplier;
+      damage *= 1 + TUNING.upgrade.itemMeleeFinisherPer * this.countOwned(MELEE_FINISHER_IDS);
+    }
     if (this.hasUpgrade("MELEE_BERSERK") && this.hp <= this.maxHp * TUNING.upgrade.berserkHpRatio) {
       damage *= TUNING.upgrade.berserkDamageMultiplier;
     }
@@ -1098,7 +1205,8 @@ export class Player {
 
     const cooldown =
       PLAYER.rangedCooldownMs *
-      (this.hasUpgrade("RANGED_COOLDOWN_DOWN") ? TUNING.upgrade.rangedCooldownMultiplier : 1);
+      (this.hasUpgrade("RANGED_COOLDOWN_DOWN") ? TUNING.upgrade.rangedCooldownMultiplier : 1) *
+      Math.max(0.4, 1 - TUNING.upgrade.itemRangedCdPer * this.countOwned(RANGED_CD_IDS));
     this.nextAttackAtMs = now + cooldown;
     // 검을 놓았으니 근접 콤보는 끊긴다.
     this.comboStep = 0;
@@ -1123,7 +1231,8 @@ export class Player {
       this.applyDashFollowup(
         ranged.damage *
           (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1) *
-          (reloadBurst ? TUNING.upgrade.reloadBurstMultiplier : 1),
+          (reloadBurst ? TUNING.upgrade.reloadBurstMultiplier : 1) *
+          (1 + TUNING.upgrade.itemRangedDmgPer * this.countOwned(RANGED_DMG_IDS)),
       ),
     );
 
@@ -1287,6 +1396,17 @@ export class Player {
       this.hp = Math.min(this.maxHp, this.hp + TUNING.upgrade.vampireHeal);
       this.emitHud();
     }
+    // 잡화 아티팩트(근접 흡혈 축) — 가진 개수만큼 확률이 쌓인다.
+    const itemLifeCount = this.countOwned(HEALTH_LIFE_IDS);
+    if (
+      mode === "MELEE" &&
+      !this.isDead &&
+      itemLifeCount > 0 &&
+      Math.random() < TUNING.upgrade.itemLifestealChancePer * itemLifeCount
+    ) {
+      this.hp = Math.min(this.maxHp, this.hp + 1);
+      this.emitHud();
+    }
 
     this.scene.cameras.main.shake(
       TUNING.feedback.hitShakeMs,
@@ -1358,6 +1478,10 @@ export class Player {
     // 내구 강화 — 막기와 별개로, 맞을 때마다 항상 곱해진다(중첩 가능).
     if (this.hasUpgrade("HEALTH_ARMOR")) {
       amount = Math.round(amount * TUNING.upgrade.armorDamageMultiplier);
+    }
+    const itemArmorCount = this.countOwned(HEALTH_ARMOR_IDS);
+    if (itemArmorCount > 0) {
+      amount = Math.round(amount * Math.max(0.4, 1 - TUNING.upgrade.itemArmorPer * itemArmorCount));
     }
 
     const invulnMs =
@@ -1629,6 +1753,23 @@ export class Player {
     return this.deps.upgrades.includes(id);
   }
 
+  /** 잡화 아티팩트 55종처럼 여러 개가 같은 축을 공유할 때, 가진 개수를 센다. */
+  private countOwned(ids: readonly UpgradeId[]): number {
+    return ids.filter((id) => this.hasUpgrade(id)).length;
+  }
+
+  private get moveSpeed(): number {
+    return PLAYER.moveSpeed * (1 + TUNING.upgrade.itemMoveSpeedPer * this.countOwned(MOBILITY_SPEED_IDS));
+  }
+
+  /** 대시 재충전 시간에 곱한다 — 두 군데(충전 시작·대시 즉시 재충전)가 같은 값을 써야 한다. */
+  private get dashCooldownMultiplier(): number {
+    return (
+      (this.hasUpgrade("DASH_COOLDOWN_DOWN") ? TUNING.upgrade.dashCooldownMultiplier : 1) *
+      Math.max(0.4, 1 - TUNING.upgrade.itemDashCdPer * this.countOwned(MOBILITY_DASH_CD_IDS))
+    );
+  }
+
   private get maxDashCharges(): number {
     return (
       PLAYER.dashCharges +
@@ -1641,7 +1782,8 @@ export class Player {
     return (
       TUNING.ranged.magazineSize +
       (this.hasUpgrade("RANGED_MAG_UP") ? TUNING.upgrade.magazineBonus : 0) +
-      (hasEngraving("SPARE_SHELL") ? ENGRAVING_EFFECT.magazineBonus : 0)
+      (hasEngraving("SPARE_SHELL") ? ENGRAVING_EFFECT.magazineBonus : 0) +
+      this.countOwned(RANGED_MAG_IDS)
     );
   }
 
