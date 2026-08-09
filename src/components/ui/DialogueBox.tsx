@@ -2,18 +2,12 @@
 
 import styled from "@emotion/styled";
 import gsap from "gsap";
-import localFont from "next/font/local";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { chosunKg } from "@/styles/fonts";
 import { theme } from "@/styles/theme";
 
 import { DIALOGUE_ASSETS } from "./dialogueAssets";
-
-/** 대화 본문 전용 서체(정체, Regular). 다른 UI는 손대지 않는다 — 지금은 이 대화창 본문에만 쓴다. */
-const chosunKg = localFont({
-  src: "../../assets/fonts/ChosunKg.ttf",
-  display: "swap",
-});
 
 /**
  * 기록자 대화창.

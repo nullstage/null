@@ -27,10 +27,12 @@ import {
   ashRise,
   BEAM_WINDUP_MS,
   beamLine,
+  bladeVortexBurst,
   clearParryGuard,
   createBulletTrail,
   deathBurst,
   groundDust,
+  groundEruptionBurst,
   hitBurst,
   hitStop,
   MOON_SHADOW_SKEW,
@@ -939,13 +941,14 @@ export class Player {
     );
     this.fireSwordWave(sprite, damage);
 
-    // 발동의 "쾅" — 가시 폭발은 이런 스킬급 순간의 언어다. 검기와 같은 한랭 팔레트.
+    // 발동의 "쾅" — 가시 폭발은 이런 스킬급 순간의 언어다. 3스킬 공용 붉은 팔레트.
     spikeBurst(this.scene, sprite.x + this.facing * 24, sprite.y, {
-      scale: 0.85,
-      spikes: 8,
-      dark: 0x141c33,
-      mid: 0x4d7dff,
-      bright: 0xcfeeff,
+      scale: 1.3,
+      spikes: 10,
+      dark: 0x330606,
+      mid: 0xe0263f,
+      bright: 0xffb199,
+      lineColor: 0xff3b3b,
     });
     this.scene.cameras.main.shake(110, 0.006);
     this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
@@ -986,12 +989,13 @@ export class Player {
         if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
         this.scene.time.delayedCall(140, () => box.destroy());
 
-        // 위쪽 반원으로만 치솟는 보라 가시 — 판정은 투명하고 이 그림이 전부다.
-        spikeBurst(this.scene, at, floorY - 8, {
-          scale: 0.8,
-          spikes: 6,
-          slashLines: false,
-          angleRange: { from: -Math.PI * 0.85, to: -Math.PI * 0.15 },
+        // 위쪽 반원으로만 치솟는 붉은 가시 + 바닥 충격 링 + 튀는 잔해 — 가시 혼자서는 약하다.
+        groundEruptionBurst(this.scene, at, floorY - 8, {
+          scale: 1.35,
+          dark: 0x330606,
+          mid: 0xe0263f,
+          bright: 0xffb199,
+          ringColor: 0xff3b3b,
         });
         groundDust(this.scene, at, floorY, "land");
       });
@@ -1023,8 +1027,13 @@ export class Player {
     if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
     this.scene.time.delayedCall(upgrade.cycloneActiveMs, () => box.destroy());
 
-    // 전방위 가시 + 양방향 슬래시를 연달아 — 한 바퀴 돌아 벤 것처럼 읽힌다.
-    spikeBurst(this.scene, sprite.x, sprite.y, { scale: 1.05, spikes: 12 });
+    // 전방위 가시 + 원형 소용돌이 링 + 사방으로 튕기는 칼날 + 양방향 슬래시 — 한 바퀴 돌아 벤 것처럼 읽힌다.
+    bladeVortexBurst(this.scene, sprite.x, sprite.y, upgrade.cycloneRadiusPx * 1.4, {
+      dark: 0x330606,
+      mid: 0xe0263f,
+      bright: 0xffb199,
+      ringColor: 0xff3b3b,
+    });
     slashArc(this.scene, sprite.x, sprite.y - 6, this.facing, 95, 3, false);
     this.scene.time.delayedCall(110, () => {
       if (this.sprite) {

@@ -1103,6 +1103,8 @@ export const spikeBurst = (
     bright?: number;
     /** 교차 섬광선을 그릴지. 잔타격에서는 꺼서 화면을 아낀다. */
     slashLines?: boolean;
+    /** 교차 섬광선 색. 생략하면 기본 핑크. */
+    lineColor?: number;
     /** 가시가 뻗는 각도 범위(라디안). 생략하면 전방위. 지면 충격파는 위쪽 반원만. */
     angleRange?: { from: number; to: number };
   } = {},
@@ -1112,6 +1114,7 @@ export const spikeBurst = (
   const dark = opts.dark ?? 0x1c0f33;
   const mid = opts.mid ?? 0x7a2ee0;
   const bright = opts.bright ?? 0xd98aff;
+  const lineColor = opts.lineColor ?? 0xff5fa8;
   const from = opts.angleRange?.from ?? 0;
   const to = opts.angleRange?.to ?? Math.PI * 2;
 
@@ -1218,7 +1221,7 @@ export const spikeBurst = (
       line.setDepth(VFX.depth + 2);
       line.setBlendMode(Phaser.BlendModes.ADD);
       line.setRotation(lineAngle + (i * Math.PI) / 2);
-      line.fillStyle(0xff5fa8, 0.9);
+      line.fillStyle(lineColor, 0.9);
       line.fillPoints(
         [
           { x: -lineLen, y: 0 },
@@ -1785,6 +1788,137 @@ export const bossShockwave = (scene: Phaser.Scene, x: number, y: number, width: 
         debris.setAlpha(1 - carrier.t * 0.7);
       },
       onComplete: () => debris.destroy(),
+    });
+  }
+};
+
+/**
+ * 지면 가시 폭발. `bossShockwave`와 같은 얼개(위쪽 반원 가시+바닥 충격 링+튀는 잔해)를
+ * 색만 매개변수로 받게 뺐다 — 가시 혼자서는 "쾅"이 약해서, 스킬 이펙트는 항상 이 조합을 쓴다.
+ */
+export const groundEruptionBurst = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  opts: {
+    scale?: number;
+    dark?: number;
+    mid?: number;
+    bright?: number;
+    ringColor?: number;
+    debrisColor?: number;
+  } = {},
+): void => {
+  spikeBurst(scene, x, y, {
+    scale: opts.scale ?? 1.15,
+    spikes: 7,
+    dark: opts.dark,
+    mid: opts.mid,
+    bright: opts.bright,
+    slashLines: false,
+    angleRange: { from: -Math.PI * 0.9, to: -Math.PI * 0.1 },
+  });
+
+  const ringColor = opts.ringColor ?? 0xff5a3c;
+  const debrisColor = opts.debrisColor ?? 0x5a1010;
+
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.lineStyle(4, ringColor, 0.9);
+  ring.strokeEllipse(0, 0, 46, 14);
+  scene.tweens.add({
+    targets: ring,
+    scaleX: 2.4,
+    scaleY: 2.2,
+    alpha: 0,
+    duration: 300,
+    ease: "power2.out",
+    onComplete: () => ring.destroy(),
+  });
+
+  for (let i = 0; i < 7; i += 1) {
+    const size = Phaser.Math.Between(3, 6);
+    const debris = scene.add.rectangle(x + Phaser.Math.Between(-18, 18), y, size, size, debrisColor);
+    debris.setDepth(VFX.depth + 1);
+    debris.setAngle(Phaser.Math.Between(0, 360));
+
+    const startX = debris.x;
+    const drift = Phaser.Math.FloatBetween(-1, 1) * 40;
+    const peak = Phaser.Math.FloatBetween(30, 70);
+    const spin = Phaser.Math.FloatBetween(-0.25, 0.25);
+    const carrier = { t: 0 };
+    scene.tweens.add({
+      targets: carrier,
+      t: 1,
+      duration: Phaser.Math.Between(280, 420),
+      ease: "linear",
+      onUpdate: () => {
+        debris.x = startX + drift * carrier.t;
+        debris.y = y - peak * Math.sin(carrier.t * Math.PI);
+        debris.rotation += spin;
+        debris.setAlpha(1 - carrier.t * 0.7);
+      },
+      onComplete: () => debris.destroy(),
+    });
+  }
+};
+
+/**
+ * 칼날 소용돌이. 전방위 가시 위에 원형으로 확 부푸는 이중 링과, 사방으로 튕겨 나가는
+ * 짧은 칼날 조각들을 얹는다 — 제자리에서 도는 스킬이라 "돈다"는 인상은 가시만으론 안 읽힌다.
+ */
+export const bladeVortexBurst = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  radius: number,
+  opts: { dark?: number; mid?: number; bright?: number; ringColor?: number } = {},
+): void => {
+  spikeBurst(scene, x, y, {
+    scale: 1.2,
+    spikes: 13,
+    dark: opts.dark,
+    mid: opts.mid,
+    bright: opts.bright,
+    lineColor: opts.ringColor,
+  });
+
+  const ringColor = opts.ringColor ?? 0xff3b3b;
+  const ring = scene.add.graphics({ x, y });
+  ring.setDepth(VFX.depth + 2);
+  ring.setBlendMode(Phaser.BlendModes.ADD);
+  ring.lineStyle(3, ringColor, 1);
+  ring.strokeCircle(0, 0, radius * 0.3);
+  ring.lineStyle(1.5, ringColor, 0.6);
+  ring.strokeCircle(0, 0, radius * 0.5);
+  scene.tweens.add({
+    targets: ring,
+    scale: radius / (radius * 0.3),
+    alpha: 0,
+    duration: 260,
+    ease: "power3.out",
+    onComplete: () => ring.destroy(),
+  });
+
+  const bladeCount = 10;
+  for (let i = 0; i < bladeCount; i += 1) {
+    const angle = (i / bladeCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.1, 0.1);
+    const dist = radius * Phaser.Math.FloatBetween(0.75, 1.05);
+    const blade = scene.add.graphics({ x, y });
+    blade.setDepth(VFX.depth + 2);
+    blade.setBlendMode(Phaser.BlendModes.ADD);
+    blade.lineStyle(2.5, ringColor, 0.95);
+    blade.lineBetween(0, 0, 14, 0);
+    blade.setRotation(angle);
+    scene.tweens.add({
+      targets: blade,
+      x: x + Math.cos(angle) * dist,
+      y: y + Math.sin(angle) * dist,
+      alpha: 0,
+      duration: 240 + Phaser.Math.Between(-30, 50),
+      ease: "power2.out",
+      onComplete: () => blade.destroy(),
     });
   }
 };

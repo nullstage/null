@@ -1,5 +1,7 @@
 /** UI 공통 토큰. 색과 간격을 컴포넌트마다 새로 정의하지 않는다. */
 
+import { chosunKg } from "./fonts";
+
 export const theme = {
   color: {
     bg: "#12151c",
@@ -15,7 +17,8 @@ export const theme = {
   space: (n: number) => `${n * 4}px`,
   radius: "10px",
   font: {
-    mono: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    /** 숫자·라벨 등 UI 전반에서 쓰던 자리. 대화창과 같은 ChosunKg 서체로 통일했다. */
+    mono: chosunKg.style.fontFamily,
     /** 시작 화면 등 아트가 붙는 화면의 한글 본문. Figma 지정 서체. */
     ui: "Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
   },
