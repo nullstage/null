@@ -1287,16 +1287,22 @@ export class CombatScene extends Phaser.Scene {
    * MVP_PLAN §6 역기만 판정.
    *
    * 예측은 방 3 입장 전 값이고, 실제 스타일은 방 3 텔레메트리만으로 다시 계산한다.
-   * OQ-014 미결정 — 보스 성향도 지금은 방 3만 사용한다.
+   * 보스 가중치는 OQ-014 확정에 따라 방 3 65% + 방 2 35%로 넓게 본다.
    */
   private resolveDeception(roomThreeTelemetry: CombatTelemetry): void {
     const predictedStyle = runState.predictedStyle ?? "MIXED";
+    // 역기만 판정은 방 3 단독으로 본다. 여기에 이전 방을 섞으면 "스타일을 바꿔
+    // 예측을 빗나가게 했다"는 판정 자체가 흐려진다.
     const actualStyle = classify(roomThreeTelemetry).style;
+    // 보스 가중치는 방 3만이 아니라 직전 방까지 함께 읽는다 — 방 사이 분석과 같은
+    // 65/35 가중이다(OQ-014 확정). 방 3이 여전히 지배적이라 스타일 전환은 계속 통한다.
+    const bossWeightStyle = analyze(roomThreeTelemetry, runState.previousTelemetry).style;
 
     runState.setDeception(
       evaluateDeception(predictedStyle, actualStyle, true, runState.maxHp),
     );
-    runState.setBossWeights(bossWeightsFor(actualStyle));
+    runState.setBossWeightStyle(bossWeightStyle);
+    runState.setBossWeights(bossWeightsFor(bossWeightStyle));
 
     // 역기만 결과를 닫으면 보스 진입 전 마지막 강화를 지급한다. (OQ-016 RESOLVED, DEC-015)
     this.once("ui:continue", () =>
