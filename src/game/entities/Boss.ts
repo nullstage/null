@@ -237,10 +237,11 @@ export class Boss {
     // 224px 셀 안에서 실제 그림은 여백을 두고 그려져 있다. setDisplaySize로 셀을 통째로
     // 눌러 맞추면 보스가 작아 보이므로, 그림은 스케일로 키우고 충돌 박스만 따로 잡는다.
     const sprite = this.scene.physics.add
-      .sprite(x, this.groundY, TEXTURE.boss, BOSS_FRAME.idle)
+      .sprite(x, this.groundY, TEXTURE.boss, 0)
       .setScale(BOSS_SPRITE_SCALE)
       .setDepth(DEPTH.boss);
     sprite.body?.setSize(BODY.width / BOSS_SPRITE_SCALE, BODY.height / BOSS_SPRITE_SCALE);
+    sprite.play(BOSS_FRAME.idle);
 
     // 씬이 보스방에 바닥 collider를 걸어주지 않고, slam 궤적도 직접 제어해야 한다.
     // 중력을 끄고 바닥 높이를 매 프레임 스냅하는 편이 예측 가능하다.
@@ -292,16 +293,16 @@ export class Boss {
   }
 
   /**
-   * 포즈 교체. 보스는 애니메이션 없이 패턴별 정지 포즈만 골라 쓴다.
+   * 포즈 교체. 패턴별 예고·타격 애니메이션을 재생한다.
    * 예고 포즈를 먼저 보여주고 타격 순간에 바꿔야 "무엇을 하려는지"가 읽힌다. (DEC-004)
    */
-  private setPose(frame: number): void {
-    this.sprite?.setFrame(frame);
+  private setPose(animKey: string): void {
+    this.sprite?.play(animKey, true);
   }
 
-  /** 타격 포즈를 잠깐 보여준 뒤 idle로 돌아온다. 젖혔던 몸도 이때 되돌린다. */
-  private strikePose(frame: number, holdMs: number): void {
-    this.setPose(frame);
+  /** 타격 애니메이션을 잠깐 재생한 뒤 idle로 돌아온다. 젖혔던 몸도 이때 되돌린다. */
+  private strikePose(animKey: string, holdMs: number): void {
+    this.setPose(animKey);
     this.sprite?.setRotation(0);
     this.after(holdMs, () => this.setPose(BOSS_FRAME.idle));
   }
