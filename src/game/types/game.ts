@@ -242,11 +242,17 @@ export interface RunResult {
   cleared: boolean;
   totalTimeMs: number;
   rooms: RoomRecord[];
+  /** 기록자가 보스 패턴을 정할 때 읽은 성향. 방 3 65% + 방 2 35% 가중이다. */
   finalStyle: PlayStyle;
   deception: DeceptionResult | null;
   bossWeights: BossPatternWeights;
   bossPatternUsage: Record<BossPattern, number>;
   selectedUpgrades: UpgradeId[];
+  /**
+   * 보스전에서 실제로 어떻게 싸웠는가. 표시 전용이다 — 보스가 죽으면 런이 끝나
+   * Director가 반응할 다음 방이 없다. 보스전 중에 가중치를 다시 계산하지 않는다. (MVP_PLAN §8)
+   */
+  bossStyle: PlayStyle | null;
 }
 
 /** 전투 중 React HUD가 표시하는 최소 상태 */
