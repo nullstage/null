@@ -37,8 +37,13 @@ const SKILL_ICON: Partial<Record<UpgradeId, ReactElement>> = {
   MELEE_SWORD_WAVE: <WaveIcon />,
   MELEE_SPIKE_ERUPTION: <SpikeIcon />,
   MELEE_BLADE_CYCLONE: <CycloneIcon />,
-  // eslint-disable-next-line @next/next/no-img-element
+  /* eslint-disable @next/next/no-img-element */
   HEALTH_MASK: <img src={assetPath("ui/items/mask-of-no-name.png")} alt="" />,
+  MELEE_BERSERK: <img src={assetPath("ui/items/enraged-blade.png")} alt="" />,
+  RANGED_RELOAD_BURST: <img src={assetPath("ui/items/hunters-revolver.png")} alt="" />,
+  MOBILITY_FEATHER: <img src={assetPath("ui/items/feather-fall.png")} alt="" />,
+  HEALTH_VAMPIRE: <img src={assetPath("ui/items/undying-heart.png")} alt="" />,
+  /* eslint-enable @next/next/no-img-element */
 };
 
 const CATEGORY_ICON: Record<UpgradeCategory, ReactElement> = {

@@ -157,6 +157,30 @@ export const UPGRADES: Record<UpgradeId, UpgradeDefinition> = {
     name: "이름 없는 낯",
     description: "피격 직후 무적 시간이 늘어난다.",
   },
+  MELEE_BERSERK: {
+    id: "MELEE_BERSERK",
+    category: "MELEE",
+    name: "분노한 칼날",
+    description: "체력이 30% 이하일 때 근접 공격력이 25% 증가한다.",
+  },
+  RANGED_RELOAD_BURST: {
+    id: "RANGED_RELOAD_BURST",
+    category: "RANGED",
+    name: "사냥꾼의 리볼버",
+    description: "재장전 직후 첫 발의 피해가 50% 증가한다.",
+  },
+  MOBILITY_FEATHER: {
+    id: "MOBILITY_FEATHER",
+    category: "MOBILITY",
+    name: "떨어지지 않는 깃털",
+    description: "낭떠러지에 떨어져도 피해를 입지 않는다.",
+  },
+  HEALTH_VAMPIRE: {
+    id: "HEALTH_VAMPIRE",
+    category: "HEALTH",
+    name: "멈추지 않는 심장",
+    description: "근접 공격 적중 시 15% 확률로 체력을 1 회복한다.",
+  },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

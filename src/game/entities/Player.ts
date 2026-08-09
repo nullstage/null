@@ -212,6 +212,14 @@ export const TUNING = {
     armorDamageMultiplier: 0.85,
     /** 이름 없는 낯 — 피격 직후 무적 시간(PLAYER.invulnerabilityMs)에 더한다. */
     maskInvulnBonusMs: 250,
+    /** 분노한 칼날 — 이 체력 비율 이하에서 근접 공격력에 곱한다. */
+    berserkHpRatio: 0.3,
+    berserkDamageMultiplier: 1.25,
+    /** 사냥꾼의 리볼버 — 재장전 직후 첫 발의 피해에 곱한다. */
+    reloadBurstMultiplier: 1.5,
+    /** 멈추지 않는 심장 — 근접 적중마다 이 확률로 체력을 회복한다. */
+    vampireChance: 0.15,
+    vampireHeal: 1,
 
     /** 화염 — 적중 후 이 간격으로 이 횟수만큼 화상 틱이 들어간다. */
     fireTickDamage: 3,
@@ -403,6 +411,8 @@ export class Player {
   // `as const` 탓에 초기값 그대로 두면 리터럴 타입(6)으로 좁혀진다.
   private ammo: number = TUNING.ranged.magazineSize;
   private reloadingUntilMs = 0;
+  /** 사냥꾼의 리볼버 — 재장전이 막 끝났는지. 다음 한 발에만 보너스를 주고 곧바로 꺼진다. */
+  private freshReload = false;
 
   private dashCharges: number = PLAYER.dashCharges;
   private dashEndsAtMs = 0;
@@ -830,6 +840,9 @@ export class Player {
     if (this.hasUpgrade("MELEE_DAMAGE_UP")) damage *= TUNING.upgrade.meleeDamageMultiplier;
     if (reforgedBlade) damage *= TUNING.upgrade.bladeDamageMultiplier;
     if (isFinisher) damage *= melee.finisherDamageMultiplier;
+    if (this.hasUpgrade("MELEE_BERSERK") && this.hp <= this.maxHp * TUNING.upgrade.berserkHpRatio) {
+      damage *= TUNING.upgrade.berserkDamageMultiplier;
+    }
     damage = this.applyDashFollowup(damage);
 
     const hitbox = this.scene.physics.add.image(
@@ -1103,9 +1116,14 @@ export class Player {
     const reforgedBarrel = this.hasUpgrade("BARREL_REFORGED");
     const maxHits =
       ranged.baseMaxHits + (this.hasUpgrade("RANGED_PIERCE") ? ranged.pierceBonusHits : 0);
+    // 사냥꾼의 리볼버 — 재장전 직후 이 한 발에만 실리고 곧바로 꺼진다.
+    const reloadBurst = this.freshReload;
+    this.freshReload = false;
     const rangedDamage = Math.round(
       this.applyDashFollowup(
-        ranged.damage * (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1),
+        ranged.damage *
+          (reforgedBarrel ? TUNING.upgrade.barrelDamageMultiplier : 1) *
+          (reloadBurst ? TUNING.upgrade.reloadBurstMultiplier : 1),
       ),
     );
 
@@ -1218,6 +1236,7 @@ export class Player {
     this.scene.time.delayedCall(TUNING.ranged.reloadMs, () => {
       if (this.isDead) return;
       this.ammo = this.maxMagazineSize;
+      if (this.hasUpgrade("RANGED_RELOAD_BURST")) this.freshReload = true;
       playSfx(this.scene, AUDIO.shellDrop);
       this.emitHud();
     });
@@ -1257,6 +1276,17 @@ export class Player {
   notifyHit(mode: AttackMode, at?: { x: number; y: number }): void {
     if (mode === "MELEE") this.telemetry.recordMeleeHit();
     else this.telemetry.recordRangedHit();
+
+    // 멈추지 않는 심장 — 근접 적중마다 낮은 확률로 조금씩 되찾는다.
+    if (
+      mode === "MELEE" &&
+      !this.isDead &&
+      this.hasUpgrade("HEALTH_VAMPIRE") &&
+      Math.random() < TUNING.upgrade.vampireChance
+    ) {
+      this.hp = Math.min(this.maxHp, this.hp + TUNING.upgrade.vampireHeal);
+      this.emitHud();
+    }
 
     this.scene.cameras.main.shake(
       TUNING.feedback.hitShakeMs,
