@@ -1397,3 +1397,50 @@
 - 검증 중 겪은 함정: 첫 방문 NOTICE는 마운트 뒤 effect에서 뜬다. `isVisible()`로 먼저
   확인하면 레이스로 놓치고, z-index 70짜리 오버레이가 남아 이후 모든 클릭을 가로챈다.
   나타날 때까지 기다렸다가 눌러야 한다.
+
+## 2026-08-09
+
+### 방 1 서사 종료 직후 키맵 모달 추가 (P-038, DEC-020)
+
+- 상태: DONE
+- 관련 계획: P-038 / OQ-026(RESOLVED) / DEC-020
+
+#### 배경
+
+사용자가 "스토리 이후에 조작키 안내 모달을 띄우자"고 요청했는데, `DialogueBox.tsx`
+주석에 이미 상반된 결정이 남아 있었다 — 방 1 진입 시 뜨는 기록자 대화는 서사 전용이고
+키 이름을 넣지 않으며, 키 안내는 설정 화면의 조작 목록이 맡는다는 결정이었다. OQ-026도
+이 지점 그대로 `OPEN`으로 남아 있었다. 임의로 어느 한쪽을 택하지 않고 사용자에게 확인
+질문을 던졌고, "대화는 그대로 두고 대화 종료 직후 별도 모달을 추가"·"최초 1회만 표시"로
+답을 받아 DEC-020으로 확정한 뒤 구현했다.
+
+#### 작업
+
+- `src/components/ui/KeyMapModal.tsx` 신설. 실제 `KEY_BINDINGS`를 읽어 런 시작 시점에
+  바로 쓸 수 있는 동작(이동/점프/대시/공격/무기 전환/패링/상호작용)만 나열한다. 아티팩트로
+  나중에 풀리는 스킬 슬롯(SKILL 계열)과 메뉴·디버그 키는 뺐다. `localStorage`
+  (`null:keymapSeen`)로 최초 1회만 노출.
+- `src/components/HUDOverlay.tsx` — `DialogueBox.onDone`에서 곧바로 `game:resume`을 쏘던
+  것을, 최초 방문이면 `KeyMapModal`을 먼저 띄우고 그게 닫힐 때 `game:resume`을 쏘도록
+  분기. `keymapOpen`을 ESC 일시정지 가드·E 상태창 가드·`showCombatHud`·`clearRunState`에
+  `dialogueOpen`과 나란히 추가해 대화창과 동일한 취급을 받게 했다.
+- `docs/OpenQuestions.md` OQ-026 RESOLVED, `docs/DecisionLog.md` DEC-020 신설,
+  `docs/Plan.md` P-038 추가.
+
+#### 검증
+
+- `npm run build`, `npm run lint`(0 errors), `npm run typecheck` 전부 통과.
+- 기존에 떠 있던 개발 dev 서버(포트 3000, 팀원과 공유 가능성이 있어 재시작하지 않음)를
+  그대로 이용해 `tmp/probe-keymap.mjs`(Playwright, 빈 컨텍스트로 최초 방문 재현)로
+  실제 브라우저 흐름을 확인:
+  - 방 1 첫 진입 → 대화 → ESC로 대화 스킵 → 키맵 모달 노출, 이 시점 `combat` 씬은
+    계속 `isPaused`
+  - 모달 "확인" 클릭 → `null:keymapSeen`이 `1`로 저장, 씬 `resume`, 모달 DOM에서 제거
+  - `Combat` 씬을 `room_1`으로 재시작(재방문 시뮬레이션) → 대화는 기존 정책대로 다시
+    뜨지만, 키맵 모달은 다시 뜨지 않고 씬이 곧바로 재개됨
+  - 페이지 콘솔 에러 0건
+
+#### 남은 것
+
+- 실제 사람이 마우스로 "확인" 버튼을 눌러 보는 수동 확인은 아직 못 했다(Playwright
+  자동화로만 검증). 다음 실플레이 때 함께 확인한다.
