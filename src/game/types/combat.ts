@@ -462,6 +462,15 @@ export const AUDIO = {
   shellDrop: "sfx_shell",
   hitEnemy: "sfx_hit_enemy",
   parry: "sfx_parry",
+  /** 패링 자세를 잡는 순간. 성공음(parry)과 구분되는 시전음이다. */
+  parryCast: "sfx_parry_cast",
+  playerHurt: "sfx_player_hurt",
+  swordWave: "sfx_skill_sword_wave",
+  spike: "sfx_skill_spike",
+  /** 그림자 실체화(깨어남) — 인트로 연출 길이에 맞춘 긴 트랙. */
+  bossAwaken: "sfx_boss_awaken",
+  bossChain: "sfx_boss_chain",
+  bossSlam: "sfx_boss_slam",
   footstepRun: "sfx_run",
   dash: "sfx_dash",
   portal: "sfx_portal",

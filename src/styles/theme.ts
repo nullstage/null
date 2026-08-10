@@ -25,6 +25,11 @@ export const theme = {
      * (이미지 로고라 폰트와 무관)은 대상이 아니다.
      */
     ui: `${neoDunggeunmo.style.fontFamily}, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`,
+    /**
+     * 시작 화면 메뉴. 라벨을 네오둥근모로 바꿀 때 함께 바뀌었다가 Pretendard로 되돌렸다.
+     * (사용자 결정) globals.css의 CDN 서브셋이 'Pretendard Variable'로 선언된다.
+     */
+    title: `'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`,
   },
   z: {
     canvas: 0,

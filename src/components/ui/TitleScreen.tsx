@@ -98,7 +98,7 @@ const MenuItem = styled.button<{ selected: boolean; disabled: boolean }>`
   height: calc(var(--u) * 62);
   border: none;
   padding: 0;
-  font-family: ${theme.font.ui};
+  font-family: ${theme.font.title};
   font-weight: 300;
   font-size: calc(var(--u) * 32);
   line-height: 1;

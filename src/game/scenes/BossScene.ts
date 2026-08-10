@@ -46,6 +46,9 @@ export class BossScene extends Phaser.Scene {
   private awakenPrompt: Phaser.GameObjects.Container | null = null;
   private interactKey?: Phaser.Input.Keyboard.Key;
 
+  /** `?debug=1` 전용 플레이어 좌표 표시. */
+  private debugPosText: Phaser.GameObjects.Text | null = null;
+
   constructor() {
     super("Boss");
   }
@@ -108,7 +111,7 @@ export class BossScene extends Phaser.Scene {
       onPatternSelected: (pattern) => runState.recordBossPattern(pattern),
       onDefeated: () => this.finish(true),
     });
-    this.boss.spawn(VIEWPORT.width * 0.8, this.arena.bounds.floorY - 90);
+    this.boss.spawn(VIEWPORT.width * 0.55, this.arena.bounds.floorY - 90);
 
     // 상호작용 전까지는 방 가운데 그림자로 서 있을 뿐이다 — 다가가 말을 걸어야 깨어난다.
     // (사용자 요청: 보스룸 NPC형 그림자 → 상호작용 시 보스전 시작)
@@ -123,6 +126,16 @@ export class BossScene extends Phaser.Scene {
     // 개발·시연 전용 보스 스킵. 배포본에서 실수로 눌리지 않도록 `?debug=1`일 때만 붙인다.
     if (debugFlag("debug")) {
       this.input.keyboard?.on(`keydown-${KEY_BINDINGS.DEBUG_SKIP_ROOM}`, () => this.finish(true));
+      // 플레이어 월드 좌표. NPC·오브젝트 배치 좌표를 게임 안에서 바로 읽는 용도다.
+      this.debugPosText = this.add
+        .text(12, VIEWPORT.height - 28, "", {
+          fontFamily: "'Pretendard', sans-serif",
+          fontSize: "14px",
+          color: "#7ee787",
+          resolution: 2,
+        })
+        .setScrollFactor(0)
+        .setDepth(950);
     }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
@@ -136,6 +149,20 @@ export class BossScene extends Phaser.Scene {
     this.player.update(time, deltaMs);
     this.boss.update(time, deltaMs);
     if (!this.awakened) this.updateAwakenPrompt();
+
+    if (this.debugPosText && this.player.sprite) {
+      this.debugPosText.setText(
+        `x ${Math.round(this.player.sprite.x)}  y ${Math.round(this.player.sprite.y)}`,
+      );
+      // 인트로 줌·줌 펀치가 scrollFactor 0 텍스트까지 밀어내므로 역보정으로 고정.
+      const cam = this.cameras.main;
+      const inv = 1 / cam.zoom;
+      this.debugPosText.setScale(inv);
+      this.debugPosText.setPosition(
+        cam.width / 2 + (12 - cam.width / 2) * inv,
+        cam.height / 2 + (VIEWPORT.height - 28 - cam.height / 2) * inv,
+      );
+    }
   }
 
   /**
@@ -149,7 +176,12 @@ export class BossScene extends Phaser.Scene {
 
     const near = Math.abs(player.x - boss.x) < 140;
     this.awakenPrompt.setVisible(near);
-    if (near) this.awakenPrompt.setPosition(boss.x, boss.y - boss.displayHeight / 2 - 20);
+    // 보스가 아니라 플레이어 머리 위에 띄운다 — 보스는 커서 시선이 위로 튄다.
+    // 스프라이트 셀 위 여백을 피해 충돌 바디 상단을 머리 높이로 쓴다.
+    if (near) {
+      const body = player.body as Phaser.Physics.Arcade.Body;
+      this.awakenPrompt.setPosition(player.x, body.top - 16);
+    }
 
     if (near && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
       this.awakenBoss();
@@ -222,6 +254,10 @@ export class BossScene extends Phaser.Scene {
     const arena = this.arena;
 
     this.physics.add.overlap(arena.playerAttacks, arena.enemyBodies, (attackObj, bodyObj) => {
+      // 그림자 상태에선 공격이 통하지 않는다. Boss.takeDamage도 스스로 막지만,
+      // 여기서 안 끊으면 데미지 숫자·타격음·이펙트가 떠서 맞는 것처럼 보인다.
+      if (!this.awakened) return;
+
       const attack = attackObj as Phaser.GameObjects.GameObject;
       const target = (bodyObj as Phaser.GameObjects.GameObject).getData("enemy") as Boss | undefined;
       if (!target || target.isDefeated) return;
@@ -235,14 +271,29 @@ export class BossScene extends Phaser.Scene {
       const damage = (attack.getData("damage") as number) ?? 0;
       target.takeDamage(damage);
       playSfx(this, AUDIO.hitEnemy, { detune: Phaser.Math.Between(-200, 200) });
-      const hitPoint = bodyObj as Phaser.GameObjects.Sprite;
-      damageNumber(this, hitPoint.x, hitPoint.y - 30, damage);
+
+      // 보스는 몸이 커서 스프라이트 원점(셀 중심)에 이펙트를 찍으면 어디를 베든
+      // 같은 자리에 뜬다. 무기 판정체의 중심을 보스 몸 범위로 클램프한 실제
+      // 접점에 데미지 숫자·피격 이펙트를 띄운다.
+      const bossSprite = bodyObj as Phaser.GameObjects.Sprite;
+      const bossBody = bossSprite.body as Phaser.Physics.Arcade.Body;
+      const attackBody = (attack as { body?: Phaser.Physics.Arcade.Body }).body;
+      const hitX = Phaser.Math.Clamp(
+        attackBody?.center.x ?? bossSprite.x,
+        bossBody.left,
+        bossBody.right,
+      );
+      const hitY = Phaser.Math.Clamp(
+        attackBody?.center.y ?? bossSprite.y,
+        bossBody.top,
+        bossBody.bottom,
+      );
+      damageNumber(this, hitX, hitY - 20, damage);
       this.applyElement(attack.getData("element") as UpgradeElement | undefined, target);
 
       // 보스전 텔레메트리도 같은 방식으로 기록한다. 결과 리포트에 쓰인다.
       const mode = attack.getData("mode") as AttackMode | undefined;
-      const point = bodyObj as Phaser.GameObjects.Sprite;
-      if (mode) this.player.notifyHit(mode, { x: point.x, y: point.y });
+      if (mode) this.player.notifyHit(mode, { x: hitX, y: hitY });
 
       if (attack.getData("consumeOnHit")) attack.destroy();
     });
@@ -323,9 +374,10 @@ export class BossScene extends Phaser.Scene {
   private runBossIntro(): void {
     const cam = this.cameras.main;
     cam.setBounds(0, 0, VIEWPORT.width, VIEWPORT.height);
-    const bossX = VIEWPORT.width * 0.8;
+    // 카메라는 실제 보스 자리로 다가간다 — 스폰 좌표가 바뀌면 같이 따라온다.
+    const bossX = this.boss.sprite?.x ?? VIEWPORT.width * 0.55;
 
-    this.boss.holdPatterns(2600);
+    this.boss.holdPatterns(4600);
 
     const barH = 64;
     const top = this.add
@@ -341,8 +393,8 @@ export class BossScene extends Phaser.Scene {
     this.tweens.add({ targets: top, y: barH, duration: 300, ease: "power2.out" });
     this.tweens.add({ targets: bottom, y: VIEWPORT.height - barH, duration: 300, ease: "power2.out" });
 
-    cam.pan(bossX, VIEWPORT.height * 0.55, 700, "Sine.easeInOut");
-    cam.zoomTo(1.28, 700, "Sine.easeInOut");
+    cam.pan(bossX, VIEWPORT.height * 0.55, 1100, "Sine.easeInOut");
+    cam.zoomTo(1.28, 1100, "Sine.easeInOut");
 
     const name = this.add
       .text(VIEWPORT.width / 2, VIEWPORT.height * 0.24, "「 집 행 자 」", {
@@ -362,8 +414,8 @@ export class BossScene extends Phaser.Scene {
       targets: name,
       alpha: 1,
       y: VIEWPORT.height * 0.26,
-      delay: 500,
-      duration: 420,
+      delay: 800,
+      duration: 600,
       ease: "power2.out",
     });
 
@@ -384,12 +436,12 @@ export class BossScene extends Phaser.Scene {
     this.tweens.add({
       targets: subtitle,
       alpha: 1,
-      delay: 780,
-      duration: 380,
+      delay: 1300,
+      duration: 500,
       ease: "power2.out",
     });
 
-    this.time.delayedCall(1800, () => {
+    this.time.delayedCall(3400, () => {
       cam.pan(VIEWPORT.width / 2, VIEWPORT.height / 2, 600, "Sine.easeInOut");
       cam.zoomTo(1, 600, "Sine.easeInOut");
       this.tweens.add({ targets: [name, subtitle], alpha: 0, duration: 300 });

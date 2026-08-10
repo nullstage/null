@@ -61,11 +61,12 @@ eventBus.on("audio:change", () => {
 export const playSfx = (
   scene: Phaser.Scene,
   key: string,
-  opts?: { detune?: number; delay?: number },
+  opts?: { detune?: number; delay?: number; rate?: number },
 ): void => {
   const volume = sfxVolume();
   if (volume <= 0) return;
-  const play = () => scene.sound.play(key, { volume, detune: opts?.detune ?? 0 });
+  const play = () =>
+    scene.sound.play(key, { volume, detune: opts?.detune ?? 0, rate: opts?.rate ?? 1 });
   if (opts?.delay) scene.time.delayedCall(opts.delay, play);
   else play();
 };
