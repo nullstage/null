@@ -143,6 +143,13 @@ export class BootScene extends Phaser.Scene {
     this.load.audio(AUDIO.shellDrop, assetPath("audio/shell-drop.mp3"));
     this.load.audio(AUDIO.hitEnemy, assetPath("audio/hit-enemy.mp3"));
     this.load.audio(AUDIO.parry, assetPath("audio/parry.mp3"));
+    this.load.audio(AUDIO.parryCast, assetPath("audio/parry-cast.mp3"));
+    this.load.audio(AUDIO.playerHurt, assetPath("audio/player-hurt.mp3"));
+    this.load.audio(AUDIO.swordWave, assetPath("audio/skill-sword-wave.mp3"));
+    this.load.audio(AUDIO.spike, assetPath("audio/skill-spike.mp3"));
+    this.load.audio(AUDIO.bossAwaken, assetPath("audio/boss-awaken.mp3"));
+    this.load.audio(AUDIO.bossChain, assetPath("audio/boss-chain.mp3"));
+    this.load.audio(AUDIO.bossSlam, assetPath("audio/boss-slam.mp3"));
     this.load.audio(AUDIO.footstepRun, assetPath("audio/footstep-run.mp3"));
     this.load.audio(AUDIO.dash, assetPath("audio/dash.mp3"));
     this.load.audio(AUDIO.portal, assetPath("audio/portal.mp3"));

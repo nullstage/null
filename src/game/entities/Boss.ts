@@ -38,8 +38,9 @@ import {
   hitStop,
   pulseGlitchFx,
 } from "../systems/CombatVfx";
+import { playSfx } from "../systems/audio";
 import { pickBossPattern } from "../systems/DirectorPolicy";
-import { BOSS_FRAME, SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
+import { AUDIO, BOSS_FRAME, SILHOUETTE, TEXTURE, type CombatArena } from "../types/combat";
 import type { BossPattern, BossPatternWeights } from "../types/game";
 
 /**
@@ -371,6 +372,8 @@ export class Boss {
     // 체력바도, 패턴 타이머도 아직 없다(awaken 전까지 update()가 그 아래 로직을 건너뛴다).
     sprite.setTintFill(0x140a12);
     sprite.setAlpha(0.82);
+    // 방 가운데 서서 왼쪽(입장하는 플레이어 쪽)을 본다. 원본 그림은 오른쪽을 향한다.
+    sprite.setFlipX(true);
   }
 
   /**
@@ -390,7 +393,11 @@ export class Boss {
 
     // 등장 연출 — 그림자 덩어리에서 실체화하는 6프레임을 재생한 뒤 idle로 넘어간다.
     // 첫 패턴은 씬(BossScene.runBossIntro)이 인트로 배너 길이만큼 별도로 미룬다.
-    bossShadowEmergeFx(this.scene, sprite.x, this.groundY, VFX_SCALE);
+    // 이펙트는 바닥 원점(bottom-anchor)이라 y에 바닥선을 줘야 한다. groundY(스프라이트
+    // 중심)를 주면 그만큼 공중에 떠 보인다 — 페이즈 오오라·지면 가시와 같은 기준.
+    bossShadowEmergeFx(this.scene, sprite.x, this.arena.bounds.floorY - 6, VFX_SCALE);
+    // 실체화 전용 긴 트랙 — 인트로 연출(카메라·배너) 길이를 소리로 채운다.
+    playSfx(this.scene, AUDIO.bossAwaken);
     this.setPose(BOSS_FRAME.spawn);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.busy) this.setPose(BOSS_FRAME.idle);

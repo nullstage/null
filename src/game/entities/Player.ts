@@ -954,8 +954,9 @@ export class Player {
     this.parryEndsAtMs = now + activeMs;
     this.parryCooldownUntilMs = now + PARRY_COOLDOWN_MS;
 
-    // 소리는 성공했을 때만 낸다(takeDamage의 퍼펙트 분기) — 자세를 잡는 순간에 매번
-    // 울리면 실제로 막았는지와 상관없이 성공한 것처럼 들린다.
+    // 시전음과 성공음(takeDamage의 퍼펙트 분기, AUDIO.parry)을 다른 트랙으로 구분한다 —
+    // 같은 소리면 실제로 막았는지와 상관없이 성공한 것처럼 들린다. (사용자 결정: 시전음 추가)
+    playSfx(this.scene, AUDIO.parryCast);
     this.parryGuardFx?.destroy();
     this.parryGuardFx = parryGuard(this.scene, sprite.x, sprite.y, this.facing, TUNING.upgrade.parryGuardVisualScale);
   }
@@ -1198,7 +1199,7 @@ export class Player {
     // 그림부터 마무리 타격이어야 한다 — 3타 모션으로 크게 벤다.
     this.comboStep = 0;
     this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 3));
-    playSfx(this.scene, AUDIO.swordHit3);
+    playSfx(this.scene, AUDIO.swordWave);
 
     const damage = Math.round(
       TUNING.melee.damage *
@@ -1224,7 +1225,7 @@ export class Player {
 
     this.comboStep = 0;
     this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 3));
-    playSfx(this.scene, AUDIO.swordHit3);
+    playSfx(this.scene, AUDIO.spike);
     this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
     this.scene.cameras.main.shake(90, 0.005);
 
@@ -1271,7 +1272,8 @@ export class Player {
 
     this.comboStep = 0;
     this.lockAnim(comboAnim(MELEE_ANIM_BY_STEP, 2));
-    playSfx(this.scene, AUDIO.swordHit2);
+    // 검무 전용 트랙은 없다 — 검기 소리를 낮고 느리게 눌러 회오리의 무게를 낸다.
+    playSfx(this.scene, AUDIO.swordWave, { detune: -300, rate: 0.9 });
     playSfx(this.scene, AUDIO.swordHit3, { delay: 120 });
 
     const damage = Math.round(TUNING.melee.damage * upgrade.cycloneDamageMultiplier);
@@ -1866,6 +1868,7 @@ export class Player {
     this.emitHud();
 
     this.flash();
+    playSfx(this.scene, AUDIO.playerHurt, { detune: Phaser.Math.Between(-100, 100) });
     this.scene.cameras.main.shake(
       TUNING.feedback.damageShakeMs,
       TUNING.feedback.damageShakeIntensity,

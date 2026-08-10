@@ -104,6 +104,9 @@ export class CombatScene extends Phaser.Scene {
   private interactKey?: Phaser.Input.Keyboard.Key;
   /** 우상단 미니맵. 매 프레임 다시 그린다 — 사각형 몇 개라 비용이 없다. */
   private minimap: Phaser.GameObjects.Graphics | null = null;
+
+  /** `?debug=1` 전용 플레이어 좌표 표시. */
+  private debugPosText: Phaser.GameObjects.Text | null = null;
   /** 마을 그림자 상인. 조각을 받고 강화를 판다 — 마을(방 1)에만 선다. */
   private merchant: Phaser.GameObjects.Sprite | null = null;
   private merchantPrompt: Phaser.GameObjects.Container | null = null;
@@ -211,6 +214,16 @@ export class CombatScene extends Phaser.Scene {
         }
         this.room.forceClear();
       });
+      // 플레이어 월드 좌표. NPC·오브젝트 배치 좌표를 게임 안에서 바로 읽는 용도다.
+      this.debugPosText = this.add
+        .text(12, VIEWPORT.height - 28, "", {
+          fontFamily: "'Pretendard', sans-serif",
+          fontSize: "14px",
+          color: "#7ee787",
+          resolution: 2,
+        })
+        .setScrollFactor(0)
+        .setDepth(950);
     }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
@@ -255,6 +268,16 @@ export class CombatScene extends Phaser.Scene {
     if (this.altar) this.updateAltarPrompt();
     this.updateIdleZoom(time);
     this.drawMinimap();
+
+    // 카메라 줌(유휴 확대 등)은 scrollFactor 0 오브젝트도 화면 가운데 기준으로
+    // 키워 구석의 UI를 화면 밖으로 밀어낸다. 매 프레임 역보정으로 제자리에 고정.
+    if (this.minimap) this.pinToViewport(this.minimap, 0, 0);
+    if (this.debugPosText && this.player.sprite) {
+      this.debugPosText.setText(
+        `x ${Math.round(this.player.sprite.x)}  y ${Math.round(this.player.sprite.y)}`,
+      );
+      this.pinToViewport(this.debugPosText, 12, VIEWPORT.height - 28);
+    }
 
     // 배경/구름 흐름. 트윈으로 하면 반복마다 원위치로 튀어서(Phaser 상대값 트윈의 특성)
     // 매 프레임 직접 누적한다 — `combat.ts`의 `createArena` 주석 참고.
@@ -1089,6 +1112,24 @@ export class CombatScene extends Phaser.Scene {
    * 그때 잔적 수가 0이라 서 있기만 해도 화면이 확 당겨졌다가 다음 웨이브에 도로 물러났다.
    * 기준은 "방이 끝났는가"다 — 방이 끝나야 비로소 숨 돌리는 장면이 된다.
    */
+  /**
+   * 카메라 줌을 역보정해 scrollFactor 0 오브젝트를 화면 좌표 (x, y)에 고정한다.
+   * 줌은 화면 가운데를 중심으로 먹으므로, 가운데 기준 거리도 1/zoom으로 줄여야 한다.
+   */
+  private pinToViewport(
+    obj: Phaser.GameObjects.Graphics | Phaser.GameObjects.Text,
+    x: number,
+    y: number,
+  ): void {
+    const cam = this.cameras.main;
+    const inv = 1 / cam.zoom;
+    obj.setScale(inv);
+    obj.setPosition(
+      cam.width / 2 + (x - cam.width / 2) * inv,
+      cam.height / 2 + (y - cam.height / 2) * inv,
+    );
+  }
+
   private updateIdleZoom(_time: number): void {
     const body = this.player.sprite?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body || this.player.isDead) return;
