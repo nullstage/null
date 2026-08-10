@@ -1,6 +1,6 @@
 /** UI 공통 토큰. 색과 간격을 컴포넌트마다 새로 정의하지 않는다. */
 
-import { chosunKg } from "./fonts";
+import { chosunKg, neoDunggeunmo } from "./fonts";
 
 export const theme = {
   color: {
@@ -17,10 +17,14 @@ export const theme = {
   space: (n: number) => `${n * 4}px`,
   radius: "10px",
   font: {
-    /** 숫자·라벨 등 UI 전반에서 쓰던 자리. 대화창과 같은 ChosunKg 서체로 통일했다. */
+    /** 숫자·라벨 등 시스템 UI(설정·일시정지·로딩 등)에서 쓰던 자리. 대화창과 같은 ChosunKg 서체다. */
     mono: chosunKg.style.fontFamily,
-    /** 시작 화면 등 아트가 붙는 화면의 한글 본문. Figma 지정 서체. */
-    ui: "Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
+    /**
+     * 보스 이름·지역명·아이템명 같은 게임 세계 고유명사 라벨. (사용자 결정)
+     * 원래 Pretendard였다가 네오둥근모로 바꿨다 — 대화(mono/ChosunKg)와 메인 타이틀
+     * (이미지 로고라 폰트와 무관)은 대상이 아니다.
+     */
+    ui: `${neoDunggeunmo.style.fontFamily}, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`,
   },
   z: {
     canvas: 0,

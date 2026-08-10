@@ -15,6 +15,8 @@
 
 import Phaser from "phaser";
 
+import { neoDunggeunmo } from "@/styles/fonts";
+
 import { BOSS, PLAYER } from "../config/gameBalance";
 import {
   ashRise,
@@ -1114,7 +1116,7 @@ export class Boss {
         frameTop + HP_BAR.hole.centerY * frameHeight,
         "",
         {
-          fontFamily: "'Pretendard', sans-serif",
+          fontFamily: `${neoDunggeunmo.style.fontFamily}, sans-serif`,
           fontSize: "12px",
           fontStyle: "bold",
           color: "#fff5f0",
@@ -1129,7 +1131,7 @@ export class Boss {
 
     this.hpNameText = this.scene.add
       .text(centerX, frameTop + HP_BAR.nameY * frameHeight, BOSS_NAME, {
-        fontFamily: "'Pretendard', sans-serif",
+        fontFamily: `${neoDunggeunmo.style.fontFamily}, sans-serif`,
         fontSize: "18px",
         fontStyle: "bold",
         color: "#f3dfe3",
@@ -1141,7 +1143,7 @@ export class Boss {
 
     this.hpTitleText = this.scene.add
       .text(centerX, frameTop + HP_BAR.titleY * frameHeight, BOSS_TITLE, {
-        fontFamily: "'Pretendard', sans-serif",
+        fontFamily: `${neoDunggeunmo.style.fontFamily}, sans-serif`,
         fontSize: "9px",
         color: "rgba(243, 223, 227, 0.75)",
         resolution: 2,
