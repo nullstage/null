@@ -20,7 +20,8 @@ export const Backdrop = styled.div`
   z-index: ${theme.z.panel};
   display: grid;
   place-items: center;
-  padding: ${theme.space(6)};
+  /* 작은 창에서도 프레임이 화면 가장자리에 잘리거나 붙지 않게 한다. */
+  padding: clamp(12px, 3.5vw, ${theme.space(6)});
 
   /* 시작 화면·일시정지와 같은 붉은 어둠. 패널만 푸른 톤이면 다른 게임처럼 보인다. */
   background:
@@ -42,6 +43,12 @@ const Frame = styled.section<{
 }>`
   position: relative;
   width: min(${({ maxWidth }) => maxWidth}, 100%);
+  max-height: calc(100dvh - clamp(24px, 7vw, 48px));
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200, 56, 60, 0.55) transparent;
   /* 도트 화면과 맞물리도록 모서리를 깎지 않는다. */
   border: 1px solid rgba(200, 56, 60, 0.4);
   background: rgba(12, 9, 11, 0.94);
@@ -90,6 +97,12 @@ const Frame = styled.section<{
       &::before {
         content: none;
       }
+
+      /* 장식 프레임의 상단 명패 중앙에 제목을 맞춘다. */
+      > h2 {
+        justify-content: center;
+        text-align: center;
+      }
     `}
 `;
 
@@ -103,6 +116,7 @@ const Heading = styled.h2`
   font-size: 16px;
   letter-spacing: 0.22em;
   color: #fff;
+  overflow-wrap: anywhere;
 
   &::before {
     content: "✦";
@@ -181,7 +195,13 @@ export const PanelRow = styled.div`
   padding: ${theme.space(2)} 0;
   font-size: 15px;
 
+  > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   span:last-of-type {
+    text-align: right;
     color: ${theme.color.textMuted};
   }
 `;

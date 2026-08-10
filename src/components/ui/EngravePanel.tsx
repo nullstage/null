@@ -164,7 +164,13 @@ export default function EngravePanel({ nodes, shards, onBuy, onClose }: EngraveP
   const focused = nodes.find((node) => node.id === focusedId) ?? null;
 
   return (
-    <Panel title="「기록 제단」" frameImage={assetPath("ui/engrave-frame.png")}>
+    <Panel
+      title="「기록 제단」"
+      frameImage={assetPath("ui/engrave-frame.png")}
+      /* 원본 프레임의 좌우 기둥과 상단 명패보다 안쪽에 콘텐츠를 둔다. */
+      framePadding="52px clamp(40px, 8vw, 52px) 38px"
+      maxWidth="620px"
+    >
       <Balance>
         <span>그림자 조각</span>
         <span>◆ {shards}</span>
