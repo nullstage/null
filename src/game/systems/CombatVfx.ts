@@ -1759,10 +1759,11 @@ export const bossChainLaunchTrail = (
   scene: Phaser.Scene,
   projectile: Phaser.GameObjects.Image,
   facing: 1 | -1,
+  scale = 1,
 ): void => {
   const fx = scene.add.sprite(projectile.x, projectile.y, TEXTURE.vfxChainLaunch);
   fx.setDepth(VFX.depth);
-  fx.setScale(facing, 1);
+  fx.setScale(facing * scale, scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
   fx.play("bossChainLaunchLoop");
 

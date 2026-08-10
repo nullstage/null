@@ -50,9 +50,14 @@ import type { BossPattern, BossPatternWeights } from "../types/game";
  * 통합 시점에 `gameBalance.ts`로 옮긴다. (최종 보고 4번 항목)
  */
 const BODY = {
-  /** 그림 배율을 키우면서 충돌 박스도 비례해 넓힌다 — 커 보이는데 안 맞으면 억울하다. (사용자 요청: 2배 확대) */
-  width: 168,
-  height: 248,
+  /**
+   * 그림 배율을 키우면서 충돌 박스도 비례해 넓힌다 — 커 보이는데 안 맞으면 억울하다.
+   * 2배 확대 때 그림 크기만큼 정직하게 2배(84→168, 124→248)로 키웠지만, 그림 자체가
+   * 사각 프레임보다 훨씬 커 보여서 여전히 작다는 지적을 받아 한 번 더 키웠다.
+   * (사용자 요청: 히트박스가 보스 크기보다 너무 작다)
+   */
+  width: 260,
+  height: 340,
   /** 패턴 사이에 플레이어 쪽으로 걸어오는 속도. 압박용이지 추격용이 아니다. */
   moveSpeed: 130,
   /** 이 거리 안에서는 멈춘다. 계속 밀고 들어오면 회피 공간이 사라진다. */
@@ -148,7 +153,10 @@ const HP_BAR = {
 const BOSS_NAME = "「 집 행 자 」";
 const BOSS_TITLE = "이름들을 거두는 자";
 
-const DEPTH = { telegraph: 1, attack: 5, boss: 10, hud: 100 } as const;
+// boss는 플레이어(Player.ts의 TUNING.depth.player = 10)보다 낮아야 한다 — 같은 값이면
+// 나중에 추가되는 쪽(보스)이 동률에서 이겨 앞을 가로막을 때 플레이어가 가려진다.
+// (사용자 요청: 보스가 앞에 서면 캐릭터가 안 보인다)
+const DEPTH = { telegraph: 1, attack: 5, boss: 9, hud: 100 } as const;
 
 /**
  * 보스 그림 배율. 화면에서 약 233px로 보이던 이전 크기가 작다는 지적을 받아
@@ -157,6 +165,9 @@ const DEPTH = { telegraph: 1, attack: 5, boss: 10, hud: 100 } as const;
  * 충돌 박스(BODY)도 같은 비율로 키워야 커 보이는데 안 맞는 일이 없다.
  */
 const BOSS_SPRITE_SCALE = 0.68 * 2;
+
+/** 공격 이펙트 배율. 보스를 2배로 키운 뒤 이펙트만 그대로라 왜소해 보인다는 지적을 받아 같이 키웠다. */
+const VFX_SCALE = 2;
 
 /**
  * 그림의 실제 바닥선(발밑)이 셀 중심보다 아래로 떨어진 거리(셀 로컬 px, 스케일 전).
@@ -370,7 +381,7 @@ export class Boss {
 
     // 등장 연출 — 그림자 덩어리에서 실체화하는 6프레임을 재생한 뒤 idle로 넘어간다.
     // 첫 패턴은 씬(BossScene.runBossIntro)이 인트로 배너 길이만큼 별도로 미룬다.
-    bossShadowEmergeFx(this.scene, sprite.x, this.groundY);
+    bossShadowEmergeFx(this.scene, sprite.x, this.groundY, VFX_SCALE);
     this.setPose(BOSS_FRAME.spawn);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.busy) this.setPose(BOSS_FRAME.idle);
@@ -588,7 +599,7 @@ export class Boss {
         this.punch(sprite);
         this.strikePose(BOSS_FRAME.slashStrike, 200);
         this.spawnHitbox(hitX, sprite.y, reach, SLASH.height, SLASH.activeMs);
-        bossSlashCrescentFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir);
+        bossSlashCrescentFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir, VFX_SCALE);
         if (isFinisher) {
           this.scene.cameras.main.shake(120, 0.006);
           this.after(SLASH.activeMs + COMBO.recoveryMs, () => this.finishPattern());
@@ -642,7 +653,7 @@ export class Boss {
             true,
           );
           shot.setVelocity(Math.cos(angle) * BARRAGE.speed, Math.sin(angle) * BARRAGE.speed);
-          bossChainLaunchTrail(this.scene, shot, this.facing);
+          bossChainLaunchTrail(this.scene, shot, this.facing, VFX_SCALE);
         });
       }
 
@@ -664,7 +675,7 @@ export class Boss {
     this.setPose(BOSS_FRAME.judgmentTelegraph);
     this.windup();
     // 판결을 여는 순간 — 발밑에 고리가 한 번 떠오른다.
-    bossJudgmentRingFx(this.scene, sprite.x, floorY - 20);
+    bossJudgmentRingFx(this.scene, sprite.x, floorY - 20, VFX_SCALE);
 
     for (let i = 0; i < ERUPTION.count; i += 1) {
       const at = Phaser.Math.Clamp(
@@ -673,7 +684,7 @@ export class Boss {
         this.arena.bounds.width - 40,
       );
       this.after(i * ERUPTION.intervalMs, () => {
-        bossJudgmentLineFx(this.scene, at, floorY);
+        bossJudgmentLineFx(this.scene, at, floorY, VFX_SCALE);
       });
       this.after(i * ERUPTION.intervalMs + ERUPTION.telegraphMs, () => {
         this.spawnHitbox(
@@ -711,13 +722,13 @@ export class Boss {
     const x = sprite.x + dir * (BODY.width / 2 + CHAIN_PULL.reach / 2);
     const y = sprite.y;
     this.showTelegraph(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.telegraphMs);
-    bossChainOrbitFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y, CHAIN_PULL.telegraphMs);
+    bossChainOrbitFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y, CHAIN_PULL.telegraphMs, VFX_SCALE);
     this.setPose(BOSS_FRAME.chainPullTelegraph);
     this.windup();
 
     this.after(CHAIN_PULL.telegraphMs, () => {
       this.strikePose(BOSS_FRAME.chainPullStrike, CHAIN_PULL.activeMs + CHAIN_PULL.recoveryMs);
-      bossChainPullImpactFx(this.scene, x, y);
+      bossChainPullImpactFx(this.scene, x, y, VFX_SCALE);
       const box = this.spawnHitbox(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.activeMs, true);
       // 씬(BossScene)이 이 값으로 플레이어를 당긴다 — 방향은 "이 지점을 향해",
       // 거리는 고정값(clamp는 씬이 arena 경계로 건다).
@@ -751,7 +762,7 @@ export class Boss {
       this.strikePose(BOSS_FRAME.slashStrike, SLASH.activeMs + SLASH.recoveryMs);
       this.spawnHitbox(x, y, SLASH.reach, SLASH.height, SLASH.activeMs);
       // 판정은 투명하다 — 그림은 초승달 궤적 스프라이트가 담당한다.
-      bossSlashCrescentFx(this.scene, sprite.x + this.facing * (BODY.width / 2), y - 8, this.facing);
+      bossSlashCrescentFx(this.scene, sprite.x + this.facing * (BODY.width / 2), y - 8, this.facing, VFX_SCALE);
       this.after(SLASH.activeMs + SLASH.recoveryMs, () => this.finishPattern());
     });
   }
@@ -779,7 +790,7 @@ export class Boss {
     this.after(DASH.telegraphMs, () => {
       this.strikePose(BOSS_FRAME.dashStrike, DASH.durationMs + DASH.recoveryMs);
       sprite.setVelocityX(dir * DASH.speed);
-      bossDashSlashFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir);
+      bossDashSlashFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir, VFX_SCALE);
       // 출발의 무게 — 발밑 흙이 터지고 화면이 잠깐 흔들린다.
       groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
       this.scene.cameras.main.shake(90, 0.004);
@@ -855,7 +866,7 @@ export class Boss {
       (dy / length) * PROJECTILE.speed,
     );
     // 판정은 투명하다 — 사슬 갈고리 스프라이트가 그림을 맡는다.
-    bossChainLaunchTrail(this.scene, shot, this.facing);
+    bossChainLaunchTrail(this.scene, shot, this.facing, VFX_SCALE);
   }
 
   /** 점프 내려찍기. 착지 지점을 띄운 뒤 떨어진다. 지연 장판은 만들지 않는다. (MVP_PLAN §8) */
@@ -921,7 +932,7 @@ export class Boss {
             SLAM.activeMs,
           );
           // 판정은 투명하다 — 착지의 그림은 기둥 폭발 스프라이트 + 흙먼지가 맡는다.
-          bossSlamEruptionFx(this.scene, targetX, this.arena.bounds.floorY - 6);
+          bossSlamEruptionFx(this.scene, targetX, this.arena.bounds.floorY - 6, VFX_SCALE);
           groundDust(this.scene, targetX, this.arena.bounds.floorY, "land");
           hitStop(this.scene, 70);
           this.after(SLAM.activeMs + SLAM.recoveryMs, () => this.finishPattern());
@@ -985,7 +996,7 @@ export class Boss {
     this.scene.cameras.main.flash(160, 120, 10, 30);
     pulseGlitchFx(this.scene, next === 2 ? 0.65 : 0.9, 550);
     bossShockwave(this.scene, sprite.x, this.arena.bounds.floorY - 6, 300);
-    bossPhaseAuraFx(this.scene, sprite.x, this.arena.bounds.floorY - 6);
+    bossPhaseAuraFx(this.scene, sprite.x, this.arena.bounds.floorY - 6, VFX_SCALE);
     groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
 
     // 분노가 몸에 남는다 — 페이즈가 오를수록 붉은 광채가 짙어진다. (WebGL 전용)
@@ -1038,7 +1049,7 @@ export class Boss {
       deathBurst(this.scene, sprite.x, sprite.y, SILHOUETTE.boss);
       ashRise(this.scene, sprite.x, sprite.y - 30, SILHOUETTE.boss);
       ashRise(this.scene, sprite.x, sprite.y + 30, 0xff2a3a);
-      bossGroundSpikeFx(this.scene, sprite.x, this.arena.bounds.floorY - 6);
+      bossGroundSpikeFx(this.scene, sprite.x, this.arena.bounds.floorY - 6, VFX_SCALE);
 
       this.scene.tweens.add({
         targets: sprite,
