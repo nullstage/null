@@ -39,7 +39,7 @@ const FRAME = {
   title: { left: 130 / 1024, right: 895 / 1024, top: 225 / 1536, bottom: 308 / 1536 },
   body: { left: 130 / 1024, right: 895 / 1024, top: 350 / 1536, bottom: 885 / 1536 },
   lower: { left: 150 / 1024, right: 895 / 1024, top: 930 / 1536, bottom: 1195 / 1536 },
-  button: { left: 95 / 1024, right: 930 / 1024, top: 1250 / 1536, bottom: 1330 / 1536 },
+  button: { left: 95 / 1024, right: 930 / 1024, top: 1276 / 1536, bottom: 1344 / 1536 },
   /** 본문 가로선 사이와 강조 박스의 실측 중심 y 좌표. */
   bodyRowCenters: [405, 486, 563, 632, 697, 860],
   /** 하단의 선·마름모·육각 횟수 칸이 공유하는 실측 중심 y 좌표. */
