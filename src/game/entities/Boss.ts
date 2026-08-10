@@ -314,6 +314,8 @@ export class Boss {
 
   private timers: Phaser.Time.TimerEvent[] = [];
   private tweens: Phaser.Tweens.Tween[] = [];
+  /** 보스 크기를 건드리는 연출은 하나만 유지한다. 겹치면 현재 배율이 새 기준값이 된다. */
+  private scaleTween: Phaser.Tweens.Tween | null = null;
   /** 예고·투사체·잔상처럼 수명이 짧은 오브젝트. 씬이 내려갈 때 한 번에 정리한다. */
   private ephemera: Phaser.GameObjects.GameObject[] = [];
 
@@ -1032,15 +1034,7 @@ export class Boss {
 
     // 포효 자세 — 에너지가 차오르는 8프레임 전용 연출을 재생한다.
     this.setPose(BOSS_FRAME.phaseChange);
-    this.tweens.push(
-      this.scene.tweens.add({
-        targets: sprite,
-        scaleX: sprite.scaleX * 1.12,
-        scaleY: sprite.scaleY * 1.12,
-        duration: 180,
-        yoyo: true,
-      }),
-    );
+    this.pulseScale(sprite, 1.12, 1.12, 180);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.busy) this.setPose(BOSS_FRAME.idle);
     });
@@ -1212,15 +1206,39 @@ export class Boss {
 
   /** 타격·착지 순간의 짧은 스케일 펀치. */
   private punch(sprite: Phaser.Physics.Arcade.Sprite): void {
-    this.tweens.push(
-      this.scene.tweens.add({
-        targets: sprite,
-        scaleX: sprite.scaleX * FEEDBACK.punchScale,
-        scaleY: sprite.scaleY / FEEDBACK.punchScale,
-        duration: FEEDBACK.punchMs,
-        yoyo: true,
-      }),
+    this.pulseScale(
+      sprite,
+      FEEDBACK.punchScale,
+      1 / FEEDBACK.punchScale,
+      FEEDBACK.punchMs,
     );
+  }
+
+  /**
+   * 현재 표시 배율이 아니라 고정된 기본 배율에서 스케일 연출을 시작한다.
+   * 공격 펀치와 페이즈 전환이 같은 프레임에 겹쳐도 배율이 누적되지 않는다.
+   */
+  private pulseScale(
+    sprite: Phaser.Physics.Arcade.Sprite,
+    scaleX: number,
+    scaleY: number,
+    durationMs: number,
+  ): void {
+    this.scaleTween?.remove();
+    sprite.setScale(BOSS_SPRITE_SCALE);
+
+    this.scaleTween = this.scene.tweens.add({
+      targets: sprite,
+      scaleX: BOSS_SPRITE_SCALE * scaleX,
+      scaleY: BOSS_SPRITE_SCALE * scaleY,
+      duration: durationMs,
+      yoyo: true,
+      onComplete: () => {
+        if (sprite.active) sprite.setScale(BOSS_SPRITE_SCALE);
+        this.scaleTween = null;
+      },
+    });
+    this.tweens.push(this.scaleTween);
   }
 
   /**
@@ -1343,6 +1361,8 @@ export class Boss {
     for (const timer of this.timers) timer.remove();
     for (const tween of this.tweens) tween.remove();
     for (const object of this.ephemera) object.destroy();
+    this.scaleTween = null;
+    if (this.sprite?.active) this.sprite.setScale(BOSS_SPRITE_SCALE);
     this.timers = [];
     this.tweens = [];
     this.ephemera = [];

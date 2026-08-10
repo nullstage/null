@@ -1813,14 +1813,12 @@ export class Player {
         if (this.sprite) {
           perfectParryBurst(this.scene, this.sprite.x, this.sprite.y, TUNING.upgrade.perfectParryVisualScale);
         }
-        // 성공의 쾌감은 시간과 화면이 같이 흔들려야 산다 — 히트스톱 + 줌 펀치 + 금빛 섬광.
+        // 카메라 줌은 월드 전체 배율을 바꿔 보스와 플레이어가 순간적으로 커 보인다.
+        // 히트스톱·흔들림·섬광만으로 성공 피드백을 주고, 전투 중 표시 크기는 고정한다.
         hitStop(this.scene);
         const cam = this.scene.cameras.main;
         cam.shake(110, 0.008);
         cam.flash(90, 255, 240, 190);
-        const baseZoom = cam.zoom;
-        cam.zoomTo(baseZoom * 1.07, 60, "Sine.easeOut");
-        this.scene.time.delayedCall(110, () => cam.zoomTo(baseZoom, 160, "Sine.easeInOut"));
         // 보랏빛 반지 — 짧게 공격력이 오른다.
         if (this.hasUpgrade("ITEM_VIOLET_RING")) {
           this.parryDamageBuffUntilMs = now + upgrade.itemParryDamageBuffMs;
