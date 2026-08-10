@@ -359,36 +359,48 @@ export const TUNING = {
     swordWaveHeight: 46,
     swordWaveLifeMs: 500,
 
-    /** 스킬 이펙트 스프라이트 표시 배율. 원본 셀이 커서 다 축소해서 쓴다. */
-    swordWaveVisualScale: 0.42,
-    eruptionVisualScale: 0.55,
-    cycloneVisualScale: 1.1,
+    /** 스킬 이펙트 표시 배율. 사용자 그리드 스트립 재추출로 셀이 작아져 배율로 보정. */
+    swordWaveVisualScale: 1.15,
+    eruptionVisualScale: 2.0,
+    cycloneVisualScale: 2.2,
 
     /** 관통탄(총 슬롯). */
     pierceCooldownMs: 4500,
     pierceDamageMultiplier: 1.8,
-    pierceVisualScale: 0.55,
+    /** 재추출로 셀이 작아져(201→127px) 배율로 보정한다. */
+    pierceVisualScale: 1.1,
+    /** 발사체 비행 속도·수명 — 검기처럼 날아가며 경로의 적을 전부 꿰뚫는다. */
+    pierceSpeed: 1500,
+    pierceLifeMs: 420,
 
     /** 총검돌격(총 슬롯). */
     bayonetCooldownMs: 6000,
     bayonetDamageMultiplier: 2.2,
-    bayonetVisualScale: 0.55,
+    bayonetVisualScale: 0.8,
+    /** 찌르기 전진 속도·수명 — 관통탄보다 짧고 느리게, 묵직한 내지르기로. */
+    bayonetSpeed: 900,
+    bayonetLifeMs: 220,
 
     /** 확산탄(총 슬롯) — 세 갈래, 갈래당 배율이라 낱개는 약하게 잡는다. */
     spreadCooldownMs: 5000,
     spreadDamageMultiplier: 0.9,
-    spreadVisualScale: 0.75,
+    spreadVisualScale: 1.05,
+    /** 부챗살 비행 속도·수명 — 산탄답게 관통탄보다 느리고 짧게 퍼진다. */
+    spreadSpeed: 1200,
+    spreadLifeMs: 260,
 
     /** 질주의 잔영(대쉬 슬롯). */
     rushTrailCooldownMs: 6000,
     rushTrailDamageMultiplier: 1.6,
-    rushTrailVisualScale: 0.85,
+    rushTrailVisualScale: 1.3,
     rushTrailReachPx: 150,
+    /** 짓쳐드는 시간 — 기본 대시보다 살짝 길고 묵직하게. */
+    rushTrailDashMs: 180,
 
     /** 심연의 도약(대쉬 슬롯). */
     abyssLeapCooldownMs: 7000,
     abyssLeapDamageMultiplier: 1.4,
-    abyssLeapVisualScale: 0.7,
+    abyssLeapVisualScale: 1.1,
     abyssLeapDistancePx: 190,
     abyssLeapInvulnMs: 260,
 
@@ -1258,13 +1270,14 @@ export class Player {
         if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
         this.scene.time.delayedCall(140, () => box.destroy());
 
+        // 새 시트는 프레임 바닥을 셀 하단에 붙여 팩했으므로 원점을 정확히 1로 둔다.
         this.burstSkillVfx(
           "skillEruptionBurst",
           at,
           floorY - 8,
           TUNING.upgrade.eruptionVisualScale,
           1,
-          0.9768,
+          1,
         );
         groundDust(this.scene, at, floorY, "land");
       });
@@ -1319,19 +1332,25 @@ export class Player {
     playSfx(this.scene, AUDIO.gunShot);
     this.punch(TUNING.feedback.punchScale * 1.15, 1 / TUNING.feedback.punchScale);
 
+    // "꿰뚫는 한 발"인데 제자리 판정만 잠깐 생기고 끝나 앞으로 안 나간다는 지적 —
+    // 검기(fireSwordWave)처럼 판정체에 속도를 실어 날리고, 이펙트가 따라간다.
+    // consumeOnHit을 안 켜므로 경로의 적을 전부 관통한다.
     const damage = Math.round(TUNING.ranged.damage * upgrade.pierceDamageMultiplier);
-    const at = sprite.x + dir * 90;
-    const box = this.scene.physics.add.image(at, sprite.y, TEXTURE.playerAttack);
+    const box = this.scene.physics.add.image(sprite.x + dir * 60, sprite.y, TEXTURE.playerAttack);
     box.setDisplaySize(150, 24);
     box.setDepth(TUNING.depth.attack);
     box.setAlpha(0);
     this.deps.arena.playerAttacks.add(box);
-    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    const body = box.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setVelocityX(dir * upgrade.pierceSpeed);
     box.setData("damage", damage);
     box.setData("mode", "RANGED" satisfies AttackMode);
-    this.scene.time.delayedCall(120, () => box.destroy());
+    this.scene.time.delayedCall(upgrade.pierceLifeMs, () => box.destroy());
 
-    this.burstSkillVfx("skillPierceBurst", sprite.x + dir * 40, sprite.y, upgrade.pierceVisualScale, dir);
+    this.followSkillVfx("skillPierceBurst", box, dir, upgrade.pierceVisualScale);
+    // 총구 화염은 발사 자리에 남아 터지고, 탄만 날아간다.
+    this.burstSkillVfx("skillPierceMuzzle", sprite.x + dir * 55, sprite.y, upgrade.pierceVisualScale, dir);
     this.scene.cameras.main.shake(70, 0.004);
   }
 
@@ -1345,19 +1364,22 @@ export class Player {
     playSfx(this.scene, AUDIO.swordHit2);
     this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
 
+    // 관통탄과 같은 문제 — 제자리 판정만 잠깐 생겨 "내지르기"가 앞으로 안 나갔다.
+    // 판정체를 전진시키고 이펙트가 따라간다. 관통탄보다 짧고 느린 찌르기 궤적이다.
     const damage = Math.round(TUNING.ranged.damage * upgrade.bayonetDamageMultiplier);
-    const at = sprite.x + dir * 100;
-    const box = this.scene.physics.add.image(at, sprite.y, TEXTURE.playerAttack);
+    const box = this.scene.physics.add.image(sprite.x + dir * 70, sprite.y, TEXTURE.playerAttack);
     box.setDisplaySize(170, 30);
     box.setDepth(TUNING.depth.attack);
     box.setAlpha(0);
     this.deps.arena.playerAttacks.add(box);
-    (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    const body = box.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setVelocityX(dir * upgrade.bayonetSpeed);
     box.setData("damage", damage);
     box.setData("mode", "RANGED" satisfies AttackMode);
-    this.scene.time.delayedCall(140, () => box.destroy());
+    this.scene.time.delayedCall(upgrade.bayonetLifeMs, () => box.destroy());
 
-    this.burstSkillVfx("skillBayonetBurst", sprite.x + dir * 50, sprite.y, upgrade.bayonetVisualScale, dir);
+    this.followSkillVfx("skillBayonetBurst", box, dir, upgrade.bayonetVisualScale, 0.08);
     this.scene.cameras.main.shake(90, 0.005);
   }
 
@@ -1371,22 +1393,28 @@ export class Player {
     playSfx(this.scene, AUDIO.gunShot);
     this.punch(TUNING.feedback.punchScale * 1.1, 1 / TUNING.feedback.punchScale);
 
+    // 관통탄과 같은 문제 — 제자리 판정만 잠깐 생겨 산탄이 앞으로 안 나갔다.
+    // 세 갈래에 부챗살 속도를 실어 날리고, 이펙트는 가운데 갈래를 따라간다.
     const damage = Math.round(TUNING.ranged.damage * upgrade.spreadDamageMultiplier);
-    // 세 갈래 — 가운데는 곧게, 위아래는 살짝 어긋난 y에 판정을 둬 부채꼴처럼 맞는다.
     const offsets = [-26, 0, 26];
+    let center: Phaser.GameObjects.Image | null = null;
     for (const offsetY of offsets) {
-      const box = this.scene.physics.add.image(sprite.x + dir * 80, sprite.y + offsetY, TEXTURE.playerAttack);
+      const box = this.scene.physics.add.image(sprite.x + dir * 70, sprite.y + offsetY, TEXTURE.playerAttack);
       box.setDisplaySize(90, 22);
       box.setDepth(TUNING.depth.attack);
       box.setAlpha(0);
       this.deps.arena.playerAttacks.add(box);
-      (box.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      const body = box.body as Phaser.Physics.Arcade.Body;
+      body.setAllowGravity(false);
+      // 위아래 갈래는 y 오프셋에 비례해 벌어진다 — 멀수록 부채꼴이 넓어진다.
+      body.setVelocity(dir * upgrade.spreadSpeed, offsetY * 6);
       box.setData("damage", damage);
       box.setData("mode", "RANGED" satisfies AttackMode);
-      this.scene.time.delayedCall(110, () => box.destroy());
+      this.scene.time.delayedCall(upgrade.spreadLifeMs, () => box.destroy());
+      if (offsetY === 0) center = box;
     }
 
-    this.burstSkillVfx("skillSpreadBurst", sprite.x + dir * 30, sprite.y, upgrade.spreadVisualScale, dir);
+    if (center) this.followSkillVfx("skillSpreadBurst", center, dir, upgrade.spreadVisualScale, 0.08);
     this.scene.cameras.main.shake(70, 0.004);
   }
 
@@ -1399,7 +1427,19 @@ export class Player {
 
     this.comboStep = 0;
     playSfx(this.scene, AUDIO.dash);
-    this.punch(TUNING.feedback.punchScale * 1.2, 1 / TUNING.feedback.punchScale);
+
+    // "짓쳐든다"인데 몸이 제자리라는 지적 — 대시와 같은 상태 기계를 빌려 실제로
+    // 전진한다(충전은 소모하지 않는다). isDashing 경로가 지상 수평 유지·잔상·종료를
+    // 전부 처리해 주고, 대시 중 스케일 펀치 금지 규칙도 그대로 따른다.
+    const body = sprite.body as Phaser.Physics.Arcade.Body;
+    const now = this.scene.time.now;
+    this.clearPunch();
+    this.isDashing = true;
+    this.dashEndsAtMs = now + upgrade.rushTrailDashMs;
+    this.dashGrounded = this.isGrounded;
+    this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, now + upgrade.rushTrailDashMs);
+    const speed = upgrade.rushTrailReachPx / (upgrade.rushTrailDashMs / 1000);
+    body.setVelocity(dir * speed, this.isGrounded ? 0 : -TUNING.dash.airLiftVelocity);
 
     const damage = Math.round(TUNING.melee.damage * upgrade.rushTrailDamageMultiplier);
     const at = sprite.x + dir * upgrade.rushTrailReachPx * 0.5;
@@ -1509,8 +1549,15 @@ export class Player {
     target: Phaser.GameObjects.Image,
     facing: 1 | -1,
     scale: number,
+    /**
+     * 확산탄·총검처럼 셀이 넓은 이펙트는 가운데 원점이면 그림 뒤쪽 절반이 시전 순간
+     * 플레이어 뒤까지 삐져나온다 — 0에 가깝게 주면 진행 방향으로만 뻗는다.
+     * (음수 스케일 반전도 원점을 기준으로 하므로 좌우 모두 올바르게 앞을 향한다.)
+     */
+    originX = 0.5,
   ): void {
     const fx = this.scene.add.sprite(target.x, target.y, SKILL_VFX_TEXTURE[animKey]);
+    fx.setOrigin(originX, 0.5);
     fx.setScale(facing * scale, scale);
     fx.setDepth(TUNING.depth.attack + 1);
     fx.setBlendMode(Phaser.BlendModes.ADD);
@@ -1521,8 +1568,15 @@ export class Player {
       delay: 16,
       loop: true,
       callback: () => {
-        if (!target.active || !fx.active) {
+        if (!fx.active) {
           tick.remove(false);
+          return;
+        }
+        // 루프 애니메이션(관통탄 비행)은 ANIMATION_COMPLETE가 영영 안 오므로,
+        // 발사체가 사라지는 순간 이펙트도 여기서 함께 지워야 한다.
+        if (!target.active) {
+          tick.remove(false);
+          fx.destroy();
           return;
         }
         fx.setPosition(target.x, target.y);

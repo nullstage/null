@@ -83,6 +83,7 @@ export class BootScene extends Phaser.Scene {
       [TEXTURE.skillEruption, "eruption"],
       [TEXTURE.skillCyclone, "cyclone"],
       [TEXTURE.skillPierce, "pierce"],
+      [TEXTURE.skillPierceMuzzle, "pierceMuzzle"],
       [TEXTURE.skillBayonet, "bayonet"],
       [TEXTURE.skillSpread, "spread"],
       [TEXTURE.skillRushTrail, "rushTrail"],
