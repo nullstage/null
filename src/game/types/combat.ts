@@ -398,7 +398,7 @@ export const BOSS_VFX_TEXTURE: Record<BossVfxKey, string> = {
 export const BOSS_SPRITE_SHEET = {
   idle: { path: "sprites/boss/boss-idle.png", frameWidth: 463, frameHeight: 409, frames: 5 },
   walk: { path: "sprites/boss/boss-walk.png", frameWidth: 463, frameHeight: 409, frames: 8 },
-  spawn: { path: "sprites/boss/boss-spawn.png", frameWidth: 463, frameHeight: 409, frames: 5 },
+  spawn: { path: "sprites/boss/boss-spawn.png", frameWidth: 463, frameHeight: 409, frames: 6 },
   swordCombo: { path: "sprites/boss/boss-sword-combo.png", frameWidth: 463, frameHeight: 409, frames: 7 },
   executionSlam: { path: "sprites/boss/boss-execution-slam.png", frameWidth: 463, frameHeight: 409, frames: 8 },
   dashAttack: { path: "sprites/boss/boss-dash-attack.png", frameWidth: 463, frameHeight: 409, frames: 6 },
