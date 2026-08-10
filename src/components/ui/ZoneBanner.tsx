@@ -17,10 +17,10 @@ import { theme } from "@/styles/theme";
 const SHOW_MS = 2800;
 
 const fadeInOut = keyframes`
-  0% { opacity: 0; transform: translateY(-8px); }
-  12% { opacity: 1; transform: translateY(0); }
-  78% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-6px); }
+  0% { opacity: 0; transform: translate(-50%, -8px); }
+  12% { opacity: 1; transform: translate(-50%, 0); }
+  78% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
 `;
 
 const Wrap = styled.div`
@@ -46,6 +46,11 @@ const Wrap = styled.div`
   align-items: center;
   justify-content: center;
   animation: ${fadeInOut} ${SHOW_MS}ms ease forwards;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 1;
+  }
 `;
 
 const Name = styled.span`
