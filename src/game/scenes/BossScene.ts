@@ -10,6 +10,8 @@
 
 import Phaser from "phaser";
 
+import { neoDunggeunmo } from "@/styles/fonts";
+
 import { eventBus, type GameEventMap } from "../EventBus";
 import { debugFlag, VIEWPORT } from "../config/gameConfig";
 import { KEY_BINDINGS } from "../config/inputConfig";
@@ -234,7 +236,7 @@ export class BossScene extends Phaser.Scene {
 
     const name = this.add
       .text(VIEWPORT.width / 2, VIEWPORT.height * 0.24, "「 집 행 자 」", {
-        fontFamily: "'Pretendard', sans-serif",
+        fontFamily: `${neoDunggeunmo.style.fontFamily}, sans-serif`,
         fontSize: "44px",
         fontStyle: "bold",
         color: "#f3dfe3",
@@ -258,7 +260,7 @@ export class BossScene extends Phaser.Scene {
     // 이름 밑의 부제 — 세계관(그림자 침식)과 이 보스의 역할을 한 줄로 잇는다.
     const subtitle = this.add
       .text(VIEWPORT.width / 2, VIEWPORT.height * 0.315, "이름들을 거두는 자", {
-        fontFamily: "'Pretendard', sans-serif",
+        fontFamily: `${neoDunggeunmo.style.fontFamily}, sans-serif`,
         fontSize: "17px",
         color: "rgba(243, 223, 227, 0.75)",
         stroke: "#3d0a14",
