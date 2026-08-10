@@ -89,9 +89,21 @@ const PROJECTILE = {
   intervalMs: 180,
   speed: 430,
   size: 24,
-  /** 화면을 벗어난 투사체를 확실히 회수하기 위한 수명. */
+  /** 화면을 벗어난 투사체를 확실히 회수하기 위한 수명. `executeBarrage`(부채꼴 탄막) 전용. */
   lifeMs: 3_000,
   recoveryMs: 320,
+} as const;
+
+/**
+ * 사슬 휘두르기 — 기본 패턴(projectile) 실행부. 손에서 떨어져 나가 화면을 가로지르는
+ * 투사체가 아니라, 그 자리에서 뻗어 나왔다 되감기는 채찍이다. (사용자 지적: 왜 발사하냐,
+ * 손에서 나가야 한다) 판정체를 이동시키지 않는 것만으로 `bossChainLaunchTrail`을 그대로
+ * 재사용한다 — 폴링 대상이 안 움직이면 이펙트도 제자리에서만 재생된다.
+ */
+const WHIP = {
+  reach: 220,
+  height: 90,
+  activeMs: 160,
 } as const;
 
 const SLAM = {
@@ -332,7 +344,14 @@ export class Boss {
       .sprite(x, this.groundY, TEXTURE.bossIdle, 0)
       .setScale(BOSS_SPRITE_SCALE)
       .setDepth(DEPTH.boss);
-    sprite.body?.setSize(BODY.width / BOSS_SPRITE_SCALE, BODY.height / BOSS_SPRITE_SCALE);
+    // setSize만 쓰면 Phaser가 셀 "가운데"에 바디를 놓는다 — 그림이 바닥 쪽으로 치우쳐
+    // 있어(발이 셀 하단 가까이) 가운데 정렬로는 다리가 바디 밖으로 빠져 안 맞는다.
+    // (사용자 지적: 히트박스가 다리를 못 맞힌다) 바디 바닥을 그림의 실제 바닥선 근처에
+    // 직접 붙인다 — 머리 위쪽은 조금 비워 주더라도 다리는 반드시 잡는다.
+    const bodyWidthLocal = BODY.width / BOSS_SPRITE_SCALE;
+    const bodyHeightLocal = BODY.height / BOSS_SPRITE_SCALE;
+    sprite.body?.setSize(bodyWidthLocal, bodyHeightLocal);
+    sprite.body?.setOffset((463 - bodyWidthLocal) / 2, 395 - bodyHeightLocal);
 
     this.arena.enemyBodies.add(sprite);
     sprite.setData("enemy", this);
@@ -347,21 +366,11 @@ export class Boss {
     // 풀리는 순간 그동안 숨어서 쌓인 낙하 속도가 화면 밖까지 떨어뜨렸던 원인이 이것이다.
     (sprite.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
 
-    // 그림자 상태 — 어둡게 가라앉은 실루엣으로 서서 숨쉬듯 흔들린다. 체력바도,
-    // 패턴 타이머도 아직 없다(awaken 전까지 update()가 그 아래 로직을 건너뛴다).
-    sprite.play(BOSS_FRAME.idle);
+    // 그림자 상태 — 어둡게 가라앉은 실루엣으로 완전히 멈춰 선다. 숨쉬는 흔들림도,
+    // idle 애니메이션도 없다(사용자 요청: 깨우기 전엔 움직이는 모션이 아예 없어야 한다).
+    // 체력바도, 패턴 타이머도 아직 없다(awaken 전까지 update()가 그 아래 로직을 건너뛴다).
     sprite.setTintFill(0x140a12);
     sprite.setAlpha(0.82);
-    this.tweens.push(
-      this.scene.tweens.add({
-        targets: sprite,
-        alpha: 0.6,
-        duration: 1600,
-        yoyo: true,
-        repeat: -1,
-        ease: "sine.inOut",
-      }),
-    );
   }
 
   /**
@@ -394,9 +403,9 @@ export class Boss {
     const sprite = this.sprite;
     if (this.defeated || !sprite) return;
 
-    if (this.followHitbox) this.followHitbox.setPosition(sprite.x, sprite.y);
-    // 유휴 중에만 떠오르내린다 — 패턴 중엔 포즈·궤적이 우선이다.
-    this.bobOffset = this.busy || this.airborne ? 0 : Math.sin(time * 0.004) * 5;
+    if (this.followHitbox) this.followHitbox.setPosition(sprite.x, this.attackY);
+    // 유휴 중에만 떠오르내린다 — 패턴 중엔 포즈·궤적이 우선이고, 그림자 상태는 아예 멈춰야 한다.
+    this.bobOffset = this.busy || this.airborne || this.dormant ? 0 : Math.sin(time * 0.004) * 5;
     this.clampToArena(sprite);
 
     // 그림자 상태 — 깨어나기 전까지는 그 자리에 가만히 서 있는다.
@@ -453,6 +462,16 @@ export class Boss {
       // 터져 화면 밖으로 떨어지므로, 바닥에 붙어 있는 동안은 항상 0으로 눌러 둔다.
       sprite.setVelocityY(0);
     }
+  }
+
+  /**
+   * 근접형 공격 판정(베기·돌진·사슬 등)의 y 기준점. `sprite.y`(보스 원점)를 그대로 쓰면
+   * 안 된다 — 그림이 2배로 커지면서 원점이 가슴 위쪽까지 올라가, 그 높이에 판정을 놓으면
+   * 바닥에 선 플레이어에게 전혀 안 닿는다. (사용자 지적: 스킬이 전체적으로 너무 높아서
+   * 안 맞는다) 바닥에서 고정 거리만큼 낮춘 지점을 쓴다.
+   */
+  private get attackY(): number {
+    return this.arena.bounds.floorY - 60;
   }
 
   private facePlayer(sprite: Phaser.Physics.Arcade.Sprite): void {
@@ -582,7 +601,7 @@ export class Boss {
       const reach = SLASH.reach * (isFinisher ? COMBO.finisherReachScale : 1);
       const hitX = sprite.x + dir * (BODY.width / 2 + reach / 2);
 
-      bossTelegraphBoxFx(this.scene, hitX, sprite.y, reach, SLASH.height, COMBO.telegraphMs);
+      bossTelegraphBoxFx(this.scene, hitX, this.attackY, reach, SLASH.height, COMBO.telegraphMs);
       this.setPose(BOSS_FRAME.slashTelegraph);
       this.windup();
 
@@ -598,8 +617,8 @@ export class Boss {
         );
         this.punch(sprite);
         this.strikePose(BOSS_FRAME.slashStrike, 200);
-        this.spawnHitbox(hitX, sprite.y, reach, SLASH.height, SLASH.activeMs);
-        bossSlashCrescentFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir, VFX_SCALE);
+        this.spawnHitbox(hitX, this.attackY, reach, SLASH.height, SLASH.activeMs);
+        bossSlashCrescentFx(this.scene, sprite.x + dir * (BODY.width / 2), this.attackY, dir, VFX_SCALE);
         if (isFinisher) {
           this.scene.cameras.main.shake(120, 0.006);
           this.after(SLASH.activeMs + COMBO.recoveryMs, () => this.finishPattern());
@@ -621,7 +640,7 @@ export class Boss {
     }
 
     const muzzleX = sprite.x + this.facing * (BODY.width / 2 + PROJECTILE.size);
-    const muzzleY = sprite.y - 12;
+    const muzzleY = this.attackY;
     bossTelegraphBoxFx(
       this.scene,
       muzzleX,
@@ -675,7 +694,8 @@ export class Boss {
     this.setPose(BOSS_FRAME.judgmentTelegraph);
     this.windup();
     // 판결을 여는 순간 — 발밑에 고리가 한 번 떠오른다.
-    bossJudgmentRingFx(this.scene, sprite.x, floorY - 20, VFX_SCALE);
+    // 사용자 지적: 너무 높이 뜨고 너무 작다 — 바닥에 더 붙이고 배율을 따로 키운다.
+    bossJudgmentRingFx(this.scene, sprite.x, floorY, VFX_SCALE * 1.5);
 
     for (let i = 0; i < ERUPTION.count; i += 1) {
       const at = Phaser.Math.Clamp(
@@ -720,9 +740,9 @@ export class Boss {
 
     const dir = this.facing;
     const x = sprite.x + dir * (BODY.width / 2 + CHAIN_PULL.reach / 2);
-    const y = sprite.y;
+    const y = this.attackY;
     this.showTelegraph(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.telegraphMs);
-    bossChainOrbitFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y, CHAIN_PULL.telegraphMs, VFX_SCALE);
+    bossChainOrbitFx(this.scene, sprite.x + dir * (BODY.width / 2), y, CHAIN_PULL.telegraphMs, VFX_SCALE);
     this.setPose(BOSS_FRAME.chainPullTelegraph);
     this.windup();
 
@@ -752,7 +772,7 @@ export class Boss {
     }
 
     const x = sprite.x + this.facing * (BODY.width / 2 + SLASH.reach / 2);
-    const y = sprite.y;
+    const y = this.attackY;
     this.showTelegraph(x, y, SLASH.reach, SLASH.height, SLASH.telegraphMs);
     this.setPose(BOSS_FRAME.slashTelegraph);
     this.windup();
@@ -762,7 +782,7 @@ export class Boss {
       this.strikePose(BOSS_FRAME.slashStrike, SLASH.activeMs + SLASH.recoveryMs);
       this.spawnHitbox(x, y, SLASH.reach, SLASH.height, SLASH.activeMs);
       // 판정은 투명하다 — 그림은 초승달 궤적 스프라이트가 담당한다.
-      bossSlashCrescentFx(this.scene, sprite.x + this.facing * (BODY.width / 2), y - 8, this.facing, VFX_SCALE);
+      bossSlashCrescentFx(this.scene, sprite.x + this.facing * (BODY.width / 2), y, this.facing, VFX_SCALE);
       this.after(SLASH.activeMs + SLASH.recoveryMs, () => this.finishPattern());
     });
   }
@@ -779,9 +799,9 @@ export class Boss {
     const reach = (DASH.speed * DASH.durationMs) / 1000;
     this.showTelegraph(
       sprite.x + (dir * reach) / 2,
-      sprite.y,
+      this.attackY,
       reach,
-      BODY.height,
+      SLASH.height,
       DASH.telegraphMs,
     );
     this.setPose(BOSS_FRAME.dashTelegraph);
@@ -790,15 +810,15 @@ export class Boss {
     this.after(DASH.telegraphMs, () => {
       this.strikePose(BOSS_FRAME.dashStrike, DASH.durationMs + DASH.recoveryMs);
       sprite.setVelocityX(dir * DASH.speed);
-      bossDashSlashFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir, VFX_SCALE);
+      bossDashSlashFx(this.scene, sprite.x + dir * (BODY.width / 2), this.attackY, dir, VFX_SCALE);
       // 출발의 무게 — 발밑 흙이 터지고 화면이 잠깐 흔들린다.
       groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
       this.scene.cameras.main.shake(90, 0.004);
       this.followHitbox = this.spawnHitbox(
         sprite.x,
-        sprite.y,
+        this.attackY,
         DASH.hitWidth,
-        BODY.height,
+        SLASH.height,
         DASH.durationMs,
       );
 
@@ -818,7 +838,7 @@ export class Boss {
     });
   }
 
-  /** 원거리 투사체. 발사 순간의 플레이어 위치를 향해 쏘므로 움직이면 빗나간다. */
+  /** 사슬 휘두르기. 손에서 뻗어 나온 채찍이 그 자리에서 여러 번 스냅한다 — 날아가지 않는다. */
   private executeProjectile(): void {
     const sprite = this.sprite;
     if (!sprite) {
@@ -826,14 +846,10 @@ export class Boss {
       return;
     }
 
-    const muzzleX = sprite.x + this.facing * (BODY.width / 2 + PROJECTILE.size);
-    this.showTelegraph(
-      muzzleX,
-      sprite.y,
-      PROJECTILE.size * 2,
-      PROJECTILE.size * 2,
-      PROJECTILE.telegraphMs,
-    );
+    const dir = this.facing;
+    const x = sprite.x + dir * (BODY.width / 2 + WHIP.reach / 2);
+    const y = this.attackY;
+    this.showTelegraph(x, y, WHIP.reach, WHIP.height, PROJECTILE.telegraphMs);
     this.setPose(BOSS_FRAME.projectileTelegraph);
     this.windup();
 
@@ -841,31 +857,17 @@ export class Boss {
       const volleyMs = (PROJECTILE.count - 1) * PROJECTILE.intervalMs;
       this.strikePose(BOSS_FRAME.projectileStrike, volleyMs + PROJECTILE.recoveryMs);
       for (let i = 0; i < PROJECTILE.count; i += 1) {
-        this.after(i * PROJECTILE.intervalMs, () => this.fireProjectile(muzzleX, sprite.y));
+        this.after(i * PROJECTILE.intervalMs, () => this.snapChainWhip(x, y));
       }
       this.after(volleyMs + PROJECTILE.recoveryMs, () => this.finishPattern());
     });
   }
 
-  private fireProjectile(x: number, y: number): void {
-    const target = this.deps.getPlayerPosition();
-    const dx = target.x - x;
-    const dy = target.y - y;
-    const length = Math.hypot(dx, dy) || 1;
-
-    const shot = this.spawnHitbox(
-      x,
-      y,
-      PROJECTILE.size,
-      PROJECTILE.size,
-      PROJECTILE.lifeMs,
-      true,
-    );
-    shot.setVelocity(
-      (dx / length) * PROJECTILE.speed,
-      (dy / length) * PROJECTILE.speed,
-    );
-    // 판정은 투명하다 — 사슬 갈고리 스프라이트가 그림을 맡는다.
+  /** 채찍이 제자리에서 한 번 스냅한다 — 판정체를 이동시키지 않아 이펙트도 날아가지 않는다. */
+  private snapChainWhip(x: number, y: number): void {
+    const shot = this.spawnHitbox(x, y, WHIP.reach, WHIP.height, WHIP.activeMs, true);
+    // 판정은 투명하다 — 사슬 갈고리 스프라이트가 그림을 맡는다. 속도를 주지 않으므로
+    // bossChainLaunchTrail의 폴링 대상이 안 움직여 이펙트도 제자리에서만 재생된다.
     bossChainLaunchTrail(this.scene, shot, this.facing, VFX_SCALE);
   }
 
@@ -932,7 +934,8 @@ export class Boss {
             SLAM.activeMs,
           );
           // 판정은 투명하다 — 착지의 그림은 기둥 폭발 스프라이트 + 흙먼지가 맡는다.
-          bossSlamEruptionFx(this.scene, targetX, this.arena.bounds.floorY - 6, VFX_SCALE);
+          // 사용자 지적: 너무 높이 뜬다 — 바닥에 더 붙인다.
+          bossSlamEruptionFx(this.scene, targetX, this.arena.bounds.floorY + 12, VFX_SCALE);
           groundDust(this.scene, targetX, this.arena.bounds.floorY, "land");
           hitStop(this.scene, 70);
           this.after(SLAM.activeMs + SLAM.recoveryMs, () => this.finishPattern());
