@@ -1,10 +1,12 @@
 import localFont from "next/font/local";
 
-/** 대화 본문 서체(정체, Regular). 대화창과 UI 모노스페이스 자리에서 함께 쓴다. */
-export const chosunKg = localFont({
-  src: "../assets/fonts/ChosunKg.ttf",
-  display: "swap",
-});
+/*
+ * 대화 본문 서체였던 ChosunKg(조선굵은고딕, Copyright(c) 2020 조선일보사)를 제거했다.
+ * 조선일보 서체는 무료지만 "공식 배포처 이외에서의 배포 금지" 조건이 붙어 있고,
+ * 이 프로젝트는 ttf를 번들해 GitHub Pages에서 직접 서빙하므로 그 조건에
+ * 걸리는지가 불분명했다. 대화·시스템 UI는 이미 CDN으로 받는 Pretendard(OFL-1.1)로
+ * 통일했다. 근거는 CREDITS.md 참조.
+ */
 
 /**
  * 보스 이름·지역명·아이템명 등 라벨 서체(대화·메인 타이틀은 제외). (사용자 결정)
