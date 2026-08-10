@@ -16,6 +16,8 @@ import {
   AUDIO,
   BOSS_ANIM,
   BOSS_SPRITE_SHEET,
+  BOSS_VFX_ANIM,
+  BOSS_VFX_SHEET,
   ENEMY_ANIM,
   PARRY_VFX_ANIM,
   PLAYER_INTRO_ANIM,
@@ -95,6 +97,28 @@ export class BootScene extends Phaser.Scene {
         frameHeight: sheet.frameHeight,
       });
     }
+    // 보스 공격 이펙트 — 절차적 VFX를 대체하는 스프라이트 12장.
+    const bossVfxTextures: [string, keyof typeof BOSS_VFX_SHEET][] = [
+      [TEXTURE.vfxSlashCrescent, "slashCrescent"],
+      [TEXTURE.vfxSlamEruption, "slamEruption"],
+      [TEXTURE.vfxDashSlash, "dashSlash"],
+      [TEXTURE.vfxChainLaunch, "chainLaunch"],
+      [TEXTURE.vfxChainPullImpact, "chainPullImpact"],
+      [TEXTURE.vfxChainOrbit, "chainOrbit"],
+      [TEXTURE.vfxJudgmentLine, "judgmentLine"],
+      [TEXTURE.vfxTelegraphBox, "telegraphBox"],
+      [TEXTURE.vfxJudgmentRing, "judgmentRing"],
+      [TEXTURE.vfxShadowEmerge, "shadowEmerge"],
+      [TEXTURE.vfxPhaseAura, "phaseAura"],
+      [TEXTURE.vfxGroundSpike, "groundSpike"],
+    ];
+    for (const [textureKey, sheetKey] of bossVfxTextures) {
+      const sheet = BOSS_VFX_SHEET[sheetKey];
+      this.load.spritesheet(textureKey, assetPath(sheet.path), {
+        frameWidth: sheet.frameWidth,
+        frameHeight: sheet.frameHeight,
+      });
+    }
     // 보스 체력바 장식 프레임.
     this.load.image(TEXTURE.bossHpFrame, assetPath("ui/boss-hp-frame.png"));
     // 보스방 전용 고딕 성당 배경.
@@ -133,6 +157,7 @@ export class BootScene extends Phaser.Scene {
     this.registerIntroAnimation();
     this.registerFrameAnimations(ENEMY_ANIM);
     this.registerFrameAnimations(BOSS_ANIM);
+    this.registerFrameAnimations(BOSS_VFX_ANIM);
     this.registerFrameAnimations(SKILL_VFX_ANIM);
     this.registerFrameAnimations(PARRY_VFX_ANIM);
     runState.reset(this.time.now);

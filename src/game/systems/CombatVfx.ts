@@ -1648,98 +1648,6 @@ export const startBloodRain = (scene: Phaser.Scene, roomWidth: number, floorY: n
 };
 
 /**
- * 보스 예고 구역. 주황 단색 사각형 대신 — 옅은 핏빛 바닥판 + 맥동하는 진홍 테두리
- * + 모서리 꺾쇠 + 안에서 피어오르는 불티로 "위험한 자리"를 그린다.
- * 끝나는 순간 흰 테두리가 한 번 번쩍이며 조여들어 "지금 터진다"를 알린다.
- */
-export const bossTelegraphZone = (
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  durationMs: number,
-): void => {
-  const w = width / 2;
-  const h = height / 2;
-
-  const zone = scene.add.graphics({ x, y });
-  zone.setDepth(1);
-  zone.fillStyle(0x8a1220, 0.16);
-  zone.fillRect(-w, -h, width, height);
-  zone.lineStyle(2, 0xff3b4e, 0.85);
-  zone.strokeRect(-w, -h, width, height);
-  // 모서리 꺾쇠 — 테두리만으로는 "구역"이 약해 보인다. 표적 프레임처럼 조인다.
-  const c = Math.min(14, w, h);
-  zone.lineStyle(3, 0xffb199, 0.9);
-  for (const [sx, sy] of [
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-    [1, 1],
-  ] as const) {
-    zone.beginPath();
-    zone.moveTo(sx * w - sx * c, sy * h);
-    zone.lineTo(sx * w, sy * h);
-    zone.lineTo(sx * w, sy * h - sy * c);
-    zone.strokePath();
-  }
-
-  const pulse = scene.tweens.add({
-    targets: zone,
-    alpha: { from: 0.5, to: 1 },
-    duration: 150,
-    yoyo: true,
-    repeat: -1,
-  });
-
-  // 구역 안에서 피어오르는 불티 — 면을 채우지 않고도 "끓고 있다"가 보인다.
-  const embers = scene.time.addEvent({
-    delay: 90,
-    loop: true,
-    callback: () => {
-      const ember = scene.add.rectangle(
-        x + Phaser.Math.Between(Math.round(-w), Math.round(w)),
-        y + h,
-        2.5,
-        2.5,
-        0xff6a4e,
-        0.9,
-      );
-      ember.setDepth(1);
-      ember.setBlendMode(Phaser.BlendModes.ADD);
-      scene.tweens.add({
-        targets: ember,
-        y: y - h * 0.5,
-        alpha: 0,
-        duration: 420,
-        ease: "power1.out",
-        onComplete: () => ember.destroy(),
-      });
-    },
-  });
-
-  scene.time.delayedCall(durationMs, () => {
-    pulse.remove();
-    embers.remove();
-    zone.destroy();
-    const snap = scene.add.graphics({ x, y });
-    snap.setDepth(2);
-    snap.setBlendMode(Phaser.BlendModes.ADD);
-    snap.lineStyle(3, 0xffffff, 0.95);
-    snap.strokeRect(-w, -h, width, height);
-    scene.tweens.add({
-      targets: snap,
-      alpha: 0,
-      scaleX: 0.9,
-      scaleY: 0.9,
-      duration: 110,
-      onComplete: () => snap.destroy(),
-    });
-  });
-};
-
-/**
  * 보스 충격파. 내려찍기 착지·포효 순간 — 납작하게 퍼지는 링 + 포물선을 그리며
  * 튀는 돌 파편. 흙먼지(groundDust)는 호출부가 따로 얹는다.
  */
@@ -1794,46 +1702,197 @@ export const bossShockwave = (scene: Phaser.Scene, x: number, y: number, width: 
   }
 };
 
+// ────────────────────────────── 보스 공격 이펙트(스프라이트) ──────────────────────────────
 /**
- * 보스 투사체의 그림. 판정체(빨간 사각형)는 투명하게 두고, 마젠타 구체와 꼬리가
- * 투사체를 따라다닌다 — 잡몹 스팅어 궤적과 같은 폴링 방식.
+ * 절차적 도형(bossTelegraphZone/bossShockwave/bossOrbTrail)을 대체하는 보스 전용
+ * 스프라이트 이펙트 12종. 스킬 이펙트와 같은 문법(재생 후 자기 자신을 destroy)이다.
+ * `enemySlash`는 잡몹(ChaserEnemy)과도 같이 쓰므로 여기서 건드리지 않는다.
  */
-export const bossOrbTrail = (scene: Phaser.Scene, projectile: Phaser.GameObjects.Image): void => {
-  const graphics = scene.add.graphics();
-  graphics.setDepth(VFX.depth);
-  graphics.setBlendMode(Phaser.BlendModes.ADD);
 
-  const history: { x: number; y: number }[] = [];
+/** 보스 베기 — 붉은 초승달이 터진다. */
+export const bossSlashCrescentFx = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+  scale = 1,
+): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxSlashCrescent);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(facing * scale, scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossSlashCrescentBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/** 보스 돌진 베기 — 궤적이 커지며 지나간다. */
+export const bossDashSlashFx = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+  scale = 1,
+): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxDashSlash);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(facing * scale, scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossDashSlashBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/** 보스 내려찍기 착지 폭발 — 기둥이 솟았다 터진다. */
+export const bossSlamEruptionFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxSlamEruption);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossSlamEruptionBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/**
+ * 보스 사슬 발사 — 투사체를 따라다니는 스프라이트. `bossOrbTrail`과 같은 폴링
+ * 방식이되, 궤적을 그려 넣는 대신 갈고리 애니메이션 자체를 매 프레임 따라붙인다.
+ */
+export const bossChainLaunchTrail = (
+  scene: Phaser.Scene,
+  projectile: Phaser.GameObjects.Image,
+  facing: 1 | -1,
+): void => {
+  const fx = scene.add.sprite(projectile.x, projectile.y, TEXTURE.vfxChainLaunch);
+  fx.setDepth(VFX.depth);
+  fx.setScale(facing, 1);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossChainLaunchLoop");
+
   const event = scene.time.addEvent({
     delay: 16,
     loop: true,
     callback: () => {
       if (!projectile.active) {
         event.remove(false);
-        scene.tweens.add({
-          targets: graphics,
-          alpha: 0,
-          duration: 100,
-          onComplete: () => graphics.destroy(),
-        });
+        fx.stop();
+        scene.tweens.add({ targets: fx, alpha: 0, duration: 120, onComplete: () => fx.destroy() });
         return;
       }
-
-      history.unshift({ x: projectile.x, y: projectile.y });
-      if (history.length > 8) history.pop();
-
-      graphics.clear();
-      history.forEach((point, i) => {
-        const t = i / history.length;
-        graphics.fillStyle(0xd9469a, (1 - t) * 0.45);
-        graphics.fillCircle(point.x, point.y, (1 - t) * 9 + 2);
-      });
-      graphics.fillStyle(0xff7ac8, 0.75);
-      graphics.fillCircle(projectile.x, projectile.y, 10);
-      graphics.fillStyle(0xffffff, 0.95);
-      graphics.fillCircle(projectile.x, projectile.y, 4.5);
+      fx.setPosition(projectile.x, projectile.y);
     },
   });
+};
+
+/** 보스 사슬 포획 — 적중 순간의 큰 임팩트(스파크 → 감기 → 폭발 → 회수). */
+export const bossChainPullImpactFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxChainPullImpact);
+  fx.setDepth(VFX.depth + 2);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossChainPullImpactBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/**
+ * 보스 사슬 회전 — 사슬 포획 예고 중 도는 고리. 다른 예고 이펙트와 달리 이것도
+ * durationMs를 받아 호출부(Boss.ts)가 시간을 관리하지 않아도 되게 한다.
+ */
+export const bossChainOrbitFx = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  durationMs: number,
+  scale = 1,
+): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxChainOrbit);
+  fx.setDepth(VFX.depth);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossChainOrbitLoop");
+  scene.time.delayedCall(durationMs, () => {
+    fx.stop();
+    scene.tweens.add({ targets: fx, alpha: 0, duration: 120, onComplete: () => fx.destroy() });
+  });
+};
+
+/** 판결선 예고 → 낙하. 연쇄 폭발(executeEruption)의 한 걸음마다 재생한다. */
+export const bossJudgmentLineFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxJudgmentLine);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossJudgmentLineBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/**
+ * 보스 공격 예고. `bossTelegraphZone`(도형)을 대체한다 — 시그니처를 그대로 맞춰
+ * 호출부를 안 건드려도 되게 했다. 사각 프레임 스프라이트를 판정 영역 크기로 늘려
+ * 깔고, durationMs 뒤에 직접 지운다(호출부가 시간을 관리하는 유일한 이펙트라 그대로 계승).
+ */
+export const bossTelegraphBoxFx = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  durationMs: number,
+): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxTelegraphBox);
+  // 옛 도형 버전은 depth 1(바닥과 같은 높이)로도 충분했지만, 스프라이트는 바닥
+  // 타일 뒤로 가려 보일 수 있어 다른 보스 VFX와 같은 깊이대로 올린다.
+  fx.setDepth(VFX.depth);
+  fx.setDisplaySize(width, height);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossTelegraphBoxBurst");
+  scene.time.delayedCall(durationMs, () => {
+    scene.tweens.add({
+      targets: fx,
+      alpha: 0,
+      scaleX: fx.scaleX * 1.08,
+      scaleY: fx.scaleY * 1.08,
+      duration: 110,
+      onComplete: () => fx.destroy(),
+    });
+  });
+};
+
+/** 원형 심판진 — 연쇄 폭발(executeEruption) 시작 시 보스 발밑에 한 번 띄운다. */
+export const bossJudgmentRingFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxJudgmentRing);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossJudgmentRingBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/** 그림자 등장 — 스폰 스프라이트 애니메이션 위에 겹쳐 쓰는 보조 플레어. */
+export const bossShadowEmergeFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxShadowEmerge);
+  fx.setDepth(VFX.depth - 1);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossShadowEmergeBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/** 페이즈 전환 오오라 — 포효 순간 바닥에서 솟는다. */
+export const bossPhaseAuraFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxPhaseAura);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossPhaseAuraBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+};
+
+/** 지면 가시/암흑 폭발 — 사망 붕괴 순간에 겹쳐 쓴다. */
+export const bossGroundSpikeFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
+  const fx = scene.add.sprite(x, y, TEXTURE.vfxGroundSpike);
+  fx.setDepth(VFX.depth + 1);
+  fx.setScale(scale);
+  fx.setBlendMode(Phaser.BlendModes.ADD);
+  fx.play("bossGroundSpikeBurst");
+  fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
 };
 
 /**

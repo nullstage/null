@@ -119,6 +119,30 @@ export const TEXTURE = {
   parryCharge: "tex_parry_charge",
   /** 완벽 패링 성공 — 방패가 터지는 7프레임. */
   parryPerfect: "tex_parry_perfect",
+  /** 보스 베기 — 붉은 초승달 궤적이 터지는 7프레임. */
+  vfxSlashCrescent: "tex_vfx_slash_crescent",
+  /** 보스 내려찍기 — 기둥이 솟았다 터지는 8프레임. */
+  vfxSlamEruption: "tex_vfx_slam_eruption",
+  /** 보스 사슬 발사 — 갈고리가 날아가는 7프레임. */
+  vfxChainLaunch: "tex_vfx_chain_launch",
+  /** 보스 사슬 포획 — 적중부터 되감기까지 8프레임. */
+  vfxChainPullImpact: "tex_vfx_chain_pull_impact",
+  /** 보스 공격 예고 — 사각 위험구역이 채워지는 5프레임. */
+  vfxTelegraphBox: "tex_vfx_telegraph_box",
+  /** 보스 돌진 베기 — 궤적이 커지는 6프레임. */
+  vfxDashSlash: "tex_vfx_dash_slash",
+  /** 보스 사슬 회전 — 원형으로 도는 6프레임(사슬 포획 예고 중 재생). */
+  vfxChainOrbit: "tex_vfx_chain_orbit",
+  /** 판결선 예고 → 낙하 — 5프레임. */
+  vfxJudgmentLine: "tex_vfx_judgment_line",
+  /** 원형 심판진 — 고리가 조립되어 폭발하는 7프레임. */
+  vfxJudgmentRing: "tex_vfx_judgment_ring",
+  /** 그림자 등장 — 4프레임(등장 연출에 겹쳐 쓴다). */
+  vfxShadowEmerge: "tex_vfx_shadow_emerge",
+  /** 페이즈 전환 오오라 — 7프레임. */
+  vfxPhaseAura: "tex_vfx_phase_aura",
+  /** 지면 가시/암흑 폭발 — 7프레임(사망 연출에 겹쳐 쓴다). */
+  vfxGroundSpike: "tex_vfx_ground_spike",
 } as const;
 
 /**
@@ -215,6 +239,137 @@ export const PARRY_VFX_ANIM = {
     loop: false,
   },
 } as const;
+
+/**
+ * 보스 공격 이펙트 스프라이트시트 12장. 사용자가 그려 준 절차적 VFX 대체용 원본
+ * 4장(베기·체인·심판·그림자, 각 3행)에서 시퀀스별로 잘라 packing했다 —
+ * `CombatVfx.ts`의 `bossTelegraphZone`/`bossShockwave`/`bossOrbTrail`/`enemySlash`
+ * (보스 호출부만) 자리를 대체한다.
+ */
+export const BOSS_VFX_SHEET = {
+  slashCrescent: { path: "vfx/vfx-slash-crescent.png", frameWidth: 247, frameHeight: 254, frames: 7 },
+  slamEruption: { path: "vfx/vfx-slam-eruption.png", frameWidth: 250, frameHeight: 351, frames: 8 },
+  dashSlash: { path: "vfx/vfx-dash-slash.png", frameWidth: 279, frameHeight: 180, frames: 6 },
+  chainLaunch: { path: "vfx/vfx-chain-launch.png", frameWidth: 328, frameHeight: 220, frames: 7 },
+  chainPullImpact: { path: "vfx/vfx-chain-pull-impact.png", frameWidth: 229, frameHeight: 257, frames: 8 },
+  chainOrbit: { path: "vfx/vfx-chain-orbit.png", frameWidth: 266, frameHeight: 267, frames: 6 },
+  judgmentLine: { path: "vfx/vfx-judgment-line.png", frameWidth: 485, frameHeight: 334, frames: 5 },
+  telegraphBox: { path: "vfx/vfx-telegraph-box.png", frameWidth: 496, frameHeight: 277, frames: 5 },
+  judgmentRing: { path: "vfx/vfx-judgment-ring.png", frameWidth: 376, frameHeight: 337, frames: 7 },
+  shadowEmerge: { path: "vfx/vfx-shadow-emerge.png", frameWidth: 485, frameHeight: 395, frames: 4 },
+  phaseAura: { path: "vfx/vfx-phase-aura.png", frameWidth: 352, frameHeight: 335, frames: 7 },
+  groundSpike: { path: "vfx/vfx-ground-spike.png", frameWidth: 326, frameHeight: 240, frames: 7 },
+} as const;
+
+/**
+ * 보스 VFX 애니메이션. 예고류(chainOrbit/telegraphBox)만 loop=true로 두고
+ * 호출부가 durationMs만큼 붙잡고 있다가 직접 destroy한다 — 나머지는 전부
+ * 한 번 재생하고 끝난다(스킬 이펙트와 같은 문법).
+ */
+export const BOSS_VFX_ANIM = {
+  bossSlashCrescentBurst: {
+    key: TEXTURE.vfxSlashCrescent,
+    start: 0,
+    frames: BOSS_VFX_SHEET.slashCrescent.frames,
+    fps: 14,
+    loop: false,
+  },
+  bossSlamEruptionBurst: {
+    key: TEXTURE.vfxSlamEruption,
+    start: 0,
+    frames: BOSS_VFX_SHEET.slamEruption.frames,
+    fps: 14,
+    loop: false,
+  },
+  bossDashSlashBurst: {
+    key: TEXTURE.vfxDashSlash,
+    start: 0,
+    frames: BOSS_VFX_SHEET.dashSlash.frames,
+    fps: 12,
+    loop: false,
+  },
+  bossChainLaunchLoop: {
+    key: TEXTURE.vfxChainLaunch,
+    start: 0,
+    frames: BOSS_VFX_SHEET.chainLaunch.frames,
+    fps: 16,
+    loop: true,
+  },
+  bossChainPullImpactBurst: {
+    key: TEXTURE.vfxChainPullImpact,
+    start: 0,
+    frames: BOSS_VFX_SHEET.chainPullImpact.frames,
+    fps: 14,
+    loop: false,
+  },
+  bossChainOrbitLoop: {
+    key: TEXTURE.vfxChainOrbit,
+    start: 0,
+    frames: BOSS_VFX_SHEET.chainOrbit.frames,
+    fps: 10,
+    loop: true,
+  },
+  bossJudgmentLineBurst: {
+    key: TEXTURE.vfxJudgmentLine,
+    start: 0,
+    frames: BOSS_VFX_SHEET.judgmentLine.frames,
+    fps: 10,
+    loop: false,
+  },
+  bossTelegraphBoxBurst: {
+    key: TEXTURE.vfxTelegraphBox,
+    start: 0,
+    frames: BOSS_VFX_SHEET.telegraphBox.frames,
+    fps: 10,
+    loop: false,
+  },
+  bossJudgmentRingBurst: {
+    key: TEXTURE.vfxJudgmentRing,
+    start: 0,
+    frames: BOSS_VFX_SHEET.judgmentRing.frames,
+    fps: 12,
+    loop: false,
+  },
+  bossShadowEmergeBurst: {
+    key: TEXTURE.vfxShadowEmerge,
+    start: 0,
+    frames: BOSS_VFX_SHEET.shadowEmerge.frames,
+    fps: 8,
+    loop: false,
+  },
+  bossPhaseAuraBurst: {
+    key: TEXTURE.vfxPhaseAura,
+    start: 0,
+    frames: BOSS_VFX_SHEET.phaseAura.frames,
+    fps: 10,
+    loop: false,
+  },
+  bossGroundSpikeBurst: {
+    key: TEXTURE.vfxGroundSpike,
+    start: 0,
+    frames: BOSS_VFX_SHEET.groundSpike.frames,
+    fps: 12,
+    loop: false,
+  },
+} as const;
+
+export type BossVfxKey = keyof typeof BOSS_VFX_ANIM;
+
+/** 애니메이션 키 → 텍스처 키. 스프라이트 생성 시 초기 텍스처를 맞추는 용도. */
+export const BOSS_VFX_TEXTURE: Record<BossVfxKey, string> = {
+  bossSlashCrescentBurst: TEXTURE.vfxSlashCrescent,
+  bossSlamEruptionBurst: TEXTURE.vfxSlamEruption,
+  bossDashSlashBurst: TEXTURE.vfxDashSlash,
+  bossChainLaunchLoop: TEXTURE.vfxChainLaunch,
+  bossChainPullImpactBurst: TEXTURE.vfxChainPullImpact,
+  bossChainOrbitLoop: TEXTURE.vfxChainOrbit,
+  bossJudgmentLineBurst: TEXTURE.vfxJudgmentLine,
+  bossTelegraphBoxBurst: TEXTURE.vfxTelegraphBox,
+  bossJudgmentRingBurst: TEXTURE.vfxJudgmentRing,
+  bossShadowEmergeBurst: TEXTURE.vfxShadowEmerge,
+  bossPhaseAuraBurst: TEXTURE.vfxPhaseAura,
+  bossGroundSpikeBurst: TEXTURE.vfxGroundSpike,
+};
 
 /**
  * 보스 스프라이트시트 12장. 사용자가 그려 준 원본(집행자) 4장에서 시퀀스별로 잘라
