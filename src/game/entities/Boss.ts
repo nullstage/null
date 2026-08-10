@@ -178,6 +178,28 @@ const DEPTH = { telegraph: 1, attack: 5, boss: 9, hud: 100 } as const;
  */
 const BOSS_SPRITE_SCALE = 0.68 * 2;
 
+/** idle 원화의 불투명 픽셀 높이. 모든 살아 있는 포즈를 이 높이에 맞춘다. */
+const BOSS_ART_HEIGHT = 342;
+
+/**
+ * 각 스프라이트시트 프레임의 불투명 픽셀 높이 실측값.
+ * 셀 규격만 같고 내부 원화 크기는 크게 달라 포즈 단위 평균값으로는 짧은 한 프레임이
+ * 여전히 튄다. 현재 프레임마다 `BOSS_ART_HEIGHT / height`를 적용해 그 순간도 고정한다.
+ * 사망 시트는 무너지는 동작 자체가 목적이라 보정 대상에서 제외한다.
+ */
+const BOSS_FRAME_ART_HEIGHTS: Readonly<Record<string, readonly number[]>> = {
+  [TEXTURE.bossIdle]: [342, 342, 342, 342, 342],
+  [TEXTURE.bossWalk]: [283, 279, 277, 278, 271, 266, 275, 274],
+  [TEXTURE.bossSwordCombo]: [266, 232, 280, 225, 253, 237, 258],
+  [TEXTURE.bossExecutionSlam]: [269, 333, 383, 285, 289, 211, 126, 266],
+  [TEXTURE.bossDashAttack]: [158, 154, 139, 193, 189, 178],
+  [TEXTURE.bossChainWhip]: [264, 255, 260, 242, 247, 248, 265],
+  [TEXTURE.bossChainPull]: [272, 249, 251, 235, 232, 232, 260],
+  [TEXTURE.bossJudgment]: [224, 263, 262, 262, 334, 256],
+  [TEXTURE.bossHurt]: [342, 303, 286, 312],
+  [TEXTURE.bossPhaseChange]: [254, 252, 264, 269, 256, 256, 268, 283],
+};
+
 /** 공격 이펙트 배율. 보스를 2배로 키운 뒤 이펙트만 그대로라 왜소해 보인다는 지적을 받아 같이 키웠다. */
 const VFX_SCALE = 2;
 
@@ -310,6 +332,8 @@ export class Boss {
   private slowUntilMs = 0;
   /** 돌진 히트박스는 본체를 따라다녀야 "지나간 자리"만 맞는다. */
   private followHitbox: Phaser.Physics.Arcade.Image | null = null;
+  /** 현재 포즈 원화의 크기 차이를 보정한 실제 Phaser 배율. */
+  private spriteScale = BOSS_SPRITE_SCALE;
 
   private timers: Phaser.Time.TimerEvent[] = [];
   private tweens: Phaser.Tweens.Tween[] = [];
@@ -409,9 +433,7 @@ export class Boss {
     const sprite = this.sprite;
     if (this.defeated || !sprite) return;
 
-    // 살아 있는 동안 본체 배율은 불변이다. 새 패턴 연출이 실수로 scale 트윈을 추가해도
-    // 다음 프레임에 즉시 기준값으로 복원되어 스킬마다 크기가 달라지지 않는다.
-    sprite.setScale(BOSS_SPRITE_SCALE);
+    this.syncSpriteScale(sprite);
 
     if (this.followHitbox) this.followHitbox.setPosition(sprite.x, this.attackY);
     // 유휴 중에만 떠오르내린다 — 패턴 중엔 포즈·궤적이 우선이고, 그림자 상태는 아예 멈춰야 한다.
@@ -448,7 +470,31 @@ export class Boss {
    * 예고 포즈를 먼저 보여주고 타격 순간에 바꿔야 "무엇을 하려는지"가 읽힌다. (DEC-004)
    */
   private setPose(animKey: string): void {
-    this.sprite?.play(animKey, true);
+    const sprite = this.sprite;
+    if (!sprite) return;
+
+    sprite.play(animKey, true);
+    this.syncSpriteScale(sprite);
+  }
+
+  /** 현재 텍스처 프레임의 실제 그림 높이를 idle과 같게 맞춘다. */
+  private syncSpriteScale(sprite: Phaser.Physics.Arcade.Sprite): void {
+    const heights = BOSS_FRAME_ART_HEIGHTS[sprite.texture.key];
+    const frameIndex = Number(sprite.frame.name);
+    const artHeight = heights?.[frameIndex];
+    const nextScale = BOSS_SPRITE_SCALE * (artHeight ? BOSS_ART_HEIGHT / artHeight : 1);
+
+    if (Math.abs(this.spriteScale - nextScale) < 0.0001) return;
+    this.spriteScale = nextScale;
+    sprite.setScale(nextScale);
+
+    // Phaser Arcade Body도 sprite scale을 따라 커지므로 로컬 크기를 역보정해
+    // 화면에서 보이는 원화만 맞추고 실제 피격 판정은 항상 BODY 크기로 유지한다.
+    const bodyWidthLocal = BODY.width / this.spriteScale;
+    const bodyHeightLocal = BODY.height / this.spriteScale;
+    sprite.body?.setSize(bodyWidthLocal, bodyHeightLocal);
+    sprite.body?.setOffset((463 - bodyWidthLocal) / 2, 395 - bodyHeightLocal);
+    if (!this.airborne) sprite.y = this.groundY + this.bobOffset;
   }
 
   /** 타격 애니메이션을 잠깐 재생한 뒤 idle로 돌아온다. 젖혔던 몸도 이때 되돌린다. */
@@ -459,7 +505,7 @@ export class Boss {
   }
 
   private get groundY(): number {
-    return this.arena.bounds.floorY - VISUAL_GROUND_BELOW_CENTER_LOCAL * BOSS_SPRITE_SCALE;
+    return this.arena.bounds.floorY - VISUAL_GROUND_BELOW_CENTER_LOCAL * this.spriteScale;
   }
 
   private clampToArena(sprite: Phaser.Physics.Arcade.Sprite): void {
