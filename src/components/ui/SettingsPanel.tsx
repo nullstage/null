@@ -240,6 +240,22 @@ const Note = styled.p`
   color: rgba(255, 255, 255, 0.42);
 `;
 
+/**
+ * 음원 출처 고지. Suno 무료 플랜 약관은 출력물을 쓸 때마다 Suno 표기를 요구하고,
+ * 그 표기가 비영리 사용 허가의 조건이다 — 지우면 라이선스 조건이 깨진다.
+ * 전체 출처 목록은 저장소 `CREDITS.md`에 있다.
+ */
+const Credit = styled.p`
+  margin: 14px 20px 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ${theme.font.ui};
+  font-weight: 300;
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.4);
+`;
+
 const HeadphoneIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
     <path
@@ -377,6 +393,9 @@ export default function SettingsPanel({
               {volumeRow("배경음악", "bgm")}
               {volumeRow("효과음", "sfx")}
               <Note>효과음 설정은 현재 메뉴와 전투 효과음에 적용됩니다.</Note>
+              <Credit>
+                배경음악은 Suno로 생성했습니다. 효과음은 Pixabay 음원입니다.
+              </Credit>
             </>
           ) : (
             <>

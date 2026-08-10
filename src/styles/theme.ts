@@ -1,6 +1,12 @@
 /** UI 공통 토큰. 색과 간격을 컴포넌트마다 새로 정의하지 않는다. */
 
-import { chosunKg, neoDunggeunmo } from "./fonts";
+import { neoDunggeunmo } from "./fonts";
+
+/**
+ * 시스템 UI와 대화 본문 서체. `globals.css`가 CDN에서 받는 Pretendard 서브셋을 쓴다.
+ * 원래는 로컬 번들 ChosunKg였으나 배포 조건이 불분명해 걷어냈다(`CREDITS.md`).
+ */
+const PRETENDARD = `'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`;
 
 export const theme = {
   color: {
@@ -17,11 +23,11 @@ export const theme = {
   space: (n: number) => `${n * 4}px`,
   radius: "10px",
   font: {
-    /** 숫자·라벨 등 시스템 UI(설정·일시정지·로딩 등)에서 쓰던 자리. 대화창과 같은 ChosunKg 서체다. */
-    mono: chosunKg.style.fontFamily,
+    /** 숫자·라벨 등 시스템 UI(설정·일시정지·로딩 등). 대화창과 같은 서체다. */
+    mono: PRETENDARD,
     /**
      * 보스 이름·지역명·아이템명 같은 게임 세계 고유명사 라벨. (사용자 결정)
-     * 원래 Pretendard였다가 네오둥근모로 바꿨다 — 대화(mono/ChosunKg)와 메인 타이틀
+     * 원래 Pretendard였다가 네오둥근모로 바꿨다 — 대화(mono)와 메인 타이틀
      * (이미지 로고라 폰트와 무관)은 대상이 아니다.
      */
     ui: `${neoDunggeunmo.style.fontFamily}, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`,
@@ -29,7 +35,7 @@ export const theme = {
      * 시작 화면 메뉴. 라벨을 네오둥근모로 바꿀 때 함께 바뀌었다가 Pretendard로 되돌렸다.
      * (사용자 결정) globals.css의 CDN 서브셋이 'Pretendard Variable'로 선언된다.
      */
-    title: `'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`,
+    title: PRETENDARD,
   },
   z: {
     canvas: 0,

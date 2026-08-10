@@ -4,7 +4,6 @@ import styled from "@emotion/styled";
 import gsap from "gsap";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { chosunKg } from "@/styles/fonts";
 import { theme } from "@/styles/theme";
 
 import { DIALOGUE_ASSETS } from "./dialogueAssets";
@@ -120,7 +119,7 @@ const Tag = styled.div`
 `;
 
 const SpeakerName = styled.span`
-  font-family: ${chosunKg.style.fontFamily};
+  font-family: ${theme.font.mono};
   font-weight: 600;
   font-size: clamp(16px, 1.6vw, 22px);
   letter-spacing: 0.08em;
@@ -135,7 +134,7 @@ const LineRow = styled.div`
 
 const Line = styled.p`
   margin: 0;
-  font-family: ${chosunKg.style.fontFamily};
+  font-family: ${theme.font.mono};
   font-weight: 300;
   font-size: clamp(13px, 1.2vw, 18px);
   letter-spacing: 0.02em;
@@ -177,7 +176,7 @@ const SkipGauge = styled.div`
 `;
 
 const SkipLabel = styled.span`
-  font-family: ${chosunKg.style.fontFamily};
+  font-family: ${theme.font.mono};
   font-size: clamp(11px, 1vw, 13px);
   letter-spacing: 0.06em;
   color: #f5ece0;
