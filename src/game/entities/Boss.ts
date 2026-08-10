@@ -121,11 +121,10 @@ const SLAM = {
   shakeIntensity: 0.008,
 } as const;
 
-/** 피격·사망 연출. 스프라이트가 없어 도형만으로 타격감을 만들어야 한다. (OQ-024) */
+/** 피격·체력바·사망 연출. */
 const FEEDBACK = {
   flashMs: 70,
-  punchScale: 1.14,
-  punchMs: 90,
+  hpBarTweenMs: 90,
   deathMs: 420,
 } as const;
 
@@ -314,8 +313,6 @@ export class Boss {
 
   private timers: Phaser.Time.TimerEvent[] = [];
   private tweens: Phaser.Tweens.Tween[] = [];
-  /** 보스 크기를 건드리는 연출은 하나만 유지한다. 겹치면 현재 배율이 새 기준값이 된다. */
-  private scaleTween: Phaser.Tweens.Tween | null = null;
   /** 예고·투사체·잔상처럼 수명이 짧은 오브젝트. 씬이 내려갈 때 한 번에 정리한다. */
   private ephemera: Phaser.GameObjects.GameObject[] = [];
 
@@ -411,6 +408,10 @@ export class Boss {
   update(time: number, _deltaMs: number): void {
     const sprite = this.sprite;
     if (this.defeated || !sprite) return;
+
+    // 살아 있는 동안 본체 배율은 불변이다. 새 패턴 연출이 실수로 scale 트윈을 추가해도
+    // 다음 프레임에 즉시 기준값으로 복원되어 스킬마다 크기가 달라지지 않는다.
+    sprite.setScale(BOSS_SPRITE_SCALE);
 
     if (this.followHitbox) this.followHitbox.setPosition(sprite.x, this.attackY);
     // 유휴 중에만 떠오르내린다 — 패턴 중엔 포즈·궤적이 우선이고, 그림자 상태는 아예 멈춰야 한다.
@@ -626,7 +627,6 @@ export class Boss {
             ease: "power2.out",
           }),
         );
-        this.punch(sprite);
         this.strikePose(BOSS_FRAME.slashStrike, 200);
         this.spawnHitbox(hitX, this.attackY, reach, SLASH.height, SLASH.activeMs);
         bossSlashCrescentFx(this.scene, sprite.x + dir * (BODY.width / 2), this.attackY, dir, VFX_SCALE);
@@ -796,7 +796,6 @@ export class Boss {
     this.windup();
 
     this.after(SLASH.telegraphMs, () => {
-      this.punch(sprite);
       this.strikePose(BOSS_FRAME.slashStrike, SLASH.activeMs + SLASH.recoveryMs);
       this.spawnHitbox(x, y, SLASH.reach, SLASH.height, SLASH.activeMs);
       // 판정은 투명하다 — 그림은 초승달 궤적 스프라이트가 담당한다.
@@ -946,7 +945,6 @@ export class Boss {
         ease: "Quad.easeIn",
         onComplete: () => {
           this.airborne = false;
-          this.punch(sprite);
           this.strikePose(BOSS_FRAME.slamStrike, SLAM.activeMs + SLAM.recoveryMs);
           this.scene.cameras.main.shake(SLAM.shakeMs, SLAM.shakeIntensity);
           this.spawnHitbox(
@@ -1034,7 +1032,6 @@ export class Boss {
 
     // 포효 자세 — 에너지가 차오르는 8프레임 전용 연출을 재생한다.
     this.setPose(BOSS_FRAME.phaseChange);
-    this.pulseScale(sprite, 1.12, 1.12, 180);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.busy) this.setPose(BOSS_FRAME.idle);
     });
@@ -1204,43 +1201,6 @@ export class Boss {
     this.after(FEEDBACK.flashMs, () => sprite.clearTint());
   }
 
-  /** 타격·착지 순간의 짧은 스케일 펀치. */
-  private punch(sprite: Phaser.Physics.Arcade.Sprite): void {
-    this.pulseScale(
-      sprite,
-      FEEDBACK.punchScale,
-      1 / FEEDBACK.punchScale,
-      FEEDBACK.punchMs,
-    );
-  }
-
-  /**
-   * 현재 표시 배율이 아니라 고정된 기본 배율에서 스케일 연출을 시작한다.
-   * 공격 펀치와 페이즈 전환이 같은 프레임에 겹쳐도 배율이 누적되지 않는다.
-   */
-  private pulseScale(
-    sprite: Phaser.Physics.Arcade.Sprite,
-    scaleX: number,
-    scaleY: number,
-    durationMs: number,
-  ): void {
-    this.scaleTween?.remove();
-    sprite.setScale(BOSS_SPRITE_SCALE);
-
-    this.scaleTween = this.scene.tweens.add({
-      targets: sprite,
-      scaleX: BOSS_SPRITE_SCALE * scaleX,
-      scaleY: BOSS_SPRITE_SCALE * scaleY,
-      duration: durationMs,
-      yoyo: true,
-      onComplete: () => {
-        if (sprite.active) sprite.setScale(BOSS_SPRITE_SCALE);
-        this.scaleTween = null;
-      },
-    });
-    this.tweens.push(this.scaleTween);
-  }
-
   /**
    * 장식 프레임(`ui/boss-hp-frame.png`) 위에 이름·부제·게이지를 얹는다.
    * 프레임을 원점(0.5, 0)으로 중앙 상단에 두고, 나머지는 전부 프레임 크기에 대한
@@ -1343,7 +1303,7 @@ export class Boss {
       this.scene.tweens.add({
         targets: fill,
         displayWidth: barWidth * Math.max(0, this.hp / this.maxHp),
-        duration: FEEDBACK.punchMs,
+        duration: FEEDBACK.hpBarTweenMs,
       }),
     );
     this.hpValueText?.setText(`${Math.max(0, this.hp)} / ${this.maxHp}`);
@@ -1361,7 +1321,6 @@ export class Boss {
     for (const timer of this.timers) timer.remove();
     for (const tween of this.tweens) tween.remove();
     for (const object of this.ephemera) object.destroy();
-    this.scaleTween = null;
     if (this.sprite?.active) this.sprite.setScale(BOSS_SPRITE_SCALE);
     this.timers = [];
     this.tweens = [];

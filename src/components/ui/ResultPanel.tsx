@@ -139,6 +139,9 @@ const BodyRow = styled.div<{ rowIndex: number }>`
 
 /** 보스는 번호가 붙는 시험이 아니라 그 끝이다 — 색을 다르게 줘야 목록이 그렇게 읽힌다. */
 const BossRow = styled(BodyRow)`
+  justify-content: center;
+  gap: 0.45em;
+
   span:first-of-type {
     color: ${theme.color.danger};
   }
@@ -167,7 +170,7 @@ const PatternRow = styled.div<{ rowIndex: number }>`
 `;
 
 const PatternName = styled.span`
-  margin-left: 3.8%;
+  margin-left: 6.5%;
 `;
 
 const PatternWeight = styled.span`

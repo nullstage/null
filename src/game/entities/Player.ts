@@ -768,6 +768,8 @@ export class Player {
     if (this.justPressed("SKILL_3")) this.castEquippedSkill("DASH");
 
     if (this.parrying) {
+      // 방어 자세에서는 본체 크기가 판정 창 내내 고정되어야 한다.
+      sprite.setScale(this.baseScale.x, this.baseScale.y);
       if (time >= this.parryEndsAtMs) this.endParry();
       else {
         const scale = TUNING.upgrade.parryGuardVisualScale;
@@ -945,6 +947,10 @@ export class Player {
     const now = this.scene.time.now;
     if (!sprite || this.isDead || this.isDashing) return;
     if (now < this.parryCooldownUntilMs) return;
+
+    // 공격 직후 패링하면 진행 중인 스케일 펀치가 방어 자세까지 이어져 몸이 작아 보였다.
+    // 패링은 항상 기본 크기에서 시작해 판정과 화면 표시 크기가 함께 고정되게 한다.
+    this.clearPunch();
 
     // 푸른 반지 — 막기 판정이 유지되는 시간이 늘어난다.
     const activeMs =
@@ -1963,7 +1969,8 @@ export class Player {
    */
   private punch(scaleX: number, scaleY: number): void {
     const sprite = this.sprite;
-    if (!sprite || this.isDashing) return;
+    // 지연 발동 공격이 패링 시작 뒤에 도착해도 방어 자세의 크기를 바꾸지 않는다.
+    if (!sprite || this.isDashing || this.parrying) return;
 
     /**
      * Arcade Body는 매 프레임 무조건 `Body.preUpdate → updateFromGameObject`를 돌려
