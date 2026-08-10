@@ -107,6 +107,7 @@ export const TEXTURE = {
   skillCyclone: "tex_skill_cyclone",
   /** 관통탄(총 슬롯) — 단발 섬광. */
   skillPierce: "tex_skill_pierce",
+  skillPierceMuzzle: "tex_skill_pierce_muzzle",
   /** 총검돌격(총 슬롯) — 총검을 내지르는 긴 참격. */
   skillBayonet: "tex_skill_bayonet",
   /** 확산탄(총 슬롯) — 부채꼴로 퍼지는 탄막. */
@@ -151,14 +152,19 @@ export const TEXTURE = {
  * 이 값들도 다시 재야 한다.
  */
 export const SKILL_VFX_SHEET = {
-  wave: { path: "vfx/skill-wave.png", frameWidth: 309, frameHeight: 227, frames: 6 },
-  eruption: { path: "vfx/skill-eruption.png", frameWidth: 261, frameHeight: 345, frames: 6 },
-  cyclone: { path: "vfx/skill-cyclone.png", frameWidth: 198, frameHeight: 226, frames: 8 },
-  pierce: { path: "vfx/skill-piercing.png", frameWidth: 201, frameHeight: 97, frames: 1 },
-  bayonet: { path: "vfx/skill-bayonet.png", frameWidth: 271, frameHeight: 89, frames: 1 },
-  spread: { path: "vfx/skill-spread.png", frameWidth: 219, frameHeight: 141, frames: 1 },
-  rushTrail: { path: "vfx/skill-rushtrail.png", frameWidth: 150, frameHeight: 92, frames: 5 },
-  abyssLeap: { path: "vfx/skill-abyssleap.png", frameWidth: 106, frameHeight: 165, frames: 3 },
+  /** 사용자가 156px 그리드로 정렬해 준 스트립(vfx-skill, 2026-08-10)에서 재추출한 시트들. */
+  wave: { path: "vfx/skill-wave.png", frameWidth: 159, frameHeight: 117, frames: 9 },
+  eruption: { path: "vfx/skill-eruption.png", frameWidth: 141, frameHeight: 138, frames: 8 },
+  cyclone: { path: "vfx/skill-cyclone.png", frameWidth: 134, frameHeight: 106, frames: 5 },
+  /** 총 스킬 3종 — 원본 콜라주(651d47fa)에서 다프레임으로 재추출했다. 한 프레임만 잘라 써서
+   *  "스프라이트 하나만 나온다"던 문제의 원인이었다. */
+  pierce: { path: "vfx/skill-piercing.png", frameWidth: 130, frameHeight: 44, frames: 3 },
+  /** 관통탄 총구 화염 — 발사 순간 제자리에서 터지는 부분(비행 탄과 분리). */
+  pierceMuzzle: { path: "vfx/skill-pierce-muzzle.png", frameWidth: 120, frameHeight: 100, frames: 4 },
+  bayonet: { path: "vfx/skill-bayonet.png", frameWidth: 314, frameHeight: 80, frames: 3 },
+  spread: { path: "vfx/skill-spread.png", frameWidth: 207, frameHeight: 92, frames: 2 },
+  rushTrail: { path: "vfx/skill-rushtrail.png", frameWidth: 131, frameHeight: 122, frames: 7 },
+  abyssLeap: { path: "vfx/skill-abyssleap.png", frameWidth: 158, frameHeight: 150, frames: 6 },
   parryCharge: { path: "vfx/parry-charge.png", frameWidth: 216, frameHeight: 359, frames: 8 },
   parryPerfect: { path: "vfx/parry-perfect.png", frameWidth: 283, frameHeight: 395, frames: 7 },
 } as const;
@@ -168,7 +174,8 @@ export const SKILL_VFX_SHEET = {
  * fps는 각 스킬의 지속 시간(`TUNING.upgrade`)에 맞춰 프레임 수를 나눈 값이다.
  */
 export const SKILL_VFX_ANIM = {
-  skillWaveFly: { key: TEXTURE.skillWave, start: 0, frames: SKILL_VFX_SHEET.wave.frames, fps: 12, loop: false },
+  // 9프레임 ÷ 18fps = 500ms — 검기 수명(swordWaveLifeMs)과 맞춘 값.
+  skillWaveFly: { key: TEXTURE.skillWave, start: 0, frames: SKILL_VFX_SHEET.wave.frames, fps: 18, loop: false },
   skillEruptionBurst: {
     key: TEXTURE.skillEruption,
     start: 0,
@@ -180,18 +187,28 @@ export const SKILL_VFX_ANIM = {
     key: TEXTURE.skillCyclone,
     start: 0,
     frames: SKILL_VFX_SHEET.cyclone.frames,
-    fps: 36,
+    // 5프레임 ÷ 23fps ≈ 217ms — 검무 판정 시간(cycloneActiveMs 220)과 맞춘 값.
+    fps: 23,
     loop: false,
   },
-  skillPierceBurst: { key: TEXTURE.skillPierce, start: 0, frames: SKILL_VFX_SHEET.pierce.frames, fps: 6, loop: false },
+  /** 비행 중 두 프레임을 번갈아 깜빡인다 — 발사체가 사는 동안 계속 돌므로 loop. */
+  skillPierceBurst: { key: TEXTURE.skillPierce, start: 0, frames: SKILL_VFX_SHEET.pierce.frames, fps: 12, loop: true },
+  skillPierceMuzzle: {
+    key: TEXTURE.skillPierceMuzzle,
+    start: 0,
+    frames: SKILL_VFX_SHEET.pierceMuzzle.frames,
+    fps: 20,
+    loop: false,
+  },
   skillBayonetBurst: {
     key: TEXTURE.skillBayonet,
     start: 0,
     frames: SKILL_VFX_SHEET.bayonet.frames,
-    fps: 6,
+    // 3프레임 ÷ 14fps ≈ 214ms — 찌르기 판정 수명(bayonetLifeMs 220)에 맞춘 값.
+    fps: 14,
     loop: false,
   },
-  skillSpreadBurst: { key: TEXTURE.skillSpread, start: 0, frames: SKILL_VFX_SHEET.spread.frames, fps: 6, loop: false },
+  skillSpreadBurst: { key: TEXTURE.skillSpread, start: 0, frames: SKILL_VFX_SHEET.spread.frames, fps: 12, loop: false },
   skillRushTrailFly: {
     key: TEXTURE.skillRushTrail,
     start: 0,
@@ -216,6 +233,7 @@ export const SKILL_VFX_TEXTURE: Record<SkillVfxKey, string> = {
   skillEruptionBurst: TEXTURE.skillEruption,
   skillCycloneBurst: TEXTURE.skillCyclone,
   skillPierceBurst: TEXTURE.skillPierce,
+  skillPierceMuzzle: TEXTURE.skillPierceMuzzle,
   skillBayonetBurst: TEXTURE.skillBayonet,
   skillSpreadBurst: TEXTURE.skillSpread,
   skillRushTrailFly: TEXTURE.skillRushTrail,
