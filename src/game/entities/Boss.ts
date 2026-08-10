@@ -601,6 +601,8 @@ export class Boss {
       this.finishPattern();
       return;
     }
+    // 전용 트랙 없음 — 플레이어 3타 소리를 낮고 느리게 눌러 거대한 검격으로 쓴다.
+    playSfx(this.scene, AUDIO.swordHit3, { detune: -500, rate: 0.85 });
 
     const dir = this.facing;
     const swing = (step: number): void => {
@@ -680,6 +682,8 @@ export class Boss {
           );
           shot.setVelocity(Math.cos(angle) * BARRAGE.speed, Math.sin(angle) * BARRAGE.speed);
           bossChainLaunchTrail(this.scene, shot, this.facing, VFX_SCALE);
+          // 전용 트랙 없음 — 총성을 낮게 눌러 발사체마다 한 발씩. 부챗살 순서대로 음이 조금씩 오른다.
+          playSfx(this.scene, AUDIO.gunShot, { detune: -450 + i * 40, rate: 0.9 });
         });
       }
 
@@ -723,6 +727,8 @@ export class Boss {
         );
         bossShockwave(this.scene, at, floorY - 6, ERUPTION.width * 1.4);
         groundDust(this.scene, at, floorY, "land");
+        // 전용 트랙 없음 — 검극 가시 소리를 낮게 눌러 폭발 행진의 걸음마다 한 번씩.
+        playSfx(this.scene, AUDIO.spike, { detune: -400, rate: 0.85 });
         this.scene.cameras.main.shake(70, 0.004);
       });
     }
@@ -744,6 +750,7 @@ export class Boss {
       this.finishPattern();
       return;
     }
+    playSfx(this.scene, AUDIO.bossChain);
 
     const dir = this.facing;
     const x = sprite.x + dir * (BODY.width / 2 + CHAIN_PULL.reach / 2);
@@ -777,6 +784,8 @@ export class Boss {
       this.finishPattern();
       return;
     }
+    // 전용 트랙 없음 — 플레이어 3타 소리를 낮고 느리게 눌러 거대한 검격으로 쓴다.
+    playSfx(this.scene, AUDIO.swordHit3, { detune: -500, rate: 0.85 });
 
     const x = sprite.x + this.facing * (BODY.width / 2 + SLASH.reach / 2);
     const y = this.attackY;
@@ -801,6 +810,8 @@ export class Boss {
       this.finishPattern();
       return;
     }
+    // 전용 트랙 없음 — 플레이어 대시 소리를 낮고 느리게 눌러 돌진의 무게를 낸다.
+    playSfx(this.scene, AUDIO.dash, { detune: -600, rate: 0.8 });
 
     const dir = this.facing;
     const reach = (DASH.speed * DASH.durationMs) / 1000;
@@ -852,6 +863,8 @@ export class Boss {
       this.finishPattern();
       return;
     }
+    // 사슬 포획과 같은 트랙 — 휘두르기는 조금 빠르고 높게 틀어 구분한다.
+    playSfx(this.scene, AUDIO.bossChain, { detune: 150, rate: 1.15 });
 
     const dir = this.facing;
     const x = sprite.x + dir * (BODY.width / 2 + WHIP.reach / 2);
@@ -885,6 +898,7 @@ export class Boss {
       this.finishPattern();
       return;
     }
+    playSfx(this.scene, AUDIO.bossSlam);
 
     const half = BODY.width / 2;
     const targetX = Math.min(
@@ -995,6 +1009,8 @@ export class Boss {
     this.phase = next;
     const sprite = this.sprite;
     if (!sprite) return;
+    // 전용 포효 트랙 없음 — 사슬 트랙을 낮고 느리게 눌러 으르렁거림으로 쓴다.
+    playSfx(this.scene, AUDIO.bossChain, { detune: -500, rate: 0.7 });
 
     this.nextPatternAtMs = Math.max(
       this.nextPatternAtMs,
@@ -1039,6 +1055,8 @@ export class Boss {
       this.notifyDefeat();
       return;
     }
+    // 전용 트랙 없음 — 내려찍기 트랙을 낮고 느리게 늘어뜨려 붕괴음으로 쓴다.
+    playSfx(this.scene, AUDIO.bossSlam, { detune: -300, rate: 0.7 });
 
     sprite.setVelocity(0, 0);
     sprite.clearTint();
