@@ -20,11 +20,20 @@ import { neoDunggeunmo } from "@/styles/fonts";
 import { BOSS, PLAYER } from "../config/gameBalance";
 import {
   ashRise,
-  bossOrbTrail,
+  bossChainLaunchTrail,
+  bossChainOrbitFx,
+  bossChainPullImpactFx,
+  bossDashSlashFx,
+  bossGroundSpikeFx,
+  bossJudgmentLineFx,
+  bossJudgmentRingFx,
+  bossPhaseAuraFx,
+  bossShadowEmergeFx,
   bossShockwave,
-  bossTelegraphZone,
+  bossSlamEruptionFx,
+  bossSlashCrescentFx,
+  bossTelegraphBoxFx,
   deathBurst,
-  enemySlash,
   groundDust,
   hitStop,
   pulseGlitchFx,
@@ -324,6 +333,7 @@ export class Boss {
 
     // 등장 연출 — 그림자 덩어리에서 실체화하는 6프레임을 재생한 뒤 idle로 넘어간다.
     // 첫 패턴은 씬(BossScene.runBossIntro)이 인트로 배너 길이만큼 별도로 미룬다.
+    bossShadowEmergeFx(this.scene, x, this.groundY);
     this.setPose(BOSS_FRAME.spawn);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.busy) this.setPose(BOSS_FRAME.idle);
@@ -520,7 +530,7 @@ export class Boss {
       const reach = SLASH.reach * (isFinisher ? COMBO.finisherReachScale : 1);
       const hitX = sprite.x + dir * (BODY.width / 2 + reach / 2);
 
-      bossTelegraphZone(this.scene, hitX, sprite.y, reach, SLASH.height, COMBO.telegraphMs);
+      bossTelegraphBoxFx(this.scene, hitX, sprite.y, reach, SLASH.height, COMBO.telegraphMs);
       this.setPose(BOSS_FRAME.slashTelegraph);
       this.windup();
 
@@ -537,7 +547,7 @@ export class Boss {
         this.punch(sprite);
         this.strikePose(BOSS_FRAME.slashStrike, 200);
         this.spawnHitbox(hitX, sprite.y, reach, SLASH.height, SLASH.activeMs);
-        enemySlash(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir, reach + 28);
+        bossSlashCrescentFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir);
         if (isFinisher) {
           this.scene.cameras.main.shake(120, 0.006);
           this.after(SLASH.activeMs + COMBO.recoveryMs, () => this.finishPattern());
@@ -560,7 +570,7 @@ export class Boss {
 
     const muzzleX = sprite.x + this.facing * (BODY.width / 2 + PROJECTILE.size);
     const muzzleY = sprite.y - 12;
-    bossTelegraphZone(
+    bossTelegraphBoxFx(
       this.scene,
       muzzleX,
       muzzleY,
@@ -591,7 +601,7 @@ export class Boss {
             true,
           );
           shot.setVelocity(Math.cos(angle) * BARRAGE.speed, Math.sin(angle) * BARRAGE.speed);
-          bossOrbTrail(this.scene, shot);
+          bossChainLaunchTrail(this.scene, shot, this.facing);
         });
       }
 
@@ -612,6 +622,8 @@ export class Boss {
     const startX = sprite.x + dir * (BODY.width / 2 + 70);
     this.setPose(BOSS_FRAME.judgmentTelegraph);
     this.windup();
+    // 판결을 여는 순간 — 발밑에 고리가 한 번 떠오른다.
+    bossJudgmentRingFx(this.scene, sprite.x, floorY - 20);
 
     for (let i = 0; i < ERUPTION.count; i += 1) {
       const at = Phaser.Math.Clamp(
@@ -620,14 +632,7 @@ export class Boss {
         this.arena.bounds.width - 40,
       );
       this.after(i * ERUPTION.intervalMs, () => {
-        bossTelegraphZone(
-          this.scene,
-          at,
-          floorY - ERUPTION.height / 2,
-          ERUPTION.width,
-          ERUPTION.height,
-          ERUPTION.telegraphMs,
-        );
+        bossJudgmentLineFx(this.scene, at, floorY);
       });
       this.after(i * ERUPTION.intervalMs + ERUPTION.telegraphMs, () => {
         this.spawnHitbox(
@@ -665,11 +670,13 @@ export class Boss {
     const x = sprite.x + dir * (BODY.width / 2 + CHAIN_PULL.reach / 2);
     const y = sprite.y;
     this.showTelegraph(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.telegraphMs);
+    bossChainOrbitFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y, CHAIN_PULL.telegraphMs);
     this.setPose(BOSS_FRAME.chainPullTelegraph);
     this.windup();
 
     this.after(CHAIN_PULL.telegraphMs, () => {
       this.strikePose(BOSS_FRAME.chainPullStrike, CHAIN_PULL.activeMs + CHAIN_PULL.recoveryMs);
+      bossChainPullImpactFx(this.scene, x, y);
       const box = this.spawnHitbox(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.activeMs, true);
       // 씬(BossScene)이 이 값으로 플레이어를 당긴다 — 방향은 "이 지점을 향해",
       // 거리는 고정값(clamp는 씬이 arena 경계로 건다).
@@ -702,8 +709,8 @@ export class Boss {
       this.punch(sprite);
       this.strikePose(BOSS_FRAME.slashStrike, SLASH.activeMs + SLASH.recoveryMs);
       this.spawnHitbox(x, y, SLASH.reach, SLASH.height, SLASH.activeMs);
-      // 판정은 투명하다 — 베는 그림은 플레이어 슬래시와 같은 문법의 초승달 궤적이 담당한다.
-      enemySlash(this.scene, sprite.x + this.facing * (BODY.width / 2), y - 8, this.facing, SLASH.reach + 28);
+      // 판정은 투명하다 — 그림은 초승달 궤적 스프라이트가 담당한다.
+      bossSlashCrescentFx(this.scene, sprite.x + this.facing * (BODY.width / 2), y - 8, this.facing);
       this.after(SLASH.activeMs + SLASH.recoveryMs, () => this.finishPattern());
     });
   }
@@ -731,6 +738,7 @@ export class Boss {
     this.after(DASH.telegraphMs, () => {
       this.strikePose(BOSS_FRAME.dashStrike, DASH.durationMs + DASH.recoveryMs);
       sprite.setVelocityX(dir * DASH.speed);
+      bossDashSlashFx(this.scene, sprite.x + dir * (BODY.width / 2), sprite.y - 8, dir);
       // 출발의 무게 — 발밑 흙이 터지고 화면이 잠깐 흔들린다.
       groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
       this.scene.cameras.main.shake(90, 0.004);
@@ -805,8 +813,8 @@ export class Boss {
       (dx / length) * PROJECTILE.speed,
       (dy / length) * PROJECTILE.speed,
     );
-    // 판정은 투명하다 — 마젠타 구체와 꼬리가 그림을 맡는다.
-    bossOrbTrail(this.scene, shot);
+    // 판정은 투명하다 — 사슬 갈고리 스프라이트가 그림을 맡는다.
+    bossChainLaunchTrail(this.scene, shot, this.facing);
   }
 
   /** 점프 내려찍기. 착지 지점을 띄운 뒤 떨어진다. 지연 장판은 만들지 않는다. (MVP_PLAN §8) */
@@ -871,8 +879,8 @@ export class Boss {
             SLAM.shockwaveHeight,
             SLAM.activeMs,
           );
-          // 판정은 투명하다 — 착지의 그림은 링 충격파 + 돌 파편 + 흙먼지가 맡는다.
-          bossShockwave(this.scene, targetX, this.arena.bounds.floorY - 6, SLAM.shockwaveWidth);
+          // 판정은 투명하다 — 착지의 그림은 기둥 폭발 스프라이트 + 흙먼지가 맡는다.
+          bossSlamEruptionFx(this.scene, targetX, this.arena.bounds.floorY - 6);
           groundDust(this.scene, targetX, this.arena.bounds.floorY, "land");
           hitStop(this.scene, 70);
           this.after(SLAM.activeMs + SLAM.recoveryMs, () => this.finishPattern());
@@ -935,6 +943,7 @@ export class Boss {
     this.scene.cameras.main.flash(160, 120, 10, 30);
     pulseGlitchFx(this.scene, next === 2 ? 0.65 : 0.9, 550);
     bossShockwave(this.scene, sprite.x, this.arena.bounds.floorY - 6, 300);
+    bossPhaseAuraFx(this.scene, sprite.x, this.arena.bounds.floorY - 6);
     groundDust(this.scene, sprite.x, this.arena.bounds.floorY, "land");
 
     // 분노가 몸에 남는다 — 페이즈가 오를수록 붉은 광채가 짙어진다. (WebGL 전용)
@@ -987,6 +996,7 @@ export class Boss {
       deathBurst(this.scene, sprite.x, sprite.y, SILHOUETTE.boss);
       ashRise(this.scene, sprite.x, sprite.y - 30, SILHOUETTE.boss);
       ashRise(this.scene, sprite.x, sprite.y + 30, 0xff2a3a);
+      bossGroundSpikeFx(this.scene, sprite.x, this.arena.bounds.floorY - 6);
 
       this.scene.tweens.add({
         targets: sprite,
@@ -1039,8 +1049,8 @@ export class Boss {
 
   /**
    * 예고 표시. 피해가 나가기 전에 반드시 이걸 먼저 띄운다. (DEC-004)
-   * 주황 단색 사각형 대신 표적 프레임+불티 구역(bossTelegraphZone)으로 그린다 —
-   * VFX가 수명을 스스로 관리하므로 보스가 죽어도 알아서 사라진다.
+   * 사각 위험구역 스프라이트(bossTelegraphBoxFx)로 그린다 — VFX가 수명을
+   * 스스로 관리하므로 보스가 죽어도 알아서 사라진다.
    */
   private showTelegraph(
     x: number,
@@ -1049,7 +1059,7 @@ export class Boss {
     height: number,
     durationMs: number,
   ): void {
-    bossTelegraphZone(this.scene, x, y, width, height, durationMs);
+    bossTelegraphBoxFx(this.scene, x, y, width, height, durationMs);
   }
 
   /** 적 공격체 생성. `damage`가 없으면 씬이 피해를 전달할 수 없다. (types/combat.ts) */
