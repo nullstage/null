@@ -42,6 +42,8 @@ const FRAME = {
   button: { left: 95 / 1024, right: 930 / 1024, top: 1250 / 1536, bottom: 1330 / 1536 },
   /** 본문 가로선 사이와 강조 박스의 실측 중심 y 좌표. */
   bodyRowCenters: [405, 486, 563, 632, 697, 821],
+  /** 하단의 선·마름모·육각 횟수 칸이 공유하는 실측 중심 y 좌표. */
+  lowerRowCenters: [982, 1030, 1077, 1128, 1174],
 } as const;
 
 const zoneStyle = (zone: { left: number; right: number; top: number; bottom: number }) => `
@@ -85,8 +87,6 @@ const BodyZone = styled.div`
 
 const LowerZone = styled.div`
   ${zoneStyle(FRAME.lower)}
-  display: grid;
-  grid-template-rows: repeat(5, 1fr);
   overflow: hidden;
 `;
 
@@ -148,8 +148,17 @@ const BossRow = styled(BodyRow)`
  * 하단 에셋은 한 줄짜리 목록이 아니다. 긴 선의 양끝은 이름·비중, 오른쪽 육각 칸은
  * 사용 횟수 자리다. 세 값을 분리하지 않으면 중앙 보석 위에 문장이 올라간다.
  */
-const PatternRow = styled.div`
-  position: relative;
+const PatternRow = styled.div<{ rowIndex: number }>`
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: ${({ rowIndex }) =>
+    `${
+      ((FRAME.lowerRowCenters[rowIndex - 1] - FRAME.lower.top * 1536) /
+        ((FRAME.lower.bottom - FRAME.lower.top) * 1536)) *
+      100
+    }%`};
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   min-width: 0;
@@ -198,6 +207,10 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
   const totalSeconds = Math.round(result.totalTimeMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
+  const totalPatternUses = Object.values(result.bossPatternUsage).reduce(
+    (total, count) => total + count,
+    0,
+  );
 
   return (
     <Backdrop role="dialog" aria-modal="true" aria-label="「남겨진 기록」">
@@ -260,14 +273,19 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
 
         <LowerZone>
           {(Object.entries(result.bossPatternUsage) as [BossPattern, number][]).map(
-            ([pattern, count]) => (
-              <PatternRow key={pattern}>
+            ([pattern, count], index) => (
+              <PatternRow key={pattern} rowIndex={index + 1}>
                 <PatternName>{PATTERN_LABEL[pattern]}</PatternName>
-                <PatternWeight>비중 {result.bossWeights[pattern]}</PatternWeight>
+                <PatternWeight>비중 {result.bossWeights[pattern]}%</PatternWeight>
                 <PatternCount>{count}회</PatternCount>
               </PatternRow>
             ),
           )}
+          <PatternRow rowIndex={5}>
+            <PatternName>총 사용</PatternName>
+            <PatternWeight>누적</PatternWeight>
+            <PatternCount>{totalPatternUses}회</PatternCount>
+          </PatternRow>
         </LowerZone>
 
         <ButtonZone>
