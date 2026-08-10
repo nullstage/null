@@ -41,7 +41,7 @@ const FRAME = {
   lower: { left: 150 / 1024, right: 895 / 1024, top: 930 / 1536, bottom: 1195 / 1536 },
   button: { left: 95 / 1024, right: 930 / 1024, top: 1250 / 1536, bottom: 1330 / 1536 },
   /** 본문 가로선 사이와 강조 박스의 실측 중심 y 좌표. */
-  bodyRowCenters: [405, 486, 563, 632, 697, 821],
+  bodyRowCenters: [405, 486, 563, 632, 697, 860],
   /** 하단의 선·마름모·육각 횟수 칸이 공유하는 실측 중심 y 좌표. */
   lowerRowCenters: [982, 1030, 1077, 1128, 1174],
 } as const;
@@ -139,9 +139,6 @@ const BodyRow = styled.div<{ rowIndex: number }>`
 
 /** 보스는 번호가 붙는 시험이 아니라 그 끝이다 — 색을 다르게 줘야 목록이 그렇게 읽힌다. */
 const BossRow = styled(BodyRow)`
-  justify-content: center;
-  gap: 0.45em;
-
   span:first-of-type {
     color: ${theme.color.danger};
   }

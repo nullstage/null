@@ -951,6 +951,9 @@ export class Player {
     // 공격 직후 패링하면 진행 중인 스케일 펀치가 방어 자세까지 이어져 몸이 작아 보였다.
     // 패링은 항상 기본 크기에서 시작해 판정과 화면 표시 크기가 함께 고정되게 한다.
     this.clearPunch();
+    this.attackAnimUntilMs = 0;
+    this.animCancelAtMs = 0;
+    this.playAnim("idle", true);
 
     // 푸른 반지 — 막기 판정이 유지되는 시간이 늘어난다.
     const activeMs =
