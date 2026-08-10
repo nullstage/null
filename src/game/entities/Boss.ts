@@ -41,9 +41,9 @@ import type { BossPattern, BossPatternWeights } from "../types/game";
  * 통합 시점에 `gameBalance.ts`로 옮긴다. (최종 보고 4번 항목)
  */
 const BODY = {
-  /** 그림 배율을 1.15로 키우면서 충돌 박스도 비례해 넓힌다 — 커 보이는데 안 맞으면 억울하다. */
-  width: 84,
-  height: 124,
+  /** 그림 배율을 키우면서 충돌 박스도 비례해 넓힌다 — 커 보이는데 안 맞으면 억울하다. (사용자 요청: 2배 확대) */
+  width: 168,
+  height: 248,
   /** 패턴 사이에 플레이어 쪽으로 걸어오는 속도. 압박용이지 추격용이 아니다. */
   moveSpeed: 130,
   /** 이 거리 안에서는 멈춘다. 계속 밀고 들어오면 회피 공간이 사라진다. */
@@ -142,11 +142,21 @@ const BOSS_TITLE = "이름들을 거두는 자";
 const DEPTH = { telegraph: 1, attack: 5, boss: 10, hud: 100 } as const;
 
 /**
- * 보스 그림 배율. 224px 셀 안의 실제 그림이 대략 200px이라, 1.15배면 화면에서 약 230px —
- * 플레이어(약 62px)의 네 배 가까이 돼 "압도하는 보스"로 읽힌다. (사용자 요청: 크기 확대)
- * 충돌 박스는 BODY 값(84×124)을 그대로 쓴다.
+ * 보스 그림 배율. 화면에서 약 233px로 보이던 이전 크기가 작다는 지적을 받아
+ * 3배(약 700px)로 시도했더니 머리가 화면 위로 잘려나갈 만큼 과했다 — 2배(약 470px)로
+ * 낮췄다. 플레이어(약 62px)를 압도하면서도 화면 안에 들어온다. (사용자 요청: 2배 확대)
+ * 충돌 박스(BODY)도 같은 비율로 키워야 커 보이는데 안 맞는 일이 없다.
  */
-const BOSS_SPRITE_SCALE = 1.15;
+const BOSS_SPRITE_SCALE = 0.68 * 2;
+
+/**
+ * 그림의 실제 바닥선(발밑)이 셀 중심보다 아래로 떨어진 거리(셀 로컬 px, 스케일 전).
+ * `combat.ts`의 `BOSS_SPRITE_SHEET` packing 규칙 — 셀 높이 409, 모든 프레임이 바닥에서
+ * 10px 위로 정렬 — 에서 고정으로 나온 값이라, 시퀀스 12개가 전부 이 값을 공유한다.
+ * 물리 바디는 셀 중심에 두되(BODY 크기가 작아 오차가 작다), 그림의 시각적 바닥은
+ * 이 값으로 따로 보정해야 발이 바닥에서 뜨거나 파묻히지 않는다.
+ */
+const VISUAL_GROUND_BELOW_CENTER_LOCAL = 409 - 10 - 409 / 2;
 
 /**
  * 페이즈. 체력 66%·33%를 끊어 내려갈수록 빨라지고 기믹이 풀린다.
@@ -192,6 +202,19 @@ const ERUPTION = {
   height: 100,
   activeMs: 200,
   recoveryMs: 460,
+} as const;
+
+/** 사슬 포획 — 신규 기믹. 사슬이 닿으면 플레이어를 보스 쪽으로 강제로 끌어당긴다. */
+const CHAIN_PULL = {
+  telegraphMs: 550,
+  /** 사슬이 닿는 최대 거리. 이 안에 있어야 판정이 생긴다. */
+  reach: 320,
+  height: 90,
+  activeMs: 220,
+  /** 끌려오는 거리·시간. 짧고 굵게 — 그 자리에서 반격당할 여지를 준다. */
+  pullDistance: 190,
+  pullDurationMs: 240,
+  recoveryMs: 420,
 } as const;
 
 /**
@@ -276,14 +299,13 @@ export class Boss {
 
   /** 전달받은 x만 쓰고 y는 바닥에 맞춘다. 보스는 중력을 직접 다루기 때문이다. */
   spawn(x: number, _y: number): void {
-    // 224px 셀 안에서 실제 그림은 여백을 두고 그려져 있다. setDisplaySize로 셀을 통째로
+    // 셀 안에서 실제 그림은 여백을 두고 그려져 있다. setDisplaySize로 셀을 통째로
     // 눌러 맞추면 보스가 작아 보이므로, 그림은 스케일로 키우고 충돌 박스만 따로 잡는다.
     const sprite = this.scene.physics.add
-      .sprite(x, this.groundY, TEXTURE.boss, 0)
+      .sprite(x, this.groundY, TEXTURE.bossSpawn, 0)
       .setScale(BOSS_SPRITE_SCALE)
       .setDepth(DEPTH.boss);
     sprite.body?.setSize(BODY.width / BOSS_SPRITE_SCALE, BODY.height / BOSS_SPRITE_SCALE);
-    sprite.play(BOSS_FRAME.idle);
 
     this.arena.enemyBodies.add(sprite);
     sprite.setData("enemy", this);
@@ -300,11 +322,12 @@ export class Boss {
 
     this.createHpBar();
 
-    // 등장 연출. 첫 패턴 전에 플레이어가 보스를 인지할 시간을 준다.
-    sprite.setAlpha(0);
-    this.tweens.push(
-      this.scene.tweens.add({ targets: sprite, alpha: 1, duration: FEEDBACK.deathMs }),
-    );
+    // 등장 연출 — 그림자 덩어리에서 실체화하는 6프레임을 재생한 뒤 idle로 넘어간다.
+    // 첫 패턴은 씬(BossScene.runBossIntro)이 인트로 배너 길이만큼 별도로 미룬다.
+    this.setPose(BOSS_FRAME.spawn);
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (!this.busy) this.setPose(BOSS_FRAME.idle);
+    });
 
     this.nextPatternAtMs = this.scene.time.now + BOSS.patternCooldownMs;
   }
@@ -355,7 +378,7 @@ export class Boss {
   }
 
   private get groundY(): number {
-    return this.arena.bounds.floorY - BODY.height / 2;
+    return this.arena.bounds.floorY - VISUAL_GROUND_BELOW_CENTER_LOCAL * BOSS_SPRITE_SCALE;
   }
 
   private clampToArena(sprite: Phaser.Physics.Arcade.Sprite): void {
@@ -380,6 +403,8 @@ export class Boss {
     const closing = Math.abs(dx) > BODY.keepDistanceX;
     const speed = BODY.moveSpeed * PHASE.moveScale[this.phase - 1] * this.speedMultiplier;
     sprite.setVelocityX(closing ? Math.sign(dx) * speed : 0);
+    // 걷는 동안에는 walk, 멈추면 idle로 — 패턴 중(busy)에는 이 함수 자체가 안 불린다.
+    this.setPose(closing ? BOSS_FRAME.walk : BOSS_FRAME.idle);
   }
 
   /** 냉기 속성 적중. 이동 속도를 잠시 낮춘다. 잡몹과 같은 계약(BaseEnemy.applySlow) — 겹쳐 걸리면 더 늦게 끝나는 쪽까지 유지된다. */
@@ -471,8 +496,13 @@ export class Boss {
 
     const pool: (() => void)[] =
       this.phase >= 3
-        ? [() => this.executeComboSlash(), () => this.executeBarrage(), () => this.executeEruption()]
-        : [() => this.executeComboSlash(), () => this.executeBarrage()];
+        ? [
+            () => this.executeComboSlash(),
+            () => this.executeBarrage(),
+            () => this.executeChainPull(),
+            () => this.executeEruption(),
+          ]
+        : [() => this.executeComboSlash(), () => this.executeBarrage(), () => this.executeChainPull()];
     Phaser.Utils.Array.GetRandom(pool)();
   }
 
@@ -580,7 +610,7 @@ export class Boss {
     const dir = this.facing;
     const floorY = this.arena.bounds.floorY;
     const startX = sprite.x + dir * (BODY.width / 2 + 70);
-    this.setPose(BOSS_FRAME.slamTelegraph);
+    this.setPose(BOSS_FRAME.judgmentTelegraph);
     this.windup();
 
     for (let i = 0; i < ERUPTION.count; i += 1) {
@@ -615,8 +645,40 @@ export class Boss {
 
     const total = (ERUPTION.count - 1) * ERUPTION.intervalMs + ERUPTION.telegraphMs;
     this.after(total + ERUPTION.activeMs, () => {
-      this.strikePose(BOSS_FRAME.slamStrike, ERUPTION.recoveryMs);
+      this.strikePose(BOSS_FRAME.judgmentStrike, ERUPTION.recoveryMs);
       this.after(ERUPTION.recoveryMs, () => this.finishPattern());
+    });
+  }
+
+  /**
+   * 사슬 포획. 예고 구간에 플레이어가 있으면 사슬이 닿아 보스 쪽으로 강제로 끌어당긴다 —
+   * 피해는 다른 기믹과 같지만, 판정체에 `pull` 데이터를 실어 씬(BossScene)이 위치까지 옮긴다.
+   */
+  private executeChainPull(): void {
+    const sprite = this.sprite;
+    if (!sprite) {
+      this.finishPattern();
+      return;
+    }
+
+    const dir = this.facing;
+    const x = sprite.x + dir * (BODY.width / 2 + CHAIN_PULL.reach / 2);
+    const y = sprite.y;
+    this.showTelegraph(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.telegraphMs);
+    this.setPose(BOSS_FRAME.chainPullTelegraph);
+    this.windup();
+
+    this.after(CHAIN_PULL.telegraphMs, () => {
+      this.strikePose(BOSS_FRAME.chainPullStrike, CHAIN_PULL.activeMs + CHAIN_PULL.recoveryMs);
+      const box = this.spawnHitbox(x, y, CHAIN_PULL.reach, CHAIN_PULL.height, CHAIN_PULL.activeMs, true);
+      // 씬(BossScene)이 이 값으로 플레이어를 당긴다 — 방향은 "이 지점을 향해",
+      // 거리는 고정값(clamp는 씬이 arena 경계로 건다).
+      box.setData("pull", {
+        towardX: sprite.x,
+        distance: CHAIN_PULL.pullDistance,
+        durationMs: CHAIN_PULL.pullDurationMs,
+      });
+      this.after(CHAIN_PULL.activeMs + CHAIN_PULL.recoveryMs, () => this.finishPattern());
     });
   }
 
@@ -830,7 +892,7 @@ export class Boss {
     // 패턴 중이면 그 포즈를 지키게 둔다 — 예고 자세가 피격으로 지워지면 뭘 준비했는지 놓친다.
     // 움찔(뒤로 살짝 밀림)도 패턴 밖에서만 — 궤적 트윈과 싸우면 안 된다.
     if (!this.busy) {
-      this.strikePose(BOSS_FRAME.hit, 160);
+      this.strikePose(BOSS_FRAME.hurt, 400);
       const sprite = this.sprite;
       if (sprite) {
         this.tweens.push(
@@ -880,8 +942,8 @@ export class Boss {
       sprite.postFX.addGlow(0xff2040, next === 2 ? 2.5 : 5, 0);
     }
 
-    // 포효 자세 — hit 프레임을 잠깐 크게 보여준다.
-    this.setPose(BOSS_FRAME.hit);
+    // 포효 자세 — 에너지가 차오르는 8프레임 전용 연출을 재생한다.
+    this.setPose(BOSS_FRAME.phaseChange);
     this.tweens.push(
       this.scene.tweens.add({
         targets: sprite,
@@ -889,11 +951,11 @@ export class Boss {
         scaleY: sprite.scaleY * 1.12,
         duration: 180,
         yoyo: true,
-        onComplete: () => {
-          if (!this.busy) this.setPose(BOSS_FRAME.idle);
-        },
       }),
     );
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (!this.busy) this.setPose(BOSS_FRAME.idle);
+    });
   }
 
   private die(): void {
@@ -918,21 +980,26 @@ export class Boss {
     cam.zoomTo(baseZoom * 1.1, 220, "Sine.easeOut");
     this.scene.time.delayedCall(420, () => cam.zoomTo(baseZoom, 380, "Sine.easeInOut"));
 
-    deathBurst(this.scene, sprite.x, sprite.y, SILHOUETTE.boss);
-    ashRise(this.scene, sprite.x, sprite.y - 30, SILHOUETTE.boss);
-    ashRise(this.scene, sprite.x, sprite.y + 30, 0xff2a3a);
+    // 붕괴 시퀀스를 먼저 재생한다 — 무릎 꿇고, 그림자로 무너지고, 가면만 남았다 꺼진다.
+    // 끝난 뒤에야 재 상승 이펙트와 최종 축소 트윈이 이어받는다.
+    this.setPose(BOSS_FRAME.death);
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      deathBurst(this.scene, sprite.x, sprite.y, SILHOUETTE.boss);
+      ashRise(this.scene, sprite.x, sprite.y - 30, SILHOUETTE.boss);
+      ashRise(this.scene, sprite.x, sprite.y + 30, 0xff2a3a);
 
-    this.scene.tweens.add({
-      targets: sprite,
-      scaleX: 0,
-      scaleY: 0,
-      alpha: 0,
-      duration: FEEDBACK.deathMs * 2,
-      ease: "Quad.easeIn",
-      onComplete: () => {
-        this.destroy();
-        this.notifyDefeat();
-      },
+      this.scene.tweens.add({
+        targets: sprite,
+        scaleX: 0,
+        scaleY: 0,
+        alpha: 0,
+        duration: FEEDBACK.deathMs,
+        ease: "Quad.easeIn",
+        onComplete: () => {
+          this.destroy();
+          this.notifyDefeat();
+        },
+      });
     });
   }
 
@@ -1019,7 +1086,9 @@ export class Boss {
    * 같은 문법(진행 반대로 밀리며 늘어나는 가산 실루엣)으로 남긴다.
    */
   private spawnAfterimage(sprite: Phaser.Physics.Arcade.Sprite): void {
-    const ghost = this.scene.add.image(sprite.x, sprite.y, TEXTURE.boss, sprite.frame.name);
+    // 텍스처가 패턴마다 갈리므로(스킬 이펙트와 같은 방식) 고정 키가 아니라
+    // 스프라이트가 지금 물고 있는 텍스처를 그대로 복제해야 잔상이 맞는 그림을 쓴다.
+    const ghost = this.scene.add.image(sprite.x, sprite.y, sprite.texture.key, sprite.frame.name);
     ghost.setScale(sprite.scaleX, sprite.scaleY);
     ghost.setFlipX(sprite.flipX);
     ghost.setDepth(DEPTH.boss - 1);
@@ -1091,7 +1160,7 @@ export class Boss {
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
 
-    // fill이 TEXTURE.boss로 잡혀 있던 버그 — 보스 그림 한 장이 바 폭으로 늘어나 있었다.
+    // fill이 보스 텍스처로 잡혀 있던 버그 — 보스 그림 한 장이 바 폭으로 늘어나 있었다.
     this.hpBarFill = this.scene.add
       .image(barLeft, barY, TEXTURE.solid)
       .setOrigin(0, 0.5)

@@ -15,6 +15,7 @@ import { runState } from "../systems/RunState";
 import {
   AUDIO,
   BOSS_ANIM,
+  BOSS_SPRITE_SHEET,
   ENEMY_ANIM,
   PARRY_VFX_ANIM,
   PLAYER_INTRO_ANIM,
@@ -47,11 +48,28 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 64,
       frameHeight: 64,
     });
-    // 보스 — 패턴별 예고/타격 포즈 10칸. 애니메이션이 아니라 프레임을 골라 쓴다.
-    this.load.spritesheet(TEXTURE.boss, assetPath("sprites/boss/boss.png"), {
-      frameWidth: 224,
-      frameHeight: 224,
-    });
+    // 보스 — 상태·패턴마다 별도 시트(집행자). 스킬 이펙트와 같은 방식으로 텍스처를 나눠 싣는다.
+    const bossTextures: [string, keyof typeof BOSS_SPRITE_SHEET][] = [
+      [TEXTURE.bossIdle, "idle"],
+      [TEXTURE.bossWalk, "walk"],
+      [TEXTURE.bossSpawn, "spawn"],
+      [TEXTURE.bossSwordCombo, "swordCombo"],
+      [TEXTURE.bossExecutionSlam, "executionSlam"],
+      [TEXTURE.bossDashAttack, "dashAttack"],
+      [TEXTURE.bossChainWhip, "chainWhip"],
+      [TEXTURE.bossChainPull, "chainPull"],
+      [TEXTURE.bossJudgment, "judgment"],
+      [TEXTURE.bossHurt, "hurt"],
+      [TEXTURE.bossPhaseChange, "phaseChange"],
+      [TEXTURE.bossDeath, "death"],
+    ];
+    for (const [textureKey, sheetKey] of bossTextures) {
+      const sheet = BOSS_SPRITE_SHEET[sheetKey];
+      this.load.spritesheet(textureKey, assetPath(sheet.path), {
+        frameWidth: sheet.frameWidth,
+        frameHeight: sheet.frameHeight,
+      });
+    }
     // 시작·부활 시 앉았다 일어나는 인트로 4프레임.
     this.load.spritesheet(TEXTURE.playerIntro, assetPath("sprites/player/player-intro.png"), {
       frameWidth: PLAYER_SPRITE.frameWidth,

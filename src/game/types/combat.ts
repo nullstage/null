@@ -63,7 +63,19 @@ export const TEXTURE = {
   chaser: "px_chaser",
   ranged: "px_ranged",
   mobility: "px_mobility",
-  boss: "px_boss",
+  /** 보스 — 상태별로 텍스처가 갈린다(idle·walk·spawn 등). 아래 `BOSS_SPRITE_SHEET` 참고. */
+  bossIdle: "tex_boss_idle",
+  bossWalk: "tex_boss_walk",
+  bossSpawn: "tex_boss_spawn",
+  bossSwordCombo: "tex_boss_sword_combo",
+  bossExecutionSlam: "tex_boss_execution_slam",
+  bossDashAttack: "tex_boss_dash_attack",
+  bossChainWhip: "tex_boss_chain_whip",
+  bossChainPull: "tex_boss_chain_pull",
+  bossJudgment: "tex_boss_judgment",
+  bossHurt: "tex_boss_hurt",
+  bossPhaseChange: "tex_boss_phase_change",
+  bossDeath: "tex_boss_death",
   solid: "px_ground",
   hazard: "px_hazard",
   telegraph: "px_telegraph",
@@ -205,25 +217,73 @@ export const PARRY_VFX_ANIM = {
 } as const;
 
 /**
- * 보스 스프라이트시트. 224px 정사각 셀 22칸(가로 한 줄), 상태별 다프레임 애니메이션.
- * idle 4 · slash/dash/projectile/slam 각 4(예고 2 + 타격 2) · hit 2.
+ * 보스 스프라이트시트 12장. 사용자가 그려 준 원본(집행자) 4장에서 시퀀스별로 잘라
+ * packing했다 — 모든 시퀀스가 같은 463×409 셀을 쓰고, 그림마다 바닥선(발밑)이
+ * 셀 하단 기준 같은 위치에 오도록 정렬했다. 그래야 idle↔walk↔공격 사이를
+ * 텍스처째로 갈아 끼워도 발이 화면에서 튀지 않는다. 시트를 다시 뽑으면 이 값도 다시 잰다.
  */
-export const BOSS_ANIM = {
-  bossIdle: { key: TEXTURE.boss, start: 0, frames: 4, fps: 6, loop: true },
-  bossSlashTelegraph: { key: TEXTURE.boss, start: 4, frames: 2, fps: 8, loop: true },
-  bossSlashStrike: { key: TEXTURE.boss, start: 6, frames: 2, fps: 16, loop: false },
-  bossDashTelegraph: { key: TEXTURE.boss, start: 8, frames: 2, fps: 8, loop: true },
-  bossDashStrike: { key: TEXTURE.boss, start: 10, frames: 2, fps: 16, loop: false },
-  bossProjectileTelegraph: { key: TEXTURE.boss, start: 12, frames: 2, fps: 8, loop: true },
-  bossProjectileStrike: { key: TEXTURE.boss, start: 14, frames: 2, fps: 16, loop: false },
-  bossSlamTelegraph: { key: TEXTURE.boss, start: 16, frames: 2, fps: 8, loop: true },
-  bossSlamStrike: { key: TEXTURE.boss, start: 18, frames: 2, fps: 16, loop: false },
-  bossHit: { key: TEXTURE.boss, start: 20, frames: 2, fps: 12, loop: false },
+export const BOSS_SPRITE_SHEET = {
+  idle: { path: "sprites/boss/boss-idle.png", frameWidth: 463, frameHeight: 409, frames: 5 },
+  walk: { path: "sprites/boss/boss-walk.png", frameWidth: 463, frameHeight: 409, frames: 8 },
+  spawn: { path: "sprites/boss/boss-spawn.png", frameWidth: 463, frameHeight: 409, frames: 5 },
+  swordCombo: { path: "sprites/boss/boss-sword-combo.png", frameWidth: 463, frameHeight: 409, frames: 7 },
+  executionSlam: { path: "sprites/boss/boss-execution-slam.png", frameWidth: 463, frameHeight: 409, frames: 8 },
+  dashAttack: { path: "sprites/boss/boss-dash-attack.png", frameWidth: 463, frameHeight: 409, frames: 6 },
+  chainWhip: { path: "sprites/boss/boss-chain-whip.png", frameWidth: 463, frameHeight: 409, frames: 7 },
+  chainPull: { path: "sprites/boss/boss-chain-pull.png", frameWidth: 463, frameHeight: 409, frames: 7 },
+  judgment: { path: "sprites/boss/boss-judgment.png", frameWidth: 463, frameHeight: 409, frames: 6 },
+  hurt: { path: "sprites/boss/boss-hurt.png", frameWidth: 463, frameHeight: 409, frames: 4 },
+  phaseChange: { path: "sprites/boss/boss-phase-change.png", frameWidth: 463, frameHeight: 409, frames: 8 },
+  death: { path: "sprites/boss/boss-death.png", frameWidth: 463, frameHeight: 409, frames: 6 },
 } as const;
 
-/** 패턴별 예고(telegraph)·타격(strike) 포즈가 재생할 애니메이션 키. `Boss.ts`의 setPose/strikePose가 쓴다. */
+/**
+ * 보스 애니메이션. idle·walk·spawn·hurt·phaseChange·death는 시퀀스 하나를 통째로 재생하고,
+ * 공격 4종(slash·dash·projectile·slam)과 새 기믹 2종(judgment·chainPull)은 각 시퀀스를
+ * 앞부분(예고, loop)·뒷부분(타격, 1회)으로 나눠 기존 setPose/strikePose 문법을 그대로 쓴다.
+ * (DEC-004 — 피해가 나가기 전에 반드시 예고 자세가 먼저 보여야 한다)
+ */
+export const BOSS_ANIM = {
+  bossIdleLoop: { key: TEXTURE.bossIdle, start: 0, frames: BOSS_SPRITE_SHEET.idle.frames, fps: 6, loop: true },
+  bossWalkLoop: { key: TEXTURE.bossWalk, start: 0, frames: BOSS_SPRITE_SHEET.walk.frames, fps: 8, loop: true },
+  bossSpawnRise: { key: TEXTURE.bossSpawn, start: 0, frames: BOSS_SPRITE_SHEET.spawn.frames, fps: 7, loop: false },
+  bossHurtFlinch: { key: TEXTURE.bossHurt, start: 0, frames: BOSS_SPRITE_SHEET.hurt.frames, fps: 10, loop: false },
+  bossPhaseChangeSurge: {
+    key: TEXTURE.bossPhaseChange,
+    start: 0,
+    frames: BOSS_SPRITE_SHEET.phaseChange.frames,
+    fps: 10,
+    loop: false,
+  },
+  bossDeathCollapse: { key: TEXTURE.bossDeath, start: 0, frames: BOSS_SPRITE_SHEET.death.frames, fps: 6, loop: false },
+
+  bossSlashTelegraph: { key: TEXTURE.bossSwordCombo, start: 0, frames: 3, fps: 6, loop: true },
+  bossSlashStrike: { key: TEXTURE.bossSwordCombo, start: 3, frames: 4, fps: 12, loop: false },
+
+  bossDashTelegraph: { key: TEXTURE.bossDashAttack, start: 0, frames: 2, fps: 6, loop: true },
+  bossDashStrike: { key: TEXTURE.bossDashAttack, start: 2, frames: 4, fps: 14, loop: false },
+
+  bossProjectileTelegraph: { key: TEXTURE.bossChainWhip, start: 0, frames: 3, fps: 6, loop: true },
+  bossProjectileStrike: { key: TEXTURE.bossChainWhip, start: 3, frames: 4, fps: 12, loop: false },
+
+  bossSlamTelegraph: { key: TEXTURE.bossExecutionSlam, start: 0, frames: 3, fps: 5, loop: true },
+  bossSlamStrike: { key: TEXTURE.bossExecutionSlam, start: 3, frames: 5, fps: 12, loop: false },
+
+  bossJudgmentTelegraph: { key: TEXTURE.bossJudgment, start: 0, frames: 2, fps: 6, loop: true },
+  bossJudgmentStrike: { key: TEXTURE.bossJudgment, start: 2, frames: 4, fps: 10, loop: false },
+
+  bossChainPullTelegraph: { key: TEXTURE.bossChainPull, start: 0, frames: 3, fps: 6, loop: true },
+  bossChainPullStrike: { key: TEXTURE.bossChainPull, start: 3, frames: 4, fps: 12, loop: false },
+} as const;
+
+/** 상태·패턴별 예고(telegraph)·타격(strike) 포즈가 재생할 애니메이션 키. `Boss.ts`의 setPose/strikePose가 쓴다. */
 export const BOSS_FRAME = {
-  idle: "bossIdle",
+  idle: "bossIdleLoop",
+  walk: "bossWalkLoop",
+  spawn: "bossSpawnRise",
+  hurt: "bossHurtFlinch",
+  phaseChange: "bossPhaseChangeSurge",
+  death: "bossDeathCollapse",
   slashTelegraph: "bossSlashTelegraph",
   slashStrike: "bossSlashStrike",
   dashTelegraph: "bossDashTelegraph",
@@ -232,7 +292,10 @@ export const BOSS_FRAME = {
   projectileStrike: "bossProjectileStrike",
   slamTelegraph: "bossSlamTelegraph",
   slamStrike: "bossSlamStrike",
-  hit: "bossHit",
+  judgmentTelegraph: "bossJudgmentTelegraph",
+  judgmentStrike: "bossJudgmentStrike",
+  chainPullTelegraph: "bossChainPullTelegraph",
+  chainPullStrike: "bossChainPullStrike",
 } as const satisfies Record<string, keyof typeof BOSS_ANIM>;
 
 /** 전투 효과음·BGM 키. Phaser 내장 사운드로 재생한다 — UI 효과음(`sfx.ts`)과는 별도 경로다. */
