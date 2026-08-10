@@ -37,9 +37,11 @@ const PATTERN_LABEL: Record<BossPattern, string> = {
 const FRAME = {
   aspect: 1024 / 1536,
   title: { left: 130 / 1024, right: 895 / 1024, top: 225 / 1536, bottom: 308 / 1536 },
-  body: { left: 130 / 1024, right: 895 / 1024, top: 350 / 1536, bottom: 855 / 1536 },
-  lower: { left: 150 / 1024, right: 895 / 1024, top: 905 / 1536, bottom: 1210 / 1536 },
+  body: { left: 130 / 1024, right: 895 / 1024, top: 350 / 1536, bottom: 885 / 1536 },
+  lower: { left: 150 / 1024, right: 895 / 1024, top: 930 / 1536, bottom: 1195 / 1536 },
   button: { left: 95 / 1024, right: 930 / 1024, top: 1250 / 1536, bottom: 1330 / 1536 },
+  /** 본문 가로선 사이와 강조 박스의 실측 중심 y 좌표. */
+  bodyRowCenters: [405, 486, 563, 632, 697, 821],
 } as const;
 
 const zoneStyle = (zone: { left: number; right: number; top: number; bottom: number }) => `
@@ -78,19 +80,13 @@ const TitleText = styled.h2<{ cleared: boolean }>`
 
 const BodyZone = styled.div`
   ${zoneStyle(FRAME.body)}
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: ${theme.space(1)} ${theme.space(3)};
   overflow: hidden;
 `;
 
 const LowerZone = styled.div`
   ${zoneStyle(FRAME.lower)}
-  display: flex;
-  flex-direction: column;
-  justify-content: space-evenly;
-  padding: 0 ${theme.space(3)};
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
   overflow: hidden;
 `;
 
@@ -119,7 +115,17 @@ const FrameButton = styled.button`
   }
 `;
 
-const Row = styled.div`
+const BodyRow = styled.div<{ rowIndex: number }>`
+  position: absolute;
+  left: ${theme.space(3)};
+  right: ${theme.space(3)};
+  top: ${({ rowIndex }) =>
+    `${
+      ((FRAME.bodyRowCenters[rowIndex - 1] - FRAME.body.top * 1536) /
+        ((FRAME.body.bottom - FRAME.body.top) * 1536)) *
+      100
+    }%`};
+  transform: translateY(-50%);
   display: flex;
   justify-content: space-between;
   gap: ${theme.space(3)};
@@ -132,10 +138,41 @@ const Row = styled.div`
 `;
 
 /** 보스는 번호가 붙는 시험이 아니라 그 끝이다 — 색을 다르게 줘야 목록이 그렇게 읽힌다. */
-const BossRow = styled(Row)`
+const BossRow = styled(BodyRow)`
   span:first-of-type {
     color: ${theme.color.danger};
   }
+`;
+
+/**
+ * 하단 에셋은 한 줄짜리 목록이 아니다. 긴 선의 양끝은 이름·비중, 오른쪽 육각 칸은
+ * 사용 횟수 자리다. 세 값을 분리하지 않으면 중앙 보석 위에 문장이 올라간다.
+ */
+const PatternRow = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: clamp(10px, 2.3vw, 12px);
+  line-height: 1.3;
+`;
+
+const PatternName = styled.span`
+  margin-left: 3.8%;
+`;
+
+const PatternWeight = styled.span`
+  position: absolute;
+  right: 28.5%;
+  color: ${theme.color.textMuted};
+`;
+
+const PatternCount = styled.span`
+  position: absolute;
+  left: 79.2%;
+  width: 15.8%;
+  text-align: center;
+  color: ${theme.color.textMuted};
 `;
 
 export interface ResultPanelProps {
@@ -172,22 +209,22 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
         </TitleZone>
 
         <BodyZone>
-          <Row>
+          <BodyRow rowIndex={1}>
             <span>생존 시간</span>
             <span>
               {minutes}분 {seconds}초
             </span>
-          </Row>
+          </BodyRow>
           {/*
             "마지막 전투 방식"이 아니다 — 마지막에 싸운 건 보스이고, 그건 아래 목록에 따로 있다.
             이 줄은 기록자가 보스 패턴을 어떤 성향으로 짰는지, 즉 그 시험이 왜 그렇게
             생겼는지를 말한다. 아래 "보스가 쓴 패턴"의 비중이 이 값에서 나온다.
           */}
-          <Row>
+          <BodyRow rowIndex={2}>
             <span>기록자가 읽은 성향</span>
             <span>{STYLE_LABEL[result.finalStyle]}</span>
-          </Row>
-          <Row>
+          </BodyRow>
+          <BodyRow rowIndex={3}>
             <span>기록자를 속였는가</span>
             <span>
               {result.deception
@@ -196,25 +233,25 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
                   : "읽혔다"
                 : "판단되지 않음"}
             </span>
-          </Row>
+          </BodyRow>
           {trials.length === 0 && (
-            <Row>
+            <BodyRow rowIndex={4}>
               <span>남긴 기록이 없다</span>
               <span>-</span>
-            </Row>
+            </BodyRow>
           )}
           {trials.map((room, index) => {
             const style = styleOf(room, index);
             return (
-              <Row key={room.roomIndex}>
+              <BodyRow key={room.roomIndex} rowIndex={4 + index}>
                 <span>{index + 1}번째 시험</span>
                 <span>{style ? STYLE_LABEL[style] : "-"}</span>
-              </Row>
+              </BodyRow>
             );
           })}
           {/* 보스전에서 실제로 어떻게 싸웠는지. 판정에는 안 쓰이고 기록으로만 남는다. */}
           {result.bossStyle && (
-            <BossRow>
+            <BossRow rowIndex={6}>
               <span>보스</span>
               <span>{STYLE_LABEL[result.bossStyle]}</span>
             </BossRow>
@@ -224,12 +261,11 @@ export default function ResultPanel({ result, onRestart }: ResultPanelProps) {
         <LowerZone>
           {(Object.entries(result.bossPatternUsage) as [BossPattern, number][]).map(
             ([pattern, count]) => (
-              <Row key={pattern}>
-                <span>{PATTERN_LABEL[pattern]}</span>
-                <span>
-                  {count}회 · 비중 {result.bossWeights[pattern]}
-                </span>
-              </Row>
+              <PatternRow key={pattern}>
+                <PatternName>{PATTERN_LABEL[pattern]}</PatternName>
+                <PatternWeight>비중 {result.bossWeights[pattern]}</PatternWeight>
+                <PatternCount>{count}회</PatternCount>
+              </PatternRow>
             ),
           )}
         </LowerZone>
