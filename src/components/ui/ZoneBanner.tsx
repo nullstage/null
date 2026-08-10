@@ -25,7 +25,16 @@ const fadeInOut = keyframes`
 
 const Wrap = styled.div`
   position: absolute;
-  top: 8%;
+  /*
+   * "화면 높이의 8%"가 아니라 "캔버스 높이의 8%"다. Phaser는 Scale.FIT + 가로만
+   * 중앙 정렬(createGame.ts)이라 창 비율이 16:9보다 세로로 길면 남는 여백이 전부
+   * 캔버스 아래쪽에 생긴다 — 이 컨테이너(HUDOverlay)는 창 전체 높이를 차지하므로
+   * top: 8%는 그 여백까지 포함해 계산돼 캔버스 기준 배너 자리보다 아래로 밀린다.
+   * 캔버스는 항상 가로를 꽉 채우므로(가로 여백 없음) 캔버스 높이는 100vw*9/16 =
+   * 56.25vw로 정확히 구해진다 — 그 8%인 4.5vw를 쓰면 창 비율과 무관하게 캔버스
+   * 기준으로 정확히 맞는다. (사용자 지적: 지역 배너 위치가 안 맞음)
+   */
+  top: 4.5vw;
   left: 50%;
   transform: translateX(-50%);
   z-index: ${theme.z.hud + 5};
