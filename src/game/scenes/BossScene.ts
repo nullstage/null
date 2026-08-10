@@ -171,8 +171,33 @@ export class BossScene extends Phaser.Scene {
       const result = this.player.takeDamage(damage);
       // 퍼펙트 패링 — 보스에게도 같은 방식으로 반사된다.
       if (result.perfect) this.boss.takeDamage(damage ?? 0);
+      // 사슬 포획 — 패링으로 반사하지 않았을 때만 끌려간다. 반사면 이미 이겼다는 뜻이다.
+      if (!result.perfect) this.applyChainPull(attack);
       if (attack.getData("consumeOnHit")) attack.destroy();
     });
+  }
+
+  /**
+   * 사슬 포획 판정체(`Boss.executeChainPull`)가 실어 보낸 `pull` 데이터를 읽어
+   * 플레이어를 보스 쪽으로 당긴다. 데이터가 없는 보통 공격체는 그대로 지나간다.
+   */
+  private applyChainPull(attack: Phaser.GameObjects.GameObject): void {
+    const pull = attack.getData("pull") as
+      | { towardX: number; distance: number; durationMs: number }
+      | undefined;
+    if (!pull) return;
+
+    const sprite = this.player.sprite;
+    if (!sprite) return;
+
+    const dir = Math.sign(pull.towardX - sprite.x) || 1;
+    const half = TUNING.body.width / 2;
+    const targetX = Phaser.Math.Clamp(
+      sprite.x + dir * pull.distance,
+      half,
+      this.arena.bounds.width - half,
+    );
+    this.tweens.add({ targets: sprite, x: targetX, duration: pull.durationMs, ease: "power2.out" });
   }
 
   /** 속성 부가 효과. CombatScene.applyElement와 동일한 규칙이다. */
