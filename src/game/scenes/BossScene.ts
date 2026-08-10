@@ -41,6 +41,10 @@ export class BossScene extends Phaser.Scene {
   private boss!: Boss;
   private subscriptions: (() => void)[] = [];
   private finished = false;
+  /** 그림자가 아직 깨어나지 않았다 — 상호작용 프롬프트를 보여주고 근접을 감시한다. */
+  private awakened = false;
+  private awakenPrompt: Phaser.GameObjects.Container | null = null;
+  private interactKey?: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super("Boss");
@@ -105,7 +109,11 @@ export class BossScene extends Phaser.Scene {
       onDefeated: () => this.finish(true),
     });
     this.boss.spawn(VIEWPORT.width * 0.8, this.arena.bounds.floorY - 90);
-    this.runBossIntro();
+
+    // 상호작용 전까지는 방 가운데 그림자로 서 있을 뿐이다 — 다가가 말을 걸어야 깨어난다.
+    // (사용자 요청: 보스룸 NPC형 그림자 → 상호작용 시 보스전 시작)
+    this.awakenPrompt = this.buildInteractPrompt("깨운다");
+    this.interactKey = this.input.keyboard?.addKey(KEY_BINDINGS.INTERACT);
 
     this.wireCollisions();
 
@@ -127,6 +135,83 @@ export class BossScene extends Phaser.Scene {
     if (this.finished) return;
     this.player.update(time, deltaMs);
     this.boss.update(time, deltaMs);
+    if (!this.awakened) this.updateAwakenPrompt();
+  }
+
+  /**
+   * 그림자 근처에서만 뜨는 상호작용 프롬프트. 전투방 방랑자와 같은 규약 —
+   * 가까이 가면 보이고, 그 자리에서 상호작용 키를 누르면 딱 한 번만 반응한다.
+   */
+  private updateAwakenPrompt(): void {
+    const player = this.player.sprite;
+    const boss = this.boss.sprite;
+    if (!player || !boss || !this.awakenPrompt) return;
+
+    const near = Math.abs(player.x - boss.x) < 140;
+    this.awakenPrompt.setVisible(near);
+    if (near) this.awakenPrompt.setPosition(boss.x, boss.y - boss.displayHeight / 2 - 20);
+
+    if (near && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.awakenBoss();
+    }
+  }
+
+  /** 그림자가 깨어난다 — 프롬프트를 치우고 실체화 연출과 함께 진짜 보스전을 연다. */
+  private awakenBoss(): void {
+    this.awakened = true;
+    this.awakenPrompt?.destroy();
+    this.awakenPrompt = null;
+    this.boss.awaken();
+    this.runBossIntro();
+  }
+
+  /**
+   * 상호작용 안내 프롬프트. [키캡] + 라벨을 어두운 알약 위에 얹는다.
+   * `CombatScene.buildInteractPrompt`와 같은 문법 — 게임 전체가 상호작용을
+   * 이 모양 하나로 알려 준다.
+   */
+  private buildInteractPrompt(labelText: string): Phaser.GameObjects.Container {
+    const label = this.add.text(0, 0, labelText, {
+      fontFamily: "'Pretendard', sans-serif",
+      fontSize: "16px",
+      fontStyle: "bold",
+      color: "#f5ece0",
+      resolution: 2,
+    });
+    label.setOrigin(0, 0.5);
+
+    const keyLabel = this.add.text(0, 0, KEY_BINDINGS.INTERACT, {
+      fontFamily: "'Pretendard', sans-serif",
+      fontSize: "13px",
+      fontStyle: "bold",
+      color: "#4a2408",
+      resolution: 2,
+    });
+    keyLabel.setOrigin(0.5, 0.5);
+
+    const KEYCAP = 22;
+    const pillWidth = 12 + KEYCAP + 8 + label.width + 12;
+    const pillHeight = 34;
+
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x10150f, 0.88);
+    graphics.fillRoundedRect(-pillWidth / 2, -pillHeight, pillWidth, pillHeight, pillHeight / 2);
+    graphics.lineStyle(1, 0xffffff, 0.12);
+    graphics.strokeRoundedRect(-pillWidth / 2, -pillHeight, pillWidth, pillHeight, pillHeight / 2);
+    const keyX = -pillWidth / 2 + 12;
+    const keyY = -pillHeight / 2 - KEYCAP / 2;
+    graphics.fillStyle(0xa85511, 1);
+    graphics.fillRoundedRect(keyX, keyY + 2, KEYCAP, KEYCAP, 6);
+    graphics.fillStyle(0xe8912c, 1);
+    graphics.fillRoundedRect(keyX, keyY, KEYCAP, KEYCAP, 6);
+
+    keyLabel.setPosition(keyX + KEYCAP / 2, keyY + KEYCAP / 2);
+    label.setPosition(keyX + KEYCAP + 8, -pillHeight / 2);
+
+    const container = this.add.container(0, 0, [graphics, keyLabel, label]);
+    container.setDepth(11);
+    container.setVisible(false);
+    return container;
   }
 
   /**
