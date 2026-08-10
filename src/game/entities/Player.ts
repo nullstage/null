@@ -1248,7 +1248,14 @@ export class Player {
         if (this.hasUpgrade("MELEE_FIRE_EDGE")) box.setData("element", "FIRE" satisfies UpgradeElement);
         this.scene.time.delayedCall(140, () => box.destroy());
 
-        this.burstSkillVfx("skillEruptionBurst", at, floorY - 8, TUNING.upgrade.eruptionVisualScale);
+        this.burstSkillVfx(
+          "skillEruptionBurst",
+          at,
+          floorY - 8,
+          TUNING.upgrade.eruptionVisualScale,
+          1,
+          0.9768,
+        );
         groundDust(this.scene, at, floorY, "land");
       });
     }
@@ -1467,8 +1474,17 @@ export class Player {
    * 텍스처는 해당 시트 키를, `scale`은 프레임마다 다른 원본 크기를 화면 표시 크기로
    * 맞추는 배율이다.
    */
-  private burstSkillVfx(animKey: SkillVfxKey, x: number, y: number, scale: number, facing: 1 | -1 = 1): void {
+  private burstSkillVfx(
+    animKey: SkillVfxKey,
+    x: number,
+    y: number,
+    scale: number,
+    facing: 1 | -1 = 1,
+    /** 검극처럼 바닥에 붙어 자라나는 이펙트만 그림의 실제 바닥에 원점을 맞춘다(기본은 가운데). */
+    originY = 0.5,
+  ): void {
     const fx = this.scene.add.sprite(x, y, SKILL_VFX_TEXTURE[animKey]);
+    fx.setOrigin(0.5, originY);
     fx.setScale(facing * scale, scale);
     fx.setDepth(TUNING.depth.attack + 1);
     fx.setBlendMode(Phaser.BlendModes.ADD);

@@ -1744,6 +1744,10 @@ export const bossDashSlashFx = (
 /** 보스 내려찍기 착지 폭발 — 기둥이 솟았다 터진다. */
 export const bossSlamEruptionFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
   const fx = scene.add.sprite(x, y, TEXTURE.vfxSlamEruption);
+  // 바닥 정렬 packing(extract.py)에서 그림 바닥이 셀 하단 6px 위에 있다 —
+  // 기본 원점(0.5,0.5)이면 호출부가 지정한 y가 셀 "가운데"를 가리켜, 시각적
+  // 바닥이 그보다 한참 아래로 처진다. 원점을 그림의 실제 바닥에 맞춘다.
+  fx.setOrigin(0.5, 0.9829);
   fx.setDepth(VFX.depth + 1);
   fx.setScale(scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
@@ -1817,6 +1821,10 @@ export const bossChainOrbitFx = (
 /** 판결선 예고 → 낙하. 연쇄 폭발(executeEruption)의 한 걸음마다 재생한다. */
 export const bossJudgmentLineFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
   const fx = scene.add.sprite(x, y, TEXTURE.vfxJudgmentLine);
+  // 바닥 정렬 packing(extract.py)에서 그림 바닥이 셀 하단 6px 위에 있다 —
+  // 기본 원점(0.5,0.5)이면 호출부가 지정한 y가 셀 "가운데"를 가리켜, 시각적
+  // 바닥이 그보다 한참 아래로 처진다. 원점을 그림의 실제 바닥에 맞춘다.
+  fx.setOrigin(0.5, 0.982);
   fx.setDepth(VFX.depth + 1);
   fx.setScale(scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
@@ -1859,6 +1867,10 @@ export const bossTelegraphBoxFx = (
 /** 원형 심판진 — 연쇄 폭발(executeEruption) 시작 시 보스 발밑에 한 번 띄운다. */
 export const bossJudgmentRingFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
   const fx = scene.add.sprite(x, y, TEXTURE.vfxJudgmentRing);
+  // 바닥 정렬 packing(extract.py)에서 그림 바닥이 셀 하단 6px 위에 있다 —
+  // 기본 원점(0.5,0.5)이면 호출부가 지정한 y가 셀 "가운데"를 가리켜, 시각적
+  // 바닥이 그보다 한참 아래로 처진다. 원점을 그림의 실제 바닥에 맞춘다.
+  fx.setOrigin(0.5, 0.9822);
   fx.setDepth(VFX.depth + 1);
   fx.setScale(scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
@@ -1869,6 +1881,10 @@ export const bossJudgmentRingFx = (scene: Phaser.Scene, x: number, y: number, sc
 /** 그림자 등장 — 스폰 스프라이트 애니메이션 위에 겹쳐 쓰는 보조 플레어. */
 export const bossShadowEmergeFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
   const fx = scene.add.sprite(x, y, TEXTURE.vfxShadowEmerge);
+  // 바닥 정렬 packing(extract.py)에서 그림 바닥이 셀 하단 6px 위에 있다 —
+  // 기본 원점(0.5,0.5)이면 호출부가 지정한 y가 셀 "가운데"를 가리켜, 시각적
+  // 바닥이 그보다 한참 아래로 처진다. 원점을 그림의 실제 바닥에 맞춘다.
+  fx.setOrigin(0.5, 0.9848);
   fx.setDepth(VFX.depth - 1);
   fx.setScale(scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
@@ -1879,6 +1895,10 @@ export const bossShadowEmergeFx = (scene: Phaser.Scene, x: number, y: number, sc
 /** 페이즈 전환 오오라 — 포효 순간 바닥에서 솟는다. */
 export const bossPhaseAuraFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
   const fx = scene.add.sprite(x, y, TEXTURE.vfxPhaseAura);
+  // 바닥 정렬 packing(extract.py)에서 그림 바닥이 셀 하단 6px 위에 있다 —
+  // 기본 원점(0.5,0.5)이면 호출부가 지정한 y가 셀 "가운데"를 가리켜, 시각적
+  // 바닥이 그보다 한참 아래로 처진다. 원점을 그림의 실제 바닥에 맞춘다.
+  fx.setOrigin(0.5, 0.9821);
   fx.setDepth(VFX.depth + 1);
   fx.setScale(scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
@@ -1889,6 +1909,10 @@ export const bossPhaseAuraFx = (scene: Phaser.Scene, x: number, y: number, scale
 /** 지면 가시/암흑 폭발 — 사망 붕괴 순간에 겹쳐 쓴다. */
 export const bossGroundSpikeFx = (scene: Phaser.Scene, x: number, y: number, scale = 1): void => {
   const fx = scene.add.sprite(x, y, TEXTURE.vfxGroundSpike);
+  // 바닥 정렬 packing(extract.py)에서 그림 바닥이 셀 하단 6px 위에 있다 —
+  // 기본 원점(0.5,0.5)이면 호출부가 지정한 y가 셀 "가운데"를 가리켜, 시각적
+  // 바닥이 그보다 한참 아래로 처진다. 원점을 그림의 실제 바닥에 맞춘다.
+  fx.setOrigin(0.5, 0.975);
   fx.setDepth(VFX.depth + 1);
   fx.setScale(scale);
   fx.setBlendMode(Phaser.BlendModes.ADD);
