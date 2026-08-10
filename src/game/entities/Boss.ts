@@ -267,6 +267,8 @@ export class Boss {
   private busy = false;
   private defeated = false;
   private defeatNotified = false;
+  /** 그림자 상태 — 상호작용 전까지는 서 있기만 한다(플레이어를 보지도, 패턴을 쓰지도 않는다). */
+  private dormant = true;
 
   private facing: 1 | -1 = -1;
   /** slam 중에는 y를 tween이 관리한다. 바닥 스냅이 궤적을 덮어쓰지 않게 하는 플래그다. */
@@ -306,12 +308,17 @@ export class Boss {
 
   // ────────────────────────────── 생성과 루프 ──────────────────────────────
 
-  /** 전달받은 x만 쓰고 y는 바닥에 맞춘다. 보스는 중력을 직접 다루기 때문이다. */
+  /**
+   * 전달받은 x만 쓰고 y는 바닥에 맞춘다. 보스는 중력을 직접 다루기 때문이다.
+   * 처음엔 싸우는 상태가 아니라 방 가운데 가만히 선 그림자다 — 플레이어가
+   * 다가가 상호작용해야(`awaken`) 진짜 등장 연출과 함께 전투가 시작된다.
+   * (사용자 요청: 보스룸 NPC형 그림자 → 상호작용 시 보스전 시작)
+   */
   spawn(x: number, _y: number): void {
     // 셀 안에서 실제 그림은 여백을 두고 그려져 있다. setDisplaySize로 셀을 통째로
     // 눌러 맞추면 보스가 작아 보이므로, 그림은 스케일로 키우고 충돌 박스만 따로 잡는다.
     const sprite = this.scene.physics.add
-      .sprite(x, this.groundY, TEXTURE.bossSpawn, 0)
+      .sprite(x, this.groundY, TEXTURE.bossIdle, 0)
       .setScale(BOSS_SPRITE_SCALE)
       .setDepth(DEPTH.boss);
     sprite.body?.setSize(BODY.width / BOSS_SPRITE_SCALE, BODY.height / BOSS_SPRITE_SCALE);
@@ -329,11 +336,41 @@ export class Boss {
     // 풀리는 순간 그동안 숨어서 쌓인 낙하 속도가 화면 밖까지 떨어뜨렸던 원인이 이것이다.
     (sprite.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
 
+    // 그림자 상태 — 어둡게 가라앉은 실루엣으로 서서 숨쉬듯 흔들린다. 체력바도,
+    // 패턴 타이머도 아직 없다(awaken 전까지 update()가 그 아래 로직을 건너뛴다).
+    sprite.play(BOSS_FRAME.idle);
+    sprite.setTintFill(0x140a12);
+    sprite.setAlpha(0.82);
+    this.tweens.push(
+      this.scene.tweens.add({
+        targets: sprite,
+        alpha: 0.6,
+        duration: 1600,
+        yoyo: true,
+        repeat: -1,
+        ease: "sine.inOut",
+      }),
+    );
+  }
+
+  /**
+   * 그림자가 실체화한다 — 씬(BossScene)이 상호작용 판정 후 부른다.
+   * 등장 연출·체력바·패턴 타이머가 전부 이 시점에 시작된다.
+   */
+  awaken(): void {
+    const sprite = this.sprite;
+    if (!sprite || !this.dormant) return;
+    this.dormant = false;
+
+    this.clearScheduled();
+    sprite.clearTint();
+    this.tweens.push(this.scene.tweens.add({ targets: sprite, alpha: 1, duration: 260 }));
+
     this.createHpBar();
 
     // 등장 연출 — 그림자 덩어리에서 실체화하는 6프레임을 재생한 뒤 idle로 넘어간다.
     // 첫 패턴은 씬(BossScene.runBossIntro)이 인트로 배너 길이만큼 별도로 미룬다.
-    bossShadowEmergeFx(this.scene, x, this.groundY);
+    bossShadowEmergeFx(this.scene, sprite.x, this.groundY);
     this.setPose(BOSS_FRAME.spawn);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.busy) this.setPose(BOSS_FRAME.idle);
@@ -350,6 +387,10 @@ export class Boss {
     // 유휴 중에만 떠오르내린다 — 패턴 중엔 포즈·궤적이 우선이다.
     this.bobOffset = this.busy || this.airborne ? 0 : Math.sin(time * 0.004) * 5;
     this.clampToArena(sprite);
+
+    // 그림자 상태 — 깨어나기 전까지는 그 자리에 가만히 서 있는다.
+    // 플레이어를 쳐다보지도, 다가가지도, 패턴을 골라 쓰지도 않는다.
+    if (this.dormant) return;
 
     if (this.busy) return;
 
@@ -892,7 +933,8 @@ export class Boss {
   // ────────────────────────────── 피해와 사망 ──────────────────────────────
 
   takeDamage(amount: number): void {
-    if (this.defeated) return;
+    // 그림자는 아직 싸움에 들어오지 않았다 — 스쳐도 반응하지 않는다.
+    if (this.defeated || this.dormant) return;
 
     this.hp = Math.max(0, this.hp - amount);
     this.refreshHpBar();
